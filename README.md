@@ -9,7 +9,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3004](http://localhost:3004).
+Open [http://localhost:3004/mycodao.financial](http://localhost:3004/mycodao.financial). Pulse: [http://localhost:3004/mycodao.financial/pulse](http://localhost:3004/mycodao.financial/pulse).
 
 ## Scripts
 

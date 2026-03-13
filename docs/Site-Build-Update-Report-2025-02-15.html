@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MycoDAO Site Build — Update Report</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; max-width: 800px; margin: 0 auto; padding: 2rem; line-height: 1.6; color: #1a1a1a; }
+    h1 { font-size: 1.5rem; border-bottom: 2px solid #333; padding-bottom: 0.5rem; }
+    h2 { font-size: 1.2rem; margin-top: 1.5rem; color: #333; }
+    h3 { font-size: 1rem; margin-top: 1rem; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+    th, td { border: 1px solid #ccc; padding: 0.5rem 0.75rem; text-align: left; }
+    th { background: #f5f5f5; font-weight: 600; }
+    hr { border: none; border-top: 1px solid #ddd; margin: 1.5rem 0; }
+    .meta { color: #666; font-size: 0.9rem; margin-bottom: 1.5rem; }
+    ul { margin: 0.5rem 0; padding-left: 1.5rem; }
+    code { background: #f0f0f0; padding: 0.1rem 0.3rem; font-size: 0.9em; }
+    @media print { body { padding: 1rem; } }
+  </style>
+</head>
+<body>
+  <h1>MycoDAO Site Build — Update Report</h1>
+  <p class="meta"><strong>Report Date:</strong> February 15, 2025 &nbsp;|&nbsp; <strong>Project:</strong> MycoDAO &nbsp;|&nbsp; <strong>Location:</strong> c:\Users\Abelardo\Desktop\Websites\mycodao</p>
+  <hr>
+
+  <h2>Executive Summary</h2>
+  <p>MycoDAO is a Next.js 14 application featuring a Bloomberg TV-style "Market Pulse" dashboard for tracking crypto, commodities, precious metals, and bio assets—including the MYCO governance token. This report summarizes the current build state, architecture, recent updates, and deployment configuration.</p>
+
+  <h2>1. Technical Stack</h2>
+  <table>
+    <tr><th>Technology</th><th>Version</th></tr>
+    <tr><td>Next.js</td><td>14.2.x</td></tr>
+    <tr><td>React</td><td>18.2.x</td></tr>
+    <tr><td>Tailwind CSS</td><td>3.4.x</td></tr>
+  </table>
+  <p><strong>Port:</strong> 3004 (dev and production)<br><strong>Base path:</strong> /mycodao.financial — app at http://localhost:3004/mycodao.financial</p>
+
+  <h2>2. Routes & Pages</h2>
+  <table>
+    <tr><th>Route</th><th>Purpose</th></tr>
+    <tr><td>/</td><td>Home (links to Pulse)</td></tr>
+    <tr><td>/pulse</td><td>Main Bloomberg-style dashboard</td></tr>
+    <tr><td>/pulse/markets</td><td>Expanded tickers, watchlist, filters</td></tr>
+    <tr><td>/pulse/news</td><td>News feed</td></tr>
+    <tr><td>/pulse/podcasts</td><td>Episodes list + audio player</td></tr>
+    <tr><td>/pulse/learn</td><td>Financial literacy hub</td></tr>
+    <tr><td>/pulse/learn/[id]</td><td>Lesson detail</td></tr>
+    <tr><td>/pulse/myco</td><td>Token overview</td></tr>
+    <tr><td>/pulse/settings</td><td>Refresh intervals, watchlist</td></tr>
+    <tr><td>/token</td><td>Full MYCO token page</td></tr>
+  </table>
+
+  <h2>3. Data Architecture</h2>
+  <h3>Provider</h3>
+  <p><strong>lib/pulse-provider.tsx</strong> — Fetches from API routes, provides context to all Pulse pages</p>
+  <h3>Types (lib/types.ts)</h3>
+  <p>Ticker, NewsItem, PodcastEpisode, LearnModule, MycoSnapshot</p>
+  <h3>Asset Classes</h3>
+  <p>crypto (BTC, ETH, SOL, AVAX, LINK, UNI) | precious_metals (GOLD, SILVER, PLAT) | commodity (OIL, NATGAS, COPPER, WHEAT) | bio (MYCO, BIOX, GeneChain)</p>
+  <h3>API Routes (mock-first)</h3>
+  <p>/api/tickers, /api/news, /api/podcasts, /api/learn, /api/myco</p>
+
+  <h2>4. Components</h2>
+  <table>
+    <tr><th>Component</th><th>Purpose</th></tr>
+    <tr><td>TickerCard</td><td>Symbol, price, change, sparkline (compact mode)</td></tr>
+    <tr><td>Sparkline</td><td>SVG mini-chart</td></tr>
+    <tr><td>PanelCarousel</td><td>Rotating panels (market, news, podcast, learn, MYCO)</td></tr>
+    <tr><td>BreakingNewsBand</td><td>Top news strip</td></tr>
+    <tr><td>NewsCard</td><td>News item with compact variant</td></tr>
+    <tr><td>PodcastPlayer</td><td>Audio player</td></tr>
+    <tr><td>LessonCard</td><td>Learn module card</td></tr>
+    <tr><td>MycoEcosystemSpotlight</td><td>Tokenomics + link to /token</td></tr>
+    <tr><td>BottomBar</td><td>Time, LIVE indicator, nav tabs</td></tr>
+    <tr><td>SettingsPanel</td><td>Intervals, watchlist</td></tr>
+    <tr><td>PulseErrorBoundary</td><td>Error boundary for Pulse routes</td></tr>
+  </table>
+
+  <h2>5. Recent Updates (2025-02-15)</h2>
+  <h3>Layout Density</h3>
+  <p>Single 5-column grid: PanelCarousel + Crypto, Precious Metals, Commodities, Bio. Removed duplicate bottom row. Reduced padding and smaller typography (9px–11px) for Bloomberg-style compact dashboard.</p>
+  <h3>Hydration Fix</h3>
+  <p>BottomBar time/date caused server/client mismatch. Now renders placeholders until mount, then live time. suppressHydrationWarning on time/date spans.</p>
+  <h3>Component Tightening</h3>
+  <p>PanelCarousel: min-h-[120px], p-2 | TickerCard compact: p-1 py-0.5 | BottomBar: py-1 px-2, text-[10px] | BreakingNewsBand: py-1 px-2</p>
+
+  <h2>6. Build & Run</h2>
+  <pre><code>npm install
+npm run dev    # http://localhost:3004/mycodao.financial
+npm run build
+npm run start</code></pre>
+
+  <h2>7. Pending / TODO</h2>
+  <ul>
+    <li>Replace mock API routes with real feeds (DEX, news API, podcast RSS, CMS)</li>
+    <li>Connect MYCO price to live feed</li>
+    <li>Add GitHub remote and deploy pipeline</li>
+  </ul>
+
+  <h2>8. Documentation Index</h2>
+  <table>
+    <tr><th>Document</th><th>Description</th></tr>
+    <tr><td>Agent-Handoff.md</td><td>Latest work, project context</td></tr>
+    <tr><td>Market-Pulse-Implementation-2026-02-15.md</td><td>Pulse feature spec</td></tr>
+    <tr><td>Pulse-Sections-Update-2026-02-15.md</td><td>Sections (Crypto, Metals, Commodities, Bio)</td></tr>
+    <tr><td>Pulse-Layout-Density-2025-02-15.md</td><td>Layout density changes</td></tr>
+    <tr><td>Project-Setup-2026-02-15.md</td><td>Initial setup</td></tr>
+  </table>
+
+  <hr>
+  <p style="color:#666;font-size:0.85rem;"><em>Generated for MycoDAO site build update. Open in browser and use File → Print → Save as PDF for a PDF copy.</em></p>
+</body>
+</html>

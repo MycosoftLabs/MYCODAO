@@ -1,4 +1,5 @@
 import "./globals.css";
+import PulseProviderWrapper from "@/components/PulseProviderWrapper";
 
 export const metadata = {
   title: "MycoDAO",
@@ -9,7 +10,9 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body className="min-h-screen bg-stone-50 text-stone-800">
-        <main className="max-w-4xl mx-auto px-4 py-8">{children}</main>
+        <PulseProviderWrapper>
+          <main className="w-full min-h-screen">{children}</main>
+        </PulseProviderWrapper>
       </body>
     </html>
   );

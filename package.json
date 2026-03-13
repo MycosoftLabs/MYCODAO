@@ -6,7 +6,8 @@
     "dev": "next dev -p 3004",
     "build": "next build",
     "start": "next start -p 3004",
-    "lint": "next lint"
+    "lint": "next lint",
+    "docs:pdf": "node scripts/generate-report-pdf.js"
   },
   "dependencies": {
     "next": "^14.2.0",
@@ -14,9 +15,12 @@
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
+    "@types/node": "25.3.4",
+    "@types/react": "19.2.14",
     "autoprefixer": "^10.4.19",
     "eslint": "^8.57.0",
     "eslint-config-next": "^14.2.0",
+    "md-to-pdf": "^5.2.5",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.4"
   }
