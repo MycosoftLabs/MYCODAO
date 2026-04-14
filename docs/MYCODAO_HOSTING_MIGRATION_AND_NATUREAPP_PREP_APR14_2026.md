@@ -7,6 +7,18 @@
 
 ---
 
+## Business model & system boundaries (canonical)
+
+| Party | Role |
+|--------|------|
+| **MYCODAO (the DAO / its operating entity)** | **Separate business** from Mycosoft. Owns product vision, tokenomics, and **MYCO on Solana** as the **core product** (governance and treasury per DAO rules). |
+| **Mycosoft** | **Service provider / contractor**: designs, builds, and operates the **integration** of **MYCA**, **MINDEX**, **NatureOS**, and related backend surfaces **into** MYCODAO’s apps and dashboards. |
+| **NatureApp** | End-user experience (formerly **MYCO app**). Shows **live nature / environmental data** using a **CREP-like** backend — same *class* of capability as Mycosoft’s CREP (Common Relevant Environmental Picture): live layers, nature-relevant feeds, maps/timelines as specified — implemented under contract for the DAO, not “Mycosoft product” branding in end-user UI unless agreed. |
+
+**Integration contract (conceptual):** MYCODAO frontends and token logic remain **DAO-owned**; Mycosoft delivers APIs, pipelines, MYCA orchestration, MINDEX species/research data, NatureOS platform hooks, and CREP-class live nature feeds **as services** bound by statement of work / licensing — not a merger of corporate entities.
+
+---
+
 ## 1. What is already local
 
 - Next.js **14** app, dev port **3004** (`npm run dev`).
@@ -46,9 +58,10 @@
 
 ## 4. Product direction (aligned to your brief)
 
-- **Dashboard:** Automated trading of **IP assets**, **science funding**, **rewards** using **MYCO** (and treasury policy for **SOL** / **USDC** where required).
-- **NatureApp** (rename from “MYCO app” / MycoDex-style project): rewards users in **MYCO**, **SOL**, and **USDC** for **species images** and **tissue** submitted to the lab — surfaced in UI copy, routes, and API contracts.
-- **Backends:** **MYCA** (MAS orchestrator), **MINDEX** (species/data), **NatureOS** (platform APIs, devices, SignalR where applicable). Use env-based URLs (`MAS_API_URL`, `MINDEX_API_URL`, NatureOS base URL) — no hardcoded VM IPs in committed UI.
+- **MYCO (Solana):** Core DAO token — economics, mint/burn, governance, and disclosures are **MYCODAO** responsibility; Mycosoft implements wallet UX, program integration points, and backend settlement **as contracted**.
+- **Dashboard:** IP-asset automation, science funding, and rewards denominated in **MYCO** (plus **SOL** / **USDC** where policy requires).
+- **NatureApp:** Rewards for **species imagery** and **tissue-to-lab** workflows; **live nature data** via **CREP-like** feeds (maps, timelines, environmental layers) powered by Mycosoft-delivered backend services.
+- **Backends (contractor-delivered):** **MYCA** (MAS orchestrator), **MINDEX** (species / research data), **NatureOS** (platform APIs, devices, SignalR as needed). Configure with env-based URLs (`MAS_API_URL`, `MINDEX_API_URL`, NatureOS base URL) — no hardcoded infrastructure IPs in committed UI.
 
 ---
 
