@@ -37,7 +37,7 @@ export default function PulseModule({ title, children, className = "", accent = 
           <div className="flex items-center gap-1 min-w-0 flex-1">{titleContent}</div>
         )}
       </div>
-      <div className="flex-1 min-h-0 p-1.5 overflow-hidden leading-snug tabular-nums">{children}</div>
+      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-1.5 leading-snug tabular-nums">{children}</div>
     </section>
   );
 }

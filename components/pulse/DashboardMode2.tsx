@@ -72,7 +72,7 @@ export default function DashboardMode2() {
   }
 
   return (
-    <main className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden p-1.5 sm:p-2 grid grid-cols-12 gap-1.5 sm:gap-2" style={{ gridTemplateRows: "repeat(5, minmax(0, 1fr))" }}>
+    <main className="grid min-h-0 min-w-0 flex-1 grid-cols-12 content-start items-stretch gap-1.5 overflow-x-hidden overflow-y-auto p-1.5 auto-rows-min sm:gap-2">
       {/* Row 1: fixed */}
       <div className="col-span-12 md:col-span-4 min-h-0 overflow-hidden flex flex-col">
         <PulseModule title="Market Pulse">

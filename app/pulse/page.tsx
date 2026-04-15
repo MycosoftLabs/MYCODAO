@@ -63,7 +63,7 @@ export default function PulsePage() {
       </header>
 
       <div
-        className="flex-1 min-h-0 flex flex-col"
+        className="flex min-h-0 flex-1 flex-col overflow-hidden"
         style={{
           opacity,
           transition: `opacity ${FADE_DURATION_MS}ms ease-in-out`,

@@ -30,10 +30,10 @@ export default function PulseLayout({ children }: { children: React.ReactNode })
   return (
     <PulseErrorBoundary>
       <DashboardModeProvider>
-        {/* Fixed viewport so bottom ticker is always visible; no page scroll */}
-        <div className="fixed inset-0 w-full h-full overflow-hidden border border-black bg-black box-border border-t-[6px] border-x-[6px] border-b-[12px]">
-          <div className="pulse-dashboard-zoom h-full flex flex-col overflow-hidden bg-stone-950 text-stone-200">
-            <div className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden flex flex-col">
+        {/* Fixed viewport (dvh) so shell + bottom ticker fit; inner column scrolls */}
+        <div className="fixed inset-0 z-50 box-border h-dvh max-h-dvh w-full max-w-[100vw] overflow-hidden border border-black bg-black border-t-[6px] border-x-[6px] border-b-[12px]">
+          <div className="pulse-dashboard-shell flex h-full min-h-0 w-full flex-col overflow-hidden bg-stone-950 text-stone-200 antialiased">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
               {children}
             </div>
             <div className="shrink-0 flex flex-col">

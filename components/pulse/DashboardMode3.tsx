@@ -44,7 +44,7 @@ export default function DashboardMode3() {
   }
 
   return (
-    <main className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden p-1.5 sm:p-2 grid grid-cols-12 gap-1.5 sm:gap-2" style={{ gridTemplateRows: "minmax(0,1fr) auto" }}>
+    <main className="grid min-h-0 min-w-0 flex-1 grid-cols-12 content-start items-stretch gap-1.5 overflow-x-hidden overflow-y-auto p-1.5 auto-rows-min sm:gap-2 md:h-full md:min-h-0 md:grid-rows-1">
       {/* Large focus area */}
       <div className="col-span-12 md:col-span-8 min-h-0 overflow-hidden flex flex-col">
         <div className="flex items-center justify-between border-b border-stone-700 px-[2px] py-[2px] bg-stone-900/80 shrink-0">

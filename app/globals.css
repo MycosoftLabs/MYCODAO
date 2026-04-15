@@ -18,16 +18,14 @@
   }
 }
 
-/* Pulse trading desk: fixed Tailwind px sizes are tiny on desktop — scale the whole shell for readability */
-.pulse-dashboard-zoom {
-  zoom: 1.42;
+/* Pulse shell: readable type without CSS zoom (zoom breaks viewport fit and causes overflow). */
+.pulse-dashboard-shell {
+  font-size: 14px;
+  line-height: 1.35;
 }
-@supports not (zoom: 1) {
-  .pulse-dashboard-zoom {
-    transform: scale(1.42);
-    transform-origin: top left;
-    width: calc(100% / 1.42);
-    height: calc(100% / 1.42);
+@media (min-width: 1280px) {
+  .pulse-dashboard-shell {
+    font-size: 15px;
   }
 }
 
