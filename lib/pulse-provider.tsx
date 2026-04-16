@@ -113,11 +113,15 @@ function asArray<T>(v: unknown): T[] {
   return Array.isArray(v) ? (v as T[]) : [];
 }
 
-/** Same base path as `apiPrefix()` in MarketChart: matches `next.config.mjs` basePath / NEXT_PUBLIC_BASE_PATH. */
-function clientApiBaseFromWindow(): string {
-  if (typeof window === "undefined") return "";
-  const path = (process.env.NEXT_PUBLIC_BASE_PATH ?? "").replace(/\/$/, "");
-  return `${window.location.origin}${path}`;
+/** Same-origin path under optional NEXT_PUBLIC_BASE_PATH / next.config basePath.
+ * Do not use window.location.origin here: SSR vs first client paint changed `refresh` identity,
+ * retriggered the load effect, and kept the Pulse screen on "Loading…". */
+function pulseApiPath(path: string): string {
+  const raw = (process.env.NEXT_PUBLIC_BASE_PATH ?? "").trim();
+  const seg = path.startsWith("/") ? path : `/${path}`;
+  if (!raw || raw === "/") return seg;
+  const base = raw.startsWith("/") ? raw.replace(/\/$/, "") : `/${raw.replace(/\/$/, "")}`;
+  return `${base}${seg}`;
 }
 
 export function PulseProvider({ children }: { children: React.ReactNode }) {
@@ -148,20 +152,17 @@ export function PulseProvider({ children }: { children: React.ReactNode }) {
   }, []);
   const clearAlerts = useCallback(() => setAlerts([]), []);
 
-  const clientApiBase = clientApiBaseFromWindow();
-
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const base = clientApiBase;
       const settled = await Promise.allSettled([
-        safeFetchJson<Ticker[]>(`${base}/api/tickers`, []),
-        safeFetchJson<NewsItem[]>(`${base}/api/news`, []),
-        safeFetchJson<PodcastEpisode[]>(`${base}/api/podcasts`, []),
-        safeFetchJson<LearnModule[]>(`${base}/api/learn`, []),
-        safeFetchJson<ResearchItem[]>(`${base}/api/research`, []),
-        safeFetchJson<MycoSnapshot | null>(`${base}/api/myco`, null),
-        safeFetchJson<UpcomingCatalyst[]>(`${base}/api/calendar`, []),
+        safeFetchJson<Ticker[]>(pulseApiPath("/api/tickers"), []),
+        safeFetchJson<NewsItem[]>(pulseApiPath("/api/news"), []),
+        safeFetchJson<PodcastEpisode[]>(pulseApiPath("/api/podcasts"), []),
+        safeFetchJson<LearnModule[]>(pulseApiPath("/api/learn"), []),
+        safeFetchJson<ResearchItem[]>(pulseApiPath("/api/research"), []),
+        safeFetchJson<MycoSnapshot | null>(pulseApiPath("/api/myco"), null),
+        safeFetchJson<UpcomingCatalyst[]>(pulseApiPath("/api/calendar"), []),
       ]);
       const val = <T,>(i: number, empty: T): T => {
         const r = settled[i];
@@ -196,7 +197,7 @@ export function PulseProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [clientApiBase]);
+  }, []);
 
   useEffect(() => {
     refresh();
@@ -215,10 +216,9 @@ export function PulseProvider({ children }: { children: React.ReactNode }) {
     const sseOn =
       typeof window !== "undefined" &&
       (process.env.NEXT_PUBLIC_PULSE_SSE === "1" || process.env.NEXT_PUBLIC_PULSE_SSE === "true");
-    if (!sseOn || !clientApiBase) return;
+    if (!sseOn) return;
 
-    const url = `${clientApiBase}/api/pulse/stream`;
-    const es = new EventSource(url);
+    const es = new EventSource(pulseApiPath("/api/pulse/stream"));
 
     es.onmessage = (ev) => {
       try {
@@ -255,7 +255,7 @@ export function PulseProvider({ children }: { children: React.ReactNode }) {
     return () => {
       es.close();
     };
-  }, [clientApiBase]);
+  }, []);
 
   const whyMovingMap = useMemo(
     () => buildWhyMovingMap(tickers, enrichedNews, 12),
