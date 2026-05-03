@@ -1,2 +1,34 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# env (never commit secrets)
+.env
+.env.production
+.env*.local
+
+# Pulse podcast chat persistence (VM / single instance)
+/data/
+
+# Proxmox-injected deploy key (never commit)
+.ssh-pulse-deploy/
+
 # Nested app checkout — do not commit as embedded repo; use submodule when wired
 app/natureapp/MYCO-App/
