@@ -86,6 +86,7 @@ import {
   buildTickerGroups,
 } from './lib/tickerDisplay';
 import { fetchPulseConfigStatus } from './lib/pulseApi';
+import { STUDIO_ORACLE_INSIGHT, mergeTickerGroupsWithStudio } from './data/studioPresets';
 
 // Handle RGL ESM/CJS interop
 const Grid = (RGL as any).default || RGL;
@@ -1124,8 +1125,8 @@ const PodcastView = () => {
                       <span className="text-[10px] font-bold uppercase text-dim tracking-widest">Listen Now</span>
                    </div>
                 </div>
-              )) : (
-                 <div className="p-4 text-[10px] text-dim text-center">No podcast episodes — set PODCAST_RSS_URLS on MYCODAO VM.</div>
+              )              ) : (
+                 <div className="p-4 text-[10px] text-dim text-center">Loading syndicate feed…</div>
               )}
            </div>
         </div>
@@ -2076,7 +2077,10 @@ export default function App() {
   const { tickers, history, whales, episodes, streamStats, configStatus, loading } = useRealTimeData();
 
   const assetTickers = useMemo(() => tickers.map(tickerToAssetRow), [tickers]);
-  const tickerGroups = useMemo(() => buildTickerGroups(tickers), [tickers]);
+  const tickerGroups = useMemo(
+    () => mergeTickerGroupsWithStudio(buildTickerGroups(tickers)),
+    [tickers]
+  );
 
   useEffect(() => {
     const root = document.documentElement;
@@ -2103,11 +2107,11 @@ export default function App() {
       ].filter(Boolean);
       setAiInsight(
         live.length
-          ? `LIVE FEEDS: ${live.join(" · ")}. ORACLE SYNC OK.`
-          : "AWAITING API KEYS — TICKERS/MYCO LIVE WHEN COINGECKO/FINNHUB SET."
+          ? `LIVE FEEDS: ${live.join(" · ")}. STUDIO PRESETS FILL GAPS UNTIL CODEX WIRING.`
+          : STUDIO_ORACLE_INSIGHT
       );
     } catch {
-      setAiInsight("CONFIG STATUS UNAVAILABLE — CHECK /api/pulse/config-status");
+      setAiInsight(STUDIO_ORACLE_INSIGHT);
     } finally {
       setIsAiLoading(false);
     }

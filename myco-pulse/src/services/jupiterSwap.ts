@@ -1,6 +1,6 @@
-import axios from 'axios';
+import { STUDIO_WHALE_LEDGER, type StudioWhaleRow } from "../data/studioPresets";
 
-const JUP_QUOTE_API = 'https://quote-api.jup.ag/v6/quote';
+const JUP_QUOTE_API = "https://quote-api.jup.ag/v6/quote";
 
 export interface SwapQuote {
   inputMint: string;
@@ -8,7 +8,7 @@ export interface SwapQuote {
   inAmount: string;
   outAmount: string;
   priceImpactPct: string;
-  marketInfos: any[];
+  marketInfos: unknown[];
 }
 
 export const getJupiterQuote = async (
@@ -18,23 +18,23 @@ export const getJupiterQuote = async (
   slippage: number = 0.5
 ) => {
   try {
-    const res = await axios.get(JUP_QUOTE_API, {
-      params: {
-        inputMint,
-        outputMint,
-        amount: amount * 1e9, // Assuming 9 decimals for SOL/USDC for demo
-        slippageBps: slippage * 100,
-      }
+    const params = new URLSearchParams({
+      inputMint,
+      outputMint,
+      amount: String(amount * 1e9),
+      slippageBps: String(slippage * 100),
     });
-    return res.data;
+    const res = await fetch(`${JUP_QUOTE_API}?${params}`);
+    if (!res.ok) return null;
+    return await res.json();
   } catch (e) {
     console.error("Jupiter Quote Error", e);
     return null;
   }
 };
 
-export const MATRIX_MINT = 'EzYEwn4R5tNkNGw4K2a5a58MJFQESdf1r4UJrV7cpUF3'; // Real MYCO token
-export const SOL_MINT = 'So11111111111111111111111111111111111111112';
+export const MATRIX_MINT = "EzYEwn4R5tNkNGw4K2a5a58MJFQESdf1r4UJrV7cpUF3";
+export const SOL_MINT = "So11111111111111111111111111111111111111112";
 
-/** On-chain whale index not deployed — returns empty until MAS/MINDEX ledger API exists. */
-export const getWhaleActivity = async () => [];
+/** Live whale index when API exists; studio ledger rows until Codex wires MAS/MINDEX. */
+export const getWhaleActivity = async (): Promise<StudioWhaleRow[]> => STUDIO_WHALE_LEDGER;

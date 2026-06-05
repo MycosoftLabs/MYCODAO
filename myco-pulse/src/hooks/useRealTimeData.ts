@@ -13,8 +13,18 @@ import {
   type PulseTicker,
 } from "../lib/pulseApi";
 import { ohlcBarsToChartData } from "../lib/tickerDisplay";
-import { fetchPolymarketWhales, fetchStreamlabsStats } from "../services/apiService";
-import { fetchRealmProposals } from "../services/solanaGovernance";
+import {
+  STUDIO_CHART_DATA,
+  mergeEpisodesWithStudio,
+  mergeNewsWithStudio,
+  type StreamlabsStats,
+} from "../data/studioPresets";
+import {
+  fetchDAOProposals,
+  fetchPolymarketWhales,
+  fetchStreamlabsStats,
+} from "../services/apiService";
+import { getWhaleActivity } from "../services/jupiterSwap";
 
 export const useRealTimeData = () => {
   const [tickers, setTickers] = useState<PulseTicker[]>([]);
@@ -24,7 +34,7 @@ export const useRealTimeData = () => {
   const [news, setNews] = useState<PulseNewsItem[]>([]);
   const [proposals, setProposals] = useState<unknown[]>([]);
   const [episodes, setEpisodes] = useState<PulsePodcastEpisode[]>([]);
-  const [streamStats, setStreamStats] = useState<null>(null);
+  const [streamStats, setStreamStats] = useState<StreamlabsStats | null>(null);
   const [configStatus, setConfigStatus] = useState<PulseConfigStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -35,6 +45,7 @@ export const useRealTimeData = () => {
       myco,
       ohlcBars,
       polyWhales,
+      ledgerWhales,
       marketNews,
       daoProposals,
       podcastEpisodes,
@@ -45,20 +56,28 @@ export const useRealTimeData = () => {
       fetchPulseMyco(),
       fetchPulseOhlc("BTC", "1h"),
       fetchPolymarketWhales(),
+      getWhaleActivity(),
       fetchPulseNews(),
-      fetchRealmProposals(),
+      fetchDAOProposals(),
       fetchPulsePodcasts(),
       fetchStreamlabsStats(),
       fetchPulseConfigStatus(),
     ]);
 
+    const chart = ohlcBarsToChartData(ohlcBars);
     setTickers(tickerRows);
     setMycoSnapshot(myco);
-    setHistory(ohlcBarsToChartData(ohlcBars));
-    setWhales(Array.isArray(polyWhales) ? polyWhales : []);
-    setNews(marketNews);
+    setHistory(chart.length ? chart : STUDIO_CHART_DATA);
+    setWhales(
+      Array.isArray(polyWhales) && polyWhales.length
+        ? polyWhales
+        : Array.isArray(ledgerWhales)
+          ? ledgerWhales
+          : []
+    );
+    setNews(mergeNewsWithStudio(marketNews));
     setProposals(Array.isArray(daoProposals) ? daoProposals : []);
-    setEpisodes(podcastEpisodes);
+    setEpisodes(mergeEpisodesWithStudio(podcastEpisodes));
     setStreamStats(stats);
     setConfigStatus(status);
     setLoading(false);

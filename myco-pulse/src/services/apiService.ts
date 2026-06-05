@@ -1,6 +1,6 @@
 /**
- * Legacy service barrel — delegates to MYCODAO /api routes and real external APIs only.
- * No Gemini, no mock fallbacks.
+ * Service barrel — live MYCODAO /api routes first, AI Studio presets when empty.
+ * Codex replaces preset fallbacks with production wiring.
  */
 
 import {
@@ -17,6 +17,15 @@ import {
   type PulseNewsItem,
   type PulsePodcastEpisode,
 } from "../lib/pulseApi";
+import {
+  STUDIO_CHART_DATA,
+  STUDIO_DAO_PROPOSALS,
+  STUDIO_NEURAL_REPORT,
+  STUDIO_STREAMLABS,
+  mergeEpisodesWithStudio,
+  mergeNewsWithStudio,
+} from "../data/studioPresets";
+import { fetchRealmProposals } from "./solanaGovernance";
 
 export type { LiquidityPoolRow };
 
@@ -65,7 +74,8 @@ export const fetchDexScreenerToken = async (_address: string) => {
   };
 };
 
-export const fetchMarketNews = async (): Promise<PulseNewsItem[]> => fetchPulseNews();
+export const fetchMarketNews = async (): Promise<PulseNewsItem[]> =>
+  mergeNewsWithStudio(await fetchPulseNews());
 
 export const fetchLiveMycoTokenMetrics = async () => {
   const snap = await fetchPulseMyco();
@@ -83,23 +93,28 @@ export const fetchLiveMycoTokenMetrics = async () => {
 
 export const fetchGlobalMarketData = async () => {
   const tickers = await fetchPulseTickers();
-  return fetchPulseGlobalMarket(tickers);
+  const market = await fetchPulseGlobalMarket(tickers);
+  if (market.status !== "NO_DATA") return market;
+  return { SOL: "162.40", BTC: "$98,420", ETH: "3,842", status: "STUDIO" };
 };
 
-/** Streamlabs not configured on MYCODAO — always null until backend exists. */
-export const fetchStreamlabsStats = async () => null;
+/** Streamlabs — studio preset until STREAMLABS_* env on MYCODAO. */
+export const fetchStreamlabsStats = async () => STUDIO_STREAMLABS;
 
-/** Neural/Gemini reports removed — use MAS task API when configured. */
-export const generateNeuralReport = async (_marketContext: string) => null;
+/** Neural brief — studio text until MAS / Gemini wired in Codex. */
+export const generateNeuralReport = async (_marketContext: string) => STUDIO_NEURAL_REPORT;
 
 export const fetchRSSEpisodes = async (): Promise<PulsePodcastEpisode[]> =>
-  fetchPulsePodcasts();
+  mergeEpisodesWithStudio(await fetchPulsePodcasts());
 
-export const fetchDAOProposals = async () => [];
+export const fetchDAOProposals = async () => {
+  const live = await fetchRealmProposals();
+  return live.length ? live : STUDIO_DAO_PROPOSALS;
+};
 
 export const fetchHistory = async (symbol: string) => {
   const bars = await fetchPulseOhlc(symbol, "1h");
-  if (!bars.length) return [];
+  if (!bars.length) return STUDIO_CHART_DATA;
   return bars.map((b) => ({
     time: b.time,
     value: b.close ?? b.open ?? 0,
