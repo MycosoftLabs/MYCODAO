@@ -11,6 +11,8 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@phantom/react-sdk": "^2.0.2",
+    "@realms-today/spl-governance": "^0.3.33",
     "@solana/spl-governance": "^0.3.28",
     "@solana/wallet-adapter-base": "^0.9.27",
     "@solana/wallet-adapter-react": "^0.15.39",

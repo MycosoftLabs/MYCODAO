@@ -110,10 +110,14 @@ async function smokeSse(base) {
 const base = smokeBase();
 console.log(`Pulse smoke (base: ${base})\n`);
 
+const MYCO_REALM_PK = "At93fiCMzEkZWBAHxSNjfk7zUHnF3JcxyCyPjZELjK9Y";
+
 const paths = [
   ["/api/tickers", "tickers"],
   ["/api/news", "news"],
   ["/api/podcasts", "podcasts"],
+  ["/api/realms/daos?limit=2", "realms_daos"],
+  [`/api/realms/daos/${MYCO_REALM_PK}?proposals=1&treasury=1&members=0`, "realms_dao_detail"],
   ["/api/learn", "learn"],
   ["/api/research", "research"],
   ["/api/myco", "myco"],
@@ -128,11 +132,39 @@ for (const [p, label] of paths) {
   if (!pass) ok = false;
 }
 
+try {
+  const tickersRes = await fetch(`${base}/api/tickers`, { cache: "no-store" });
+  const tickers = await tickersRes.json();
+  const myco = Array.isArray(tickers)
+    ? tickers.find((t) => String(t.symbol).toUpperCase() === "MYCO")
+    : null;
+  if (myco?.price > 0) {
+    console.log(`OK   MYCO live price $${myco.price} (${base}/api/tickers)`);
+  } else {
+    console.error(`FAIL MYCO missing or zero price in /api/tickers`);
+    ok = false;
+  }
+  const mycoRes = await fetch(`${base}/api/myco`, { cache: "no-store" });
+  const snap = await mycoRes.json();
+  if (snap?.price > 0) {
+    console.log(`OK   MYCO snapshot $${snap.price} (${base}/api/myco)`);
+  } else {
+    console.error(`FAIL MYCO snapshot missing or zero price in /api/myco`);
+    ok = false;
+  }
+} catch (e) {
+  console.error("FAIL MYCO price validation", e);
+  ok = false;
+}
+
 const passHealth = await expectJson(`${base}/api/health?deep=1`, "health_deep");
 if (!passHealth) ok = false;
 
 const passConfig = await expectJson(`${base}/api/pulse/config-status`, "config_status");
 if (!passConfig) ok = false;
+
+const passChainStats = await expectJson(`${base}/api/pulse/chain-stats`, "chain_stats");
+if (!passChainStats) ok = false;
 
 const passMasInfo = await expectJson(`${base}/api/pulse/mas-task`, "mas_task_get");
 if (!passMasInfo) ok = false;

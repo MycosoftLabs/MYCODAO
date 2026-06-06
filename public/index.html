@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Pulse — redirecting</title>
+    <script>
+      (function () {
+        var search = window.location.search || "";
+        var hash = window.location.hash || "";
+        window.location.replace("/pulse/" + search + hash);
+      })();
+    </script>
+  </head>
+  <body>
+    <p>Redirecting to Pulse…</p>
+  </body>
+</html>

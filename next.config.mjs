@@ -12,6 +12,12 @@ const nextConfig = {
   /** Empty for `https://pulse.mycodao.com/` at root. Set NEXT_PUBLIC_BASE_PATH only if serving under a subpath. */
   basePath,
   output: "standalone",
+  async redirects() {
+    return [
+      /** Phantom OAuth returns to origin root; SPA lives under /pulse/. */
+      { source: "/", destination: "/pulse/", permanent: false },
+    ];
+  },
   async rewrites() {
     return [
       { source: "/pulse", destination: "/pulse/index.html" },

@@ -7,7 +7,10 @@ export function middleware(request) {
   const host = request.headers.get("host")?.split(":")[0] ?? "";
   // Live Pulse hostname: send / to the dashboard (Cloudflare Tunnel or direct).
   if (host === PULSE_HOST && request.nextUrl.pathname === "/") {
-    return NextResponse.redirect(new URL("/pulse", request.url));
+    const dest = new URL("/pulse/", request.url);
+    dest.search = request.nextUrl.search;
+    dest.hash = request.nextUrl.hash;
+    return NextResponse.redirect(dest);
   }
 
   // In dev, app is served at / (no basePath). Redirect /mycodao.financial -> / so old links work.
