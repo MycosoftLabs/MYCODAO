@@ -19,13 +19,11 @@ const parser = new Parser();
 
 const RSS_PARSE_TIMEOUT_MS = 18_000;
 
-/** Real crypto podcast RSS — used when PODCAST_RSS_URLS is unset (no MYCO studio episodes). */
-const DEFAULT_CRYPTO_PODCAST_RSS = [
-  "https://feeds.megaphone.fm/LSHML4761942757",
-  "https://feeds.megaphone.fm/the-breakdown",
-  "https://decrypt.co/feed/podcast",
-  "https://feeds.transistor.fm/the-scoop",
-] as const;
+/** Official MycoPOD feed (MycoDAO podcast on RSS.com). */
+export const MYCOPOD_RSS_URL = "https://media.rss.com/mycopod/feed.xml";
+
+/** Default when PODCAST_RSS_URLS is unset — MycoPOD first; optional extra feeds via env. */
+const DEFAULT_PODCAST_RSS = [MYCOPOD_RSS_URL] as const;
 
 function parseUrlWithTimeout(feedUrl: string): Promise<Awaited<ReturnType<Parser["parseURL"]>>> {
   return Promise.race([
@@ -43,15 +41,19 @@ export async function fetchPodcastEpisodes(): Promise<PodcastEpisode[]> {
         .split(",")
         .map((u) => u.trim())
         .filter(Boolean)
-    : [...DEFAULT_CRYPTO_PODCAST_RSS];
+    : [...DEFAULT_PODCAST_RSS];
   const out: PodcastEpisode[] = [];
   let idx = 0;
   for (const feedUrl of urls.slice(0, 5)) {
     try {
       const feed = await parseUrlWithTimeout(feedUrl);
-      const show = feed.title || "Podcast";
+      const show = feed.title || "MycoPOD";
+      const feedImage =
+        (feed as { itunes?: { image?: string } }).itunes?.image ||
+        feed.image?.url ||
+        undefined;
       for (const rawItem of feed.items.slice(0, 8)) {
-        const episode = itemToEpisode(rawItem as RssItem, show, idx++);
+        const episode = itemToEpisode(rawItem as RssItem, show, idx++, feedImage);
         if (episode) out.push(episode);
       }
     } catch {
@@ -62,7 +64,12 @@ export async function fetchPodcastEpisodes(): Promise<PodcastEpisode[]> {
   return out.slice(0, 48);
 }
 
-function itemToEpisode(item: RssItem, show: string, idx: number): PodcastEpisode | null {
+function itemToEpisode(
+  item: RssItem,
+  show: string,
+  idx: number,
+  feedImage?: string
+): PodcastEpisode | null {
   const title = (item.title || "Episode").slice(0, 200);
   const pub = item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString();
   const itunes = item.itunes;
@@ -117,7 +124,7 @@ function itemToEpisode(item: RssItem, show: string, idx: number): PodcastEpisode
     audioUrl,
     mediaKind,
     embedUrl,
-    image: itunes?.image,
+    image: itunes?.image || feedImage,
     durationSec: itunes?.duration ? parseItunesDuration(String(itunes.duration)) : 1800,
     publishedAt: pub,
   };

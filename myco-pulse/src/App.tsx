@@ -1263,7 +1263,7 @@ const PodcastView = ({
            {/* RSS Status */}
            <div className="flex items-center gap-3 mb-4">
             <span className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FF5C39] text-white text-[10px] font-black uppercase tracking-tighter">
-               <Wifi className="w-3 h-3" /> CRYPTO RSS LIVE
+               <Wifi className="w-3 h-3" /> MYCOPOD RSS LIVE
             </span>
             <span className="px-3 py-1.5 bg-white/5 border border-white/10 text-myco-accent text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
                <Radio className="w-3 h-3 animate-pulse" />
@@ -1278,7 +1278,7 @@ const PodcastView = ({
             <span className="text-xs font-bold uppercase tracking-widest text-white/60 line-clamp-1">{episodes[0] ? episodes[0].title : 'Loading Latest Episode...'}</span>
           </div>
           <h1 className="text-2xl sm:text-4xl lg:text-6xl font-black tracking-tighter mb-4 text-white leading-none line-clamp-2">
-            {episodes[0]?.show?.toUpperCase() || 'CRYPTO PODCASTS'}
+            {episodes[0]?.show?.toUpperCase() || 'MYCOPOD'}
           </h1>
           
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 sm:gap-6 mt-6 md:mt-8">
@@ -1292,7 +1292,7 @@ const PodcastView = ({
                      <div className="absolute inset-y-0 left-0 w-3/4 bg-myco-accent animate-pulse" />
                   </div>
                </div>
-               <span className="text-[9px] font-bold text-dim uppercase tracking-[0.3em]">Audio Feed: Live crypto podcast RSS</span>
+               <span className="text-[9px] font-bold text-dim uppercase tracking-[0.3em]">Audio Feed: MycoPOD RSS</span>
             </div>
           </div>
         </div>
