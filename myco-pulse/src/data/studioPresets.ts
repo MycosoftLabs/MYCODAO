@@ -32,68 +32,147 @@ export interface StreamlabsStats {
   recentTips: { user: string; amount: string }[];
 }
 
-export const STUDIO_NEWS: PulseNewsItem[] = [
+/** AI Studio broadcast lines — label + headline (floating stack over video). */
+export interface BroadcastNewsLine {
+  id: string;
+  label: string;
+  headline: string;
+  isDao: boolean;
+}
+
+export const STUDIO_BROADCAST_NEWS: BroadcastNewsLine[] = [
   {
     id: "studio-1",
-    source: "PULSE WIRE",
-    title: "MARKETS NOW: STOCKS RIDING 6-WEEK WIN STREAKS AGGRESSIVELY",
-    summary: "",
-    url: "",
-    tags: ["markets"],
-    publishedAt: new Date().toISOString(),
-    category: "MARKETS",
+    label: "MARKETS NOW",
+    headline: "STOCKS RIDING 6-WEEK WIN STREAKS AGGRESSIVELY",
+    isDao: false,
   },
   {
     id: "studio-2",
-    source: "BREAKING",
-    title: "BREAKING: CHINA-EXPOSED STOCKS JUMP ON EASING RESTRICTIONS",
-    summary: "",
-    url: "",
-    tags: ["macro"],
-    publishedAt: new Date().toISOString(),
-    category: "BREAKING",
+    label: "BREAKING",
+    headline: "CHINA-EXPOSED STOCKS JUMP ON EASING RESTRICTIONS",
+    isDao: false,
   },
   {
     id: "studio-3",
-    source: "DAO",
-    title: "DAO ALERT: MYCO PROPOSAL MIP-042 QUORUM REACHED IN RECORD TIME",
-    summary: "",
-    url: "",
-    tags: ["dao"],
-    publishedAt: new Date().toISOString(),
-    category: "DAO",
+    label: "DAO ALERT",
+    headline: "MYCO PROPOSAL MIP-042 QUORUM REACHED IN RECORD TIME",
+    isDao: true,
   },
   {
     id: "studio-4",
-    source: "MACRO",
-    title: "MACRO: FED HINTS AT TERMINAL RATE STABILITY FOR Q3",
-    summary: "",
-    url: "",
-    tags: ["macro"],
-    publishedAt: new Date().toISOString(),
-    category: "MACRO",
+    label: "MACRO",
+    headline: "FED HINTS AT TERMINAL RATE STABILITY FOR Q3",
+    isDao: false,
   },
+];
+
+/** Extra queue items — fade in floating stack until cycled to active. */
+export const STUDIO_EXTRA_BROADCAST_NEWS: BroadcastNewsLine[] = [
   {
     id: "studio-5",
-    source: "CRYPTO",
-    title: "SOLANA ECOSYSTEM SEES SUSTAINED DEVELOPER ACTIVITY AMID ETF FLOWS",
-    summary: "",
-    url: "",
-    tags: ["crypto"],
-    publishedAt: new Date().toISOString(),
-    category: "CRYPTO",
+    label: "CRYPTO",
+    headline: "BITCOIN HOLDS ABOVE $98K AS ETF INFLOWS ACCELERATE",
+    isDao: false,
   },
   {
     id: "studio-6",
-    source: "BIOBANK",
-    title: "DECENTRALIZED BIOBANKS GAIN TRACTION FOR RESEARCH DATA LICENSING",
-    summary: "",
-    url: "",
-    tags: ["bio"],
-    publishedAt: new Date().toISOString(),
-    category: "SCIENCE",
+    label: "BIO",
+    headline: "VITA DAO VOTES ON NEW SPECIMEN LICENSING FRAMEWORK",
+    isDao: false,
+  },
+  {
+    id: "studio-7",
+    label: "TECH",
+    headline: "SEMICONDUCTOR NAMES LEAD PRE-MARKET GAINERS",
+    isDao: false,
+  },
+  {
+    id: "studio-8",
+    label: "GLOBAL",
+    headline: "EUROPEAN MARKETS OPEN HIGHER ON SOFT INFLATION PRINT",
+    isDao: false,
   },
 ];
+
+export const STUDIO_FULL_BROADCAST_QUEUE: BroadcastNewsLine[] = [
+  ...STUDIO_BROADCAST_NEWS,
+  ...STUDIO_EXTRA_BROADCAST_NEWS,
+];
+
+export const STUDIO_NEWS: PulseNewsItem[] = STUDIO_FULL_BROADCAST_QUEUE.map((line) => ({
+  id: line.id,
+  source: "PULSE WIRE",
+  title: `${line.label}: ${line.headline}`,
+  summary: "",
+  url: "",
+  tags: line.isDao ? ["dao"] : ["markets"],
+  publishedAt: new Date().toISOString(),
+  category: line.label,
+}));
+
+export interface StudioMarketIndex {
+  id: string;
+  name: string;
+  price: string;
+  change: string;
+  up: boolean;
+}
+
+export const STUDIO_MARKET_INDICES: StudioMarketIndex[] = [
+  { id: "dow", name: "DOW INDUSTRIALS", price: "36,316.60", change: "+0.18%", up: true },
+  { id: "spx", name: "S&P 500", price: "4,606.90", change: "+0.05%", up: true },
+  { id: "ndx", name: "NASDAQ COMPOSITE", price: "14,367.59", change: "-0.25%", up: false },
+  { id: "myco", name: "MYCO PROTOCOL", price: "0.0423", change: "+1.91%", up: true },
+];
+
+export const STUDIO_BITCOIN_CM = { price: "41,826.01", up: false, change: "-0.42%" };
+
+export const STUDIO_SCROLL_TICKER: { sym: string; change: string; up: boolean }[] = [
+  { sym: "DXY", change: "-0.45%", up: false },
+  { sym: "SPX", change: "+1.24%", up: true },
+  { sym: "BABA", change: "+4.52%", up: true },
+  { sym: "BTC", change: "-0.42%", up: false },
+  { sym: "ETH", change: "+0.88%", up: true },
+  { sym: "SOL", change: "+2.15%", up: true },
+  { sym: "MYCO", change: "+1.91%", up: true },
+  { sym: "VIX", change: "+1.90%", up: true },
+];
+
+/** AI Studio bottom crawl — alternating quotes + headline snippets. */
+export interface StudioTickerSegment {
+  kind: "quote" | "news";
+  sym?: string;
+  price?: string;
+  change?: string;
+  up?: boolean;
+  text: string;
+}
+
+export function buildStudioTickerSegments(
+  lines: BroadcastNewsLine[],
+  quotes: { sym: string; change: string; up: boolean; price?: string }[] = [],
+): StudioTickerSegment[] {
+  const out: StudioTickerSegment[] = [];
+  if (!lines.length) return out;
+  lines.forEach((line, i) => {
+    const q = quotes[i % Math.max(quotes.length, 1)];
+    if (q) {
+      out.push({
+        kind: "quote",
+        sym: q.sym,
+        price: q.price,
+        change: q.change,
+        up: q.up,
+        text: q.change,
+      });
+    }
+    const snippet =
+      line.headline.length > 44 ? `${line.headline.slice(0, 44)}…` : line.headline;
+    out.push({ kind: "news", text: `${line.label}: ${snippet}` });
+  });
+  return out;
+}
 
 export const STUDIO_WHALE_LEDGER: StudioWhaleRow[] = [
   {
@@ -262,6 +341,16 @@ export const STUDIO_TICKER_GROUPS: TickerGroups = {
     { s: "DXY", p: "104.2", c: "-0.22%", up: false },
     { s: "VIX", p: "14.25", c: "+1.90%", up: true },
   ],
+  watchlist: [
+    { s: "BTC", p: "98,420", c: "+1.24%", up: true },
+    { s: "ETH", p: "3,842", c: "+0.88%", up: true },
+    { s: "SOL", p: "162.40", c: "+2.15%", up: true },
+    { s: "MYCO", p: "0.0423", c: "+1.91%", up: true },
+    { s: "XAU", p: "2,338", c: "+0.42%", up: true },
+    { s: "NVDA", p: "892", c: "+2.40%", up: true },
+    { s: "SPY", p: "528.40", c: "+0.32%", up: true },
+    { s: "OIL", p: "78.40", c: "+0.65%", up: true },
+  ],
 };
 
 function synthChartPoint(i: number, base: number) {
@@ -279,25 +368,53 @@ export const STUDIO_CHART_DATA = Array.from({ length: 48 }, (_, i) => synthChart
 export const STUDIO_ORACLE_INSIGHT =
   "STUDIO BROADCAST MODE — UI presets active. Live feeds merge when MYCODAO /api/* keys are configured. Codex handoff: wire news, Streamlabs, whale index, and MAS intel.";
 
+export function pulseNewsToBroadcastLines(items: PulseNewsItem[]): BroadcastNewsLine[] {
+  if (!items.length) return [];
+  return items.slice(0, 32).map((item) => {
+    const upper = item.title.toUpperCase();
+    const known = [
+      "MARKETS NOW",
+      "BREAKING",
+      "DAO ALERT",
+      "MACRO",
+      "BUSINESS",
+      "WASHINGTON",
+      "BITCOIN",
+      "SOLANA",
+      "CRYPTO",
+      "DEFI",
+      "REGULATION",
+    ] as const;
+    for (const label of known) {
+      if (upper.startsWith(label)) {
+        return {
+          id: item.id,
+          label,
+          headline: item.title.slice(label.length).replace(/^:\s*/, "").trim(),
+          isDao: label === "DAO ALERT" || item.tags?.includes("dao") === true,
+        };
+      }
+    }
+    const label = (item.broadcastLabel || item.category || "MARKETS NOW").toUpperCase();
+    return {
+      id: item.id,
+      label,
+      headline: item.title,
+      isDao: label === "DAO ALERT" || item.tags?.includes("dao") === true,
+    };
+  });
+}
+
+/** Live news only — no synthetic article fallback. */
 export function mergeNewsWithStudio(live: PulseNewsItem[]): PulseNewsItem[] {
-  return live.length ? live : STUDIO_NEWS;
+  return live;
 }
 
 export function mergeEpisodesWithStudio(live: PulsePodcastEpisode[]): PulsePodcastEpisode[] {
-  return live.length ? live : STUDIO_EPISODES;
+  return live;
 }
 
+/** Live tickers only — no synthetic price fallback (no-mock policy). */
 export function mergeTickerGroupsWithStudio(groups: TickerGroups): TickerGroups {
-  const merge = (live: TickerGroups[keyof TickerGroups], preset: TickerGroups[keyof TickerGroups]) =>
-    live.length ? live : preset;
-
-  return {
-    crypto: merge(groups.crypto, STUDIO_TICKER_GROUPS.crypto),
-    metals: merge(groups.metals, STUDIO_TICKER_GROUPS.metals),
-    commodities: merge(groups.commodities, STUDIO_TICKER_GROUPS.commodities),
-    bio: merge(groups.bio, STUDIO_TICKER_GROUPS.bio),
-    tech: merge(groups.tech, STUDIO_TICKER_GROUPS.tech),
-    business: merge(groups.business, STUDIO_TICKER_GROUPS.business),
-    indicators: merge(groups.indicators, STUDIO_TICKER_GROUPS.indicators),
-  };
+  return groups;
 }

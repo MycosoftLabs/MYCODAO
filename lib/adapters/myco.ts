@@ -5,6 +5,11 @@
 
 import type { MycoSnapshot } from "@/lib/types";
 import { enrichMycoSnapshot } from "@/lib/adapters/myco-enrichment";
+import {
+  MYCO_CANONICAL_SOLANA_MINT,
+  fetchLiveMycoQuote,
+  mycoExternalLinks,
+} from "@/lib/adapters/myco-price-sources";
 
 /**
  * Ensure biobank/governance objects exist for UI shape only.
@@ -53,21 +58,6 @@ function emptySnapshot(): MycoSnapshot {
   };
 }
 
-async function fetchDexScreenerToken(mint: string): Promise<{ priceUsd: number; change24h: number } | null> {
-  const url = `https://api.dexscreener.com/latest/dex/tokens/${mint}`;
-  const res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(10_000) });
-  if (!res.ok) return null;
-  const data = (await res.json()) as {
-    pairs?: Array<{ priceUsd?: string; priceChange?: { h24?: number } }>;
-  };
-  const pair = data.pairs?.[0];
-  if (!pair?.priceUsd) return null;
-  const priceUsd = parseFloat(pair.priceUsd);
-  const change24h = pair.priceChange?.h24 ?? 0;
-  if (!Number.isFinite(priceUsd)) return null;
-  return { priceUsd, change24h };
-}
-
 export async function fetchMycoSnapshot(): Promise<MycoSnapshot> {
   const snapshotUrl = process.env.MYCO_SNAPSHOT_URL?.trim();
   if (snapshotUrl) {
@@ -79,31 +69,33 @@ export async function fetchMycoSnapshot(): Promise<MycoSnapshot> {
     return ensurePhase3Fields(await enrichMycoSnapshot(raw));
   }
 
-  const mint = process.env.MYCO_SOLANA_MINT?.trim();
-  if (mint) {
-    try {
-      const dex = await fetchDexScreenerToken(mint);
-      if (dex) {
-        const now = new Date().toISOString();
-        const base = emptySnapshot();
-        const links: MycoSnapshot["links"] = {
-          ...base.links,
-          tokenPage: process.env.NEXT_PUBLIC_MYCO_TOKEN_PAGE || base.links.tokenPage,
-          governanceUrl: process.env.NEXT_PUBLIC_MYCO_GOV_URL ?? base.links.governanceUrl,
-          buyUrl: process.env.NEXT_PUBLIC_MYCO_BUY_URL ?? base.links.buyUrl,
-        };
-        const merged: MycoSnapshot = {
-          ...base,
-          price: dex.priceUsd,
-          changePct: dex.change24h,
-          updatedAt: now,
-          links,
-        };
-        return ensurePhase3Fields(await enrichMycoSnapshot(merged));
-      }
-    } catch {
-      /* fall through */
+  const mint = MYCO_CANONICAL_SOLANA_MINT;
+  try {
+    const quote = await fetchLiveMycoQuote(mint);
+    if (quote) {
+      const now = new Date().toISOString();
+      const base = emptySnapshot();
+      const ext = mycoExternalLinks(mint);
+      const links: MycoSnapshot["links"] = {
+        ...base.links,
+        tokenPage: process.env.NEXT_PUBLIC_MYCO_TOKEN_PAGE || base.links.tokenPage,
+        governanceUrl: process.env.NEXT_PUBLIC_MYCO_GOV_URL ?? base.links.governanceUrl,
+        buyUrl: process.env.NEXT_PUBLIC_MYCO_BUY_URL ?? base.links.buyUrl,
+        dexscreenerUrl: ext.dexscreener,
+      };
+      const merged: MycoSnapshot = {
+        ...base,
+        price: quote.priceUsd,
+        changePct: quote.change24h,
+        fdv: quote.fdvUsd,
+        liquidityUsd: quote.liquidityUsd,
+        updatedAt: now,
+        links,
+      };
+      return ensurePhase3Fields(await enrichMycoSnapshot(merged));
     }
+  } catch {
+    /* fall through */
   }
 
   return ensurePhase3Fields(await enrichMycoSnapshot(emptySnapshot()));

@@ -1,309 +1,624 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Activity, Clock, Globe, Zap, Radio, TrendingUp, TrendingDown } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
+import { Activity, TrendingDown } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { fetchPulseNews, fetchPulseTickers, type PulseNewsItem, type PulseTicker } from '../lib/pulseApi';
-import { STUDIO_NEWS, mergeNewsWithStudio } from '../data/studioPresets';
+import { mycodaoWhiteLogo } from '../lib/brandLogos';
+import { type PulseTicker } from '../lib/pulseApi';
+import {
+  type BroadcastNewsLine,
+  type StudioMarketIndex,
+} from '../data/studioPresets';
+import { buildLiveNewsTickerSegments } from '../lib/newsTickerCrawl';
+import { PulseMarqueeTicker } from './PulseMarqueeTicker';
+import {
+  getCachedPulseNewsBundle,
+  initPulseMarketsFromStorage,
+  prefetchPulseNewsBundle,
+  refreshPulseMarketsSlice,
+  refreshPulseNewsBundle,
+  subscribePulseNewsBundle,
+} from '../lib/pulseNewsPrefetch';
+import { loadMarketsSnapshot } from '../lib/pulseMarketsStore';
+import {
+  ACQUISITION_ROTATE_MS,
+  buildAcquisitionPool,
+  pickNextAcquisitionIndex,
+  type AcquisitionQuote,
+} from '../lib/liveStreamAcquisition';
+import {
+  MARKETS_CATEGORY_ROTATE_MS,
+  MARKETS_NOW_CATEGORIES,
+  buildMarketsNowCategorySets,
+  pickNextCategoryIndex,
+  seedMarketsNowCategorySets,
+  type MarketsNowCategorySet,
+} from '../lib/marketsNowCategories';
+import { buildFloatingNewsPages } from '../lib/floatingNewsPages';
+import {
+  getMajorMarketSessions,
+  MARKET_ZONE_ROTATE_MS,
+  type MarketSessionState,
+} from '../lib/marketSessions';
 
-function formatChange(pct: number): string {
-  const sign = pct >= 0 ? '+' : '';
-  return `${sign}${pct.toFixed(2)}%`;
+const NEWS_BUMPER_CYCLE_MS = 6000;
+const TIMEZONE_BUMPER_CYCLE_MS = 8000;
+const MARKET_ZONE_CLOCK_MS = 15_000;
+const TICKER_REFRESH_MS = 10_000;
+const NEWS_REFRESH_MS = 120_000;
+
+const BUMPER_TIME_ZONES = [
+  { tz: 'America/Los_Angeles', label: 'PACIFIC' },
+  { tz: 'America/Denver', label: 'MT' },
+  { tz: 'America/Chicago', label: 'CENTRAL' },
+  { tz: 'America/New_York', label: 'EASTERN' },
+] as const;
+
+interface BumperZoneClock {
+  id: string;
+  time: string;
+  meridiem: string;
+  label: string;
 }
 
-function formatPrice(price: number): string {
-  if (!price || price <= 0) return '—';
-  if (price >= 1000) return price.toLocaleString(undefined, { maximumFractionDigits: 2 });
-  if (price >= 1) return price.toFixed(2);
-  return price.toFixed(4);
-}
-
-function pacificClock(): string {
-  return new Date().toLocaleTimeString('en-US', {
-    timeZone: 'America/Los_Angeles',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
+function buildBumperZoneClocks(): BumperZoneClock[] {
+  return BUMPER_TIME_ZONES.map((zone) => {
+    const parts = new Date()
+      .toLocaleTimeString('en-US', {
+        timeZone: zone.tz,
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      })
+      .split(' ');
+    return {
+      id: zone.label,
+      time: parts[0] ?? '',
+      meridiem: (parts[1] ?? 'AM').charAt(0).toUpperCase(),
+      label: zone.label,
+    };
   });
 }
 
+function MarketZonePanel({ session }: { session: MarketSessionState | null }) {
+  if (!session) {
+    return (
+      <div className="bg-[#0055cc] px-4 py-3 border-2 border-white min-h-[88px]">
+        <p className="text-[8px] font-black text-white/75 uppercase tracking-[0.35em] mb-1">Market Zone</p>
+        <p className="text-2xl font-black text-white font-mono leading-none">—</p>
+        <p className="text-[9px] font-black text-white uppercase tracking-[0.2em] mt-1">—</p>
+      </div>
+    );
+  }
+
+  const pulse = session.isLive;
+
+  return (
+    <div className="bg-[#0055cc] px-4 py-3 border-2 border-white min-h-[88px] overflow-hidden">
+      <p className="text-[8px] font-black text-white/75 uppercase tracking-[0.35em] mb-1">Market Zone</p>
+      <div className="relative h-[52px]">
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={session.exchange.id}
+            className="absolute inset-0"
+            initial={{ y: 10, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -10, opacity: 0 }}
+            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <p className="text-2xl font-black text-white font-mono leading-none">{session.localTime}</p>
+            <p className="text-[9px] font-black text-white/90 uppercase tracking-[0.22em] mt-1">
+              {session.exchange.shortName} · {session.exchange.region}
+            </p>
+            <p className="text-[9px] font-black text-white uppercase tracking-[0.2em] mt-1 flex items-center gap-1.5">
+              <Activity className={cn('size-3', pulse && 'animate-pulse')} />
+              {session.statusLabel}
+            </p>
+            <p className="text-[8px] font-bold text-white/70 uppercase tracking-widest mt-0.5">
+              {session.detailLine}
+            </p>
+          </motion.div>
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
+
+function LiveStreamAcquisitionPanel({ quote }: { quote: AcquisitionQuote }) {
+  return (
+    <div className="bg-black/80 border border-white/10 px-3 py-2 min-w-[200px] overflow-hidden">
+      <div className="flex justify-between text-[7px] font-bold text-white/45 uppercase tracking-widest mb-1">
+        <span>Source</span>
+        <span className="text-[#5eb3ff]">PULSE_ORACLE_01</span>
+      </div>
+      <div className="relative h-7 overflow-hidden">
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={quote.symbol}
+            className="absolute inset-0 flex items-end justify-between gap-2"
+            initial={{ y: 12, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -12, opacity: 0 }}
+            transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <span className="text-[9px] font-black text-white uppercase truncate pr-2">
+              {quote.label}
+            </span>
+            <div className="flex items-center gap-1 shrink-0">
+              <span className="text-lg font-black font-mono text-white leading-none">
+                {quote.price}
+              </span>
+              {!quote.up && <TrendingDown className="size-3 text-red-500 shrink-0" />}
+            </div>
+          </motion.div>
+        </AnimatePresence>
+      </div>
+      <p className="text-[7px] font-bold text-white/35 uppercase tracking-widest mt-1">
+        {quote.symbol} · {quote.change}
+      </p>
+    </div>
+  );
+}
+
+function stackLineOpacity(index: number, activeIndex: number): number {
+  const dist = Math.abs(index - activeIndex);
+  if (dist === 0) return 1;
+  if (dist === 1) return 0.78;
+  if (dist === 2) return 0.65;
+  if (dist === 3) return 0.52;
+  return 0.42;
+}
+
+function MarketsNowRow({ row }: { row: StudioMarketIndex }) {
+  return (
+    <div className="py-1.5 border-b border-white/5 last:border-0 min-h-[34px]">
+      <span className="text-[7px] font-bold text-white/45 uppercase tracking-widest block mb-0.5 truncate">
+        {row.name}
+      </span>
+      <div className="flex justify-between items-baseline gap-2">
+        <AnimatePresence mode="popLayout" initial={false}>
+          <motion.span
+            key={`${row.id}-${row.price}`}
+            className="text-xs font-black text-white font-mono"
+            initial={{ opacity: 0.55, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+          >
+            {row.price}
+          </motion.span>
+        </AnimatePresence>
+        <motion.span
+          key={`${row.id}-${row.change}`}
+          className={cn('text-[8px] font-bold shrink-0', row.up ? 'text-[#00ff88]' : 'text-red-400')}
+          initial={{ opacity: 0.6 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.35 }}
+        >
+          {row.up ? '▲' : '▼'} {row.change}
+        </motion.span>
+      </div>
+    </div>
+  );
+}
+
+function MarketsNowCategoryPanel({
+  sets,
+  activeIndex,
+}: {
+  sets: MarketsNowCategorySet[];
+  activeIndex: number;
+}) {
+  const set = sets[activeIndex] ?? sets[0];
+  const visibleRows = set?.items ?? [];
+
+  return (
+    <div className="min-h-0 h-full flex flex-col overflow-hidden px-4 pt-2 pb-2 relative z-0">
+      <div className="relative h-5 overflow-hidden shrink-0 mb-1">
+        {set ? (
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.p
+              key={set.category.id}
+              className="absolute inset-0 text-[9px] font-black text-[#5eb3ff] uppercase tracking-[0.28em]"
+              initial={{ y: 10, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: -10, opacity: 0 }}
+              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+            >
+              {set.category.label}
+            </motion.p>
+          </AnimatePresence>
+        ) : null}
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden no-scrollbar overscroll-contain">
+        {visibleRows.length > 0 ? (
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={set?.category.id}
+              className="flex flex-col justify-start gap-0 pb-2"
+              initial={{ x: 20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: -20, opacity: 0 }}
+              transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+            >
+              {visibleRows.map((idx) => (
+                <MarketsNowRow key={idx.id} row={idx} />
+              ))}
+            </motion.div>
+          </AnimatePresence>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function TimezoneVerticalTicker({ zones, activeIndex }: { zones: BumperZoneClock[]; activeIndex: number }) {
+  const zone = zones[activeIndex] ?? zones[0];
+  if (!zone) return null;
+
+  return (
+    <div className="relative h-full w-full overflow-hidden">
+      <AnimatePresence mode="popLayout" initial={false}>
+        <motion.div
+          key={`${zone.id}-${zone.time}-${zone.meridiem}`}
+          className="absolute inset-0 flex flex-col items-center justify-center leading-none text-center"
+          initial={{ y: '100%', opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: '-100%', opacity: 0 }}
+          transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <p className="text-sm font-black text-white font-mono tracking-tight">{zone.time}</p>
+          <p className="text-[7px] font-black text-white uppercase tracking-widest mt-0.5">
+            {zone.label}
+          </p>
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function HeadlineVerticalTicker({ lines, activeIndex }: { lines: BroadcastNewsLine[]; activeIndex: number }) {
+  const line = lines[activeIndex] ?? lines[0];
+  if (!line) return null;
+
+  return (
+    <div className="relative flex-1 min-w-0 h-full overflow-hidden">
+      <AnimatePresence mode="popLayout" initial={false}>
+        <motion.p
+          key={`${line.id}-${activeIndex}`}
+          className="absolute inset-0 flex items-center px-5 text-[16px] sm:text-[17px] font-black text-[#0055cc] uppercase tracking-wide leading-tight"
+          initial={{ y: '100%', opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: '-100%', opacity: 0 }}
+          transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <span className="line-clamp-2">{line.headline}</span>
+        </motion.p>
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function hydrateFromBundle(bundle: ReturnType<typeof getCachedPulseNewsBundle>) {
+  initPulseMarketsFromStorage();
+  const snap = loadMarketsSnapshot();
+  if (snap?.categorySets.length) seedMarketsNowCategorySets(snap.categorySets);
+
+  const b = bundle ?? getCachedPulseNewsBundle();
+  if (!b) {
+    return {
+      newsLines: [] as BroadcastNewsLine[],
+      marketIndices: (snap?.marketIndices ?? []) as StudioMarketIndex[],
+      tickers: (snap?.tickers ?? []) as PulseTicker[],
+    };
+  }
+  return {
+    newsLines: b.newsLines.length ? b.newsLines : (snap?.newsLines ?? []),
+    marketIndices: b.marketIndices,
+    tickers: b.tickers,
+  };
+}
+
 export const CNBCNewsWidget = () => {
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [news, setNews] = useState<PulseNewsItem[]>([]);
-  const [indices, setIndices] = useState<PulseTicker[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [clock, setClock] = useState(pacificClock());
-  const [showClosingBell, setShowClosingBell] = useState(false);
+  const initial = hydrateFromBundle(getCachedPulseNewsBundle());
+  const [newsLines, setNewsLines] = useState<BroadcastNewsLine[]>(initial.newsLines);
+  const [marketIndices, setMarketIndices] = useState<StudioMarketIndex[]>(initial.marketIndices);
+  const [tickers, setTickers] = useState<PulseTicker[]>(initial.tickers);
+  const [clockTick, setClockTick] = useState(0);
+  const [marketZoneIndex, setMarketZoneIndex] = useState(0);
+  const [activeTabIndex, setActiveTabIndex] = useState(0);
+  const [newsPageIndex, setNewsPageIndex] = useState(0);
+  const [timezoneIndex, setTimezoneIndex] = useState(0);
+  const [acquisitionIndex, setAcquisitionIndex] = useState(0);
+  const [marketsCategoryIndex, setMarketsCategoryIndex] = useState(0);
+
+  const bumperZoneClocks = useMemo(() => buildBumperZoneClocks(), [clockTick]);
+
+  const marketSessions = useMemo(() => getMajorMarketSessions(), [clockTick]);
+  const marketZoneSession = marketSessions[marketZoneIndex] ?? marketSessions[0] ?? null;
 
   useEffect(() => {
-    const load = async () => {
-      const [newsRows, tickers] = await Promise.all([fetchPulseNews(), fetchPulseTickers()]);
-      setNews(mergeNewsWithStudio(newsRows));
-      setIndices(
-        tickers.filter((t) =>
-          ['SPY', 'QQQ', 'DXY', 'BTC', 'MYCO', 'SOL', 'DOW', 'NDX'].includes(t.symbol.toUpperCase())
-        )
-      );
-      setLoading(false);
+    const applyBundle = (bundle: ReturnType<typeof getCachedPulseNewsBundle>) => {
+      if (!bundle) return;
+      setNewsLines((prev) => (bundle.newsLines.length ? bundle.newsLines : prev));
+      setTickers((prev) => (bundle.tickers.length ? bundle.tickers : prev));
+      setMarketIndices((prev) => (bundle.marketIndices.length ? bundle.marketIndices : prev));
     };
-    load();
-    const timer = setInterval(load, 120_000);
-    return () => clearInterval(timer);
+
+    void prefetchPulseNewsBundle().then(applyBundle);
+    const unsub = subscribePulseNewsBundle(applyBundle);
+
+    const newsTimer = setInterval(() => {
+      void refreshPulseNewsBundle().then(applyBundle);
+    }, NEWS_REFRESH_MS);
+    const tickerTimer = setInterval(() => {
+      void refreshPulseMarketsSlice();
+    }, TICKER_REFRESH_MS);
+
+    return () => {
+      unsub();
+      clearInterval(newsTimer);
+      clearInterval(tickerTimer);
+    };
   }, []);
 
   useEffect(() => {
-    const t = setInterval(() => setClock(pacificClock()), 30_000);
+    const t = setInterval(() => setClockTick((n) => n + 1), MARKET_ZONE_CLOCK_MS);
     return () => clearInterval(t);
   }, []);
 
   useEffect(() => {
-    const items = news.length ? news : STUDIO_NEWS;
-    const timer = setInterval(() => {
-      setActiveIndex((prev) => (prev + 1) % items.length);
-    }, 6000);
-    return () => clearInterval(timer);
-  }, [news.length]);
+    if (marketSessions.length <= 1) return;
+    const t = setInterval(
+      () => setMarketZoneIndex((p) => (p + 1) % marketSessions.length),
+      MARKET_ZONE_ROTATE_MS
+    );
+    return () => clearInterval(t);
+  }, [marketSessions.length]);
 
   useEffect(() => {
-    const bell = setInterval(() => {
-      setShowClosingBell(true);
-      setTimeout(() => setShowClosingBell(false), 4500);
-    }, 45_000);
-    return () => clearInterval(bell);
+    const t = setInterval(
+      () => setTimezoneIndex((p) => (p + 1) % BUMPER_TIME_ZONES.length),
+      TIMEZONE_BUMPER_CYCLE_MS
+    );
+    return () => clearInterval(t);
   }, []);
 
-  const displayNews = news.length ? news : STUDIO_NEWS;
-  const headline = displayNews[activeIndex] ?? displayNews[0];
-  const btc = indices.find((t) => t.symbol.toUpperCase() === 'BTC');
-  const marqueeText = displayNews.map((n) => n.title).join('   •   ');
+  const displayLines = useMemo(() => newsLines.slice(0, 32), [newsLines]);
 
-  const newsNowItems = useMemo(() => displayNews.slice(0, 6), [displayNews]);
+  const floatingNewsPages = useMemo(() => buildFloatingNewsPages(newsLines), [newsLines]);
+
+  const currentPageLines = useMemo(
+    () => floatingNewsPages[newsPageIndex] ?? [],
+    [floatingNewsPages, newsPageIndex]
+  );
+
+  const acquisitionPool = useMemo(
+    () => buildAcquisitionPool(tickers, currentPageLines, activeTabIndex),
+    [tickers, currentPageLines, activeTabIndex]
+  );
+
+  const acquisitionQuote = acquisitionPool[acquisitionIndex] ?? acquisitionPool[0] ?? null;
+
+  useEffect(() => {
+    setAcquisitionIndex(0);
+  }, [acquisitionPool.length, activeTabIndex]);
+
+  useEffect(() => {
+    if (acquisitionPool.length <= 1) return;
+    const t = setInterval(() => {
+      setAcquisitionIndex((prev) => pickNextAcquisitionIndex(acquisitionPool, prev));
+    }, ACQUISITION_ROTATE_MS);
+    return () => clearInterval(t);
+  }, [acquisitionPool]);
+
+  useEffect(() => {
+    setActiveTabIndex(0);
+    setNewsPageIndex(0);
+  }, [floatingNewsPages.length, newsLines.length]);
+
+  useEffect(() => {
+    setActiveTabIndex(0);
+  }, [newsPageIndex]);
+
+  useEffect(() => {
+    const count = currentPageLines.length;
+    const pageCount = floatingNewsPages.length;
+    if (count === 0) return;
+
+    const t = setInterval(() => {
+      setActiveTabIndex((prev) => {
+        const onLastItem = prev >= count - 1;
+        if (onLastItem) {
+          if (pageCount > 1) {
+            setNewsPageIndex((p) => (p + 1) % pageCount);
+          }
+          return 0;
+        }
+        return prev + 1;
+      });
+    }, NEWS_BUMPER_CYCLE_MS);
+
+    return () => clearInterval(t);
+  }, [currentPageLines.length, floatingNewsPages.length]);
+
+  const tickerSegments = useMemo(
+    () => buildLiveNewsTickerSegments(newsLines, tickers),
+    [newsLines, tickers]
+  );
+
+  const marketsCategorySets = useMemo(
+    () => buildMarketsNowCategorySets(marketIndices, tickers),
+    [marketIndices, tickers]
+  );
+
+  useEffect(() => {
+    setMarketsCategoryIndex(0);
+  }, [marketsCategorySets.length]);
+
+  const marketsCategoryRef = useRef(0);
+  marketsCategoryRef.current = marketsCategoryIndex;
+
+  useEffect(() => {
+    const tabCount = MARKETS_NOW_CATEGORIES.length;
+    if (tabCount <= 1) return;
+
+    const t = setInterval(() => {
+      const cat = marketsCategoryRef.current;
+      setMarketsCategoryIndex(pickNextCategoryIndex(tabCount, cat));
+    }, MARKETS_CATEGORY_ROTATE_MS);
+
+    return () => clearInterval(t);
+  }, []);
+
+  const marketsRailWidth = 'clamp(175px, 22%, 280px)';
+  const bumperHeight = 'calc(68px + 26px)';
 
   return (
-    <div className="relative w-full h-full min-h-[calc(100vh-4rem)] bg-[#050505] overflow-hidden flex flex-col font-sans select-none">
-      {/* Broadcast stage */}
-      <div className="relative flex-1 bg-gradient-to-br from-[#0a1a4a]/40 via-black to-[#2a0a0a]/30 flex items-center justify-center overflow-hidden">
-        {/* Grid + vignette */}
-        <div
-          className="absolute inset-0 opacity-[0.12] pointer-events-none"
-          style={{
-            backgroundImage: 'radial-gradient(circle at 2px 2px, #3b82f6 1px, transparent 0)',
-            backgroundSize: '28px 28px',
-          }}
-        />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,#000_75%)] pointer-events-none" />
+    <div className="relative w-full flex-1 min-h-0 bg-[#050505] overflow-hidden flex flex-col font-sans select-none isolate">
+      <div
+        className="relative flex-1 min-h-0 overflow-hidden grid z-10"
+        style={{ gridTemplateColumns: `1fr ${marketsRailWidth}` }}
+      >
+        <div className="relative min-w-0 bg-black overflow-hidden">
+          <div
+            className="absolute inset-0 opacity-[0.14] pointer-events-none"
+            style={{
+              backgroundImage: 'radial-gradient(circle at 2px 2px, #3b82f6 1px, transparent 0)',
+              backgroundSize: '26px 26px',
+            }}
+          />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,#000_70%)] pointer-events-none" />
 
-        {/* Center oracle mark */}
-        <motion.div
-          className="absolute inset-0 flex items-center justify-center pointer-events-none"
-          animate={{ opacity: [0.04, 0.08, 0.04] }}
-          transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
-        >
-          <span className="text-[28vw] font-black text-white/10 tracking-tighter">M</span>
-        </motion.div>
-
-        {/* Top-left: Live stream acquisition bumper */}
-        <motion.div
-          className="absolute top-6 left-6 z-20 flex flex-col gap-2"
-          initial={{ opacity: 0, x: -24 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.5 }}
-        >
-          <div className="bg-[#0055cc] px-4 py-1.5 text-[11px] font-black text-white uppercase tracking-[0.25em] flex items-center gap-2 shadow-lg">
-            <Radio className="size-3.5 animate-pulse" />
-            LIVE STREAM ACQUISITION
-          </div>
-          <div className="bg-black/70 backdrop-blur-md border border-white/10 p-4 flex flex-col gap-2 min-w-[240px] shadow-2xl">
-            <div className="flex justify-between items-center text-[9px] font-bold text-dim uppercase tracking-widest">
-              <span>Source</span>
-              <span className="text-blue-400">PULSE_ORACLE_01</span>
+          <motion.div
+            className="absolute top-5 left-5 z-20 flex flex-col gap-0"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.45 }}
+          >
+            <div className="bg-[#0055cc] px-3 py-0.5 text-[9px] font-black text-white uppercase tracking-[0.2em]">
+              LIVE STREAM ACQUISITION
             </div>
-            <div className="h-px bg-white/10" />
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-[10px] font-black text-white uppercase">Bitcoin</span>
-              <div className="flex items-center gap-2">
-                <span className="text-lg font-black font-mono text-white">
-                  {btc ? formatPrice(btc.price) : loading ? '…' : '—'}
-                </span>
-                {btc && (
-                  <span
-                    className={cn(
-                      'text-[10px] font-bold flex items-center gap-0.5',
-                      (btc.changePct ?? 0) >= 0 ? 'text-myco-accent' : 'text-red-400'
-                    )}
-                  >
-                    {(btc.changePct ?? 0) >= 0 ? (
-                      <TrendingUp className="size-3" />
-                    ) : (
-                      <TrendingDown className="size-3" />
-                    )}
-                    {formatChange(btc.changePct ?? 0)}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-        </motion.div>
+            <LiveStreamAcquisitionPanel
+              quote={
+                acquisitionQuote ?? {
+                  symbol: "BTC",
+                  label: "Bitcoin CM",
+                  price: "—",
+                  change: "—",
+                  up: true,
+                }
+              }
+            />
+          </motion.div>
 
-        {/* Pacific time bumper */}
-        <motion.div
-          className="absolute bottom-24 left-6 z-30 bg-[#0055cc] px-5 py-3 shadow-xl border-l-4 border-white"
-          animate={{ y: [0, -2, 0] }}
-          transition={{ duration: 4, repeat: Infinity }}
-        >
-          <p className="text-[10px] font-bold text-white/70 uppercase tracking-widest leading-none mb-1">Pacific</p>
-          <p className="text-2xl font-black text-white font-mono tracking-tight">{clock}</p>
-        </motion.div>
+          {/* Floating news — vertical stack; advances page only after every headline on page is highlighted */}
+          <div className="absolute inset-y-0 top-0 right-0 z-30 flex flex-col justify-start pt-12 pr-7 pb-20 pl-2 w-[min(320px,38%)] pointer-events-none">
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={newsPageIndex}
+                className="flex flex-col justify-start gap-3.5 min-h-0"
+                initial={{ opacity: 0, x: 12 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -12 }}
+                transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+              >
+              {currentPageLines.map((line, i) => {
+                const isActive = i === activeTabIndex;
+                const opacity = stackLineOpacity(i, activeTabIndex);
 
-        {/* Closing bell overpanel */}
-        <AnimatePresence>
-          {showClosingBell && (
-            <motion.div
-              className="absolute bottom-32 right-[22%] z-40 bg-[#0055cc] border-2 border-white px-6 py-4 shadow-2xl"
-              initial={{ opacity: 0, scale: 0.85, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 10 }}
-              transition={{ type: 'spring', stiffness: 260, damping: 22 }}
-            >
-              <p className="text-[10px] font-black text-white/80 uppercase tracking-[0.3em] mb-1">Market Zone</p>
-              <p className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-2">
-                <Activity className="size-5 animate-pulse" />
-                Closing Bell
-              </p>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Right: NEWS NOW + MARKETS NOW */}
-        <div className="absolute top-0 right-0 h-full w-[min(340px,28%)] bg-[#0a1128]/90 backdrop-blur-xl border-l border-white/10 flex flex-col z-20">
-          <div className="p-4 border-b border-white/10 bg-blue-600/20">
-            <h3 className="text-[11px] font-black text-white tracking-[0.35em] flex items-center gap-2">
-              <Globe className="size-3.5 text-blue-300" />
-              NEWS NOW
-            </h3>
-          </div>
-
-          <div className="flex-1 overflow-y-auto no-scrollbar p-3 flex flex-col gap-2">
-            {loading ? (
-              <p className="text-[10px] text-dim uppercase p-4 animate-pulse">Syncing headlines…</p>
-            ) : (
-              newsNowItems.map((item, i) => {
-                const isActive = i === activeIndex % newsNowItems.length;
-                const isDao = item.tags?.includes('dao') || item.title.toLowerCase().includes('dao');
                 return (
-                  <motion.div
-                    key={item.id + i}
-                    layout
-                    className={cn(
-                      'p-3 border transition-all cursor-default',
-                      isActive
-                        ? isDao
-                          ? 'bg-white text-black border-white shadow-lg scale-[1.02]'
-                          : 'bg-blue-600/30 border-blue-400/50 text-white'
-                        : 'bg-black/30 border-white/5 text-white/80 hover:border-white/20'
+                  <div key={line.id} className="flex items-start shrink-0">
+                    {isActive ? (
+                      <motion.div
+                        layout
+                        initial={false}
+                        className="w-full bg-white border-l-[5px] border-l-[#0055cc] pl-4 pr-4 py-3.5 shadow-[0_10px_32px_rgba(0,0,0,0.65)]"
+                        transition={{ duration: 0.35 }}
+                      >
+                        <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#0055cc] mb-2">
+                          {line.label}
+                        </p>
+                        <p className="text-[13px] sm:text-sm font-black uppercase leading-[1.4] text-black line-clamp-3">
+                          {line.headline}
+                        </p>
+                      </motion.div>
+                    ) : (
+                      <motion.p
+                        layout
+                        className="w-full text-[10px] sm:text-[11px] font-bold uppercase tracking-wide leading-[1.55] [text-shadow:0_1px_3px_rgba(0,0,0,0.95)] line-clamp-2 py-0.5"
+                        style={{ opacity }}
+                        animate={{ opacity }}
+                        transition={{ duration: 0.35 }}
+                      >
+                        <span className="text-[#6eb5ff]/85">{line.label}:</span>{' '}
+                        <span className="text-white/50">{line.headline}</span>
+                      </motion.p>
                     )}
-                    animate={isActive ? { x: [0, 4, 0] } : {}}
-                    transition={{ duration: 0.6 }}
-                  >
-                    <p
-                      className={cn(
-                        'text-[9px] font-black uppercase tracking-widest mb-1',
-                        isActive && isDao ? 'text-blue-700' : 'text-blue-300'
-                      )}
-                    >
-                      {isDao ? 'DAO ALERT' : item.category || 'MARKETS'}
-                    </p>
-                    <p
-                      className={cn(
-                        'text-[11px] font-bold leading-snug uppercase',
-                        isActive && isDao ? 'text-black' : ''
-                      )}
-                    >
-                      {item.title}
-                    </p>
-                  </motion.div>
+                  </div>
                 );
-              })
-            )}
-          </div>
-
-          <div className="border-t border-white/10 p-4 bg-black/40">
-            <h3 className="text-[10px] font-black text-white tracking-[0.2em] border-b border-white/10 pb-2 mb-3">
-              MARKETS NOW
-            </h3>
-            {indices.length === 0 ? (
-              <p className="text-[9px] text-dim uppercase">Loading /api/tickers…</p>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {indices.slice(0, 5).map((idx) => {
-                  const up = (idx.changePct ?? 0) >= 0;
-                  return (
-                    <div key={idx.id} className="flex flex-col border-b border-white/5 pb-2 last:border-0">
-                      <span className="text-[9px] font-bold text-dim uppercase">{idx.name}</span>
-                      <div className="flex justify-between items-baseline">
-                        <span className="text-xs font-black text-white">{formatPrice(idx.price)}</span>
-                        <span className={cn('text-[9px] font-bold', up ? 'text-myco-accent' : 'text-red-400')}>
-                          {up ? '▲' : '▼'} {formatChange(idx.changePct ?? 0)}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+              })}
+              </motion.div>
+            </AnimatePresence>
           </div>
         </div>
 
-        {/* Bottom marquee bumper */}
-        <div className="absolute bottom-0 left-0 right-0 h-14 bg-[#0055cc] border-t-2 border-white/20 flex items-center z-30 overflow-hidden">
-          <div className="shrink-0 px-4 h-full flex items-center bg-[#003d99] border-r border-white/20">
-            <span className="text-[10px] font-black text-white uppercase tracking-[0.3em] whitespace-nowrap">
-              Pulse Wire
-            </span>
+        {/* MARKETS NOW — scroll list in middle row; Market Zone pinned with opaque footer plate */}
+        <div
+          className="h-full min-h-0 min-w-0 border-l border-white/10 relative z-30 grid overflow-hidden bg-[#0a1128]"
+          style={{ gridTemplateRows: 'auto minmax(0, 1fr) auto' }}
+        >
+          <div className="px-4 pt-4 pb-3 border-b border-white/10 bg-[#0a1128]">
+            <h3 className="text-[10px] font-black text-white tracking-[0.25em] uppercase">Markets Now</h3>
           </div>
-          <div className="flex-1 overflow-hidden relative h-full flex items-center">
-            <div className="ticker-track text-white font-bold text-sm uppercase tracking-wide">
-              <span className="px-8">{marqueeText}</span>
-              <span className="px-8" aria-hidden>
-                {marqueeText}
-              </span>
+
+          <MarketsNowCategoryPanel
+            sets={marketsCategorySets}
+            activeIndex={marketsCategoryIndex}
+          />
+
+          <div
+            className="relative z-20 min-h-[112px] shrink-0 border-t border-white/15 bg-[#0a1128] shadow-[0_-10px_28px_rgba(5,8,20,1)]"
+            aria-label="Market Zone"
+          >
+            <div className="absolute inset-0 bg-[#0a1128] pointer-events-none" aria-hidden />
+            <div className="relative z-10 px-3 pt-2 pb-3">
+              <MarketZonePanel session={marketZoneSession} />
             </div>
           </div>
-          <div className="shrink-0 px-4 flex items-center gap-2 border-l border-white/20 h-full">
-            <Zap className="size-4 text-white" />
-            <MonitorPulse />
+        </div>
+      </div>
+
+      {/* Bottom bumper + structured crawl ticker — fixed footprint, never overlays Markets Now */}
+      <div
+        className="shrink-0 flex flex-col relative z-50 bg-black border-t border-white/10"
+        style={{ minHeight: bumperHeight }}
+      >
+        <div className="flex h-[68px] border-t-2 border-white/20">
+          <div className="shrink-0 w-[184px] h-full bg-[#0055cc] flex items-center px-2">
+            <div className="flex-1 flex items-center justify-center h-full min-w-0">
+              <TimezoneVerticalTicker zones={bumperZoneClocks} activeIndex={timezoneIndex} />
+            </div>
+            <div className="w-px self-stretch shrink-0 bg-white/70 my-2" aria-hidden />
+            <div className="flex-1 flex items-center justify-center h-full min-w-0 px-1">
+              <img
+                src={mycodaoWhiteLogo}
+                alt=""
+                aria-hidden
+                className="max-h-[54px] w-full max-w-[96px] object-contain shrink-0"
+              />
+            </div>
+          </div>
+          <div className="flex-1 min-w-0 bg-white overflow-hidden flex items-center">
+            {currentPageLines.length ? (
+              <HeadlineVerticalTicker lines={currentPageLines} activeIndex={activeTabIndex} />
+            ) : displayLines.length ? (
+              <HeadlineVerticalTicker lines={displayLines} activeIndex={0} />
+            ) : null}
           </div>
         </div>
 
-        {/* Lower headline strip (CNBC-style) */}
-        <div className="absolute bottom-14 left-0 right-[min(340px,28%)] h-12 bg-black/85 border-t border-white/10 flex items-center px-6 z-[25]">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={headline.id + activeIndex}
-              className="flex-1 overflow-hidden"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.35 }}
-            >
-              <p className="text-sm font-bold text-white truncate uppercase tracking-wide">{headline.title}</p>
-              <p className="text-[9px] text-dim uppercase flex items-center gap-2 mt-0.5">
-                <Clock className="size-3" />
-                {headline.source}
-                {headline.publishedAt ? ` · ${new Date(headline.publishedAt).toLocaleString()}` : ''}
-              </p>
-            </motion.div>
-          </AnimatePresence>
-        </div>
+        <PulseMarqueeTicker segments={tickerSegments} label="LIVE" className="h-[26px] bg-[#0a0a0a]" />
       </div>
     </div>
   );
 };
-
-function MonitorPulse() {
-  return (
-    <span className="flex items-center gap-1.5 text-[9px] font-bold text-white uppercase">
-      <span className="size-2 rounded-full bg-red-500 animate-pulse" />
-      On Air
-    </span>
-  );
-}

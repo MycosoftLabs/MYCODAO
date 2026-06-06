@@ -14,7 +14,19 @@
     from { transform: translateX(0); }
     to { transform: translateX(-50%); }
   }
-  --animate-marquee: marquee 60s linear infinite;
+  --animate-marquee: marquee 90s linear infinite;
+
+  @keyframes live-on-air {
+    0%, 100% {
+      opacity: 1;
+      text-shadow: 0 0 6px rgba(0, 255, 136, 0.55);
+    }
+    50% {
+      opacity: 0.45;
+      text-shadow: 0 0 16px rgba(0, 255, 136, 1), 0 0 28px rgba(0, 255, 136, 0.45);
+    }
+  }
+  --animate-live-on-air: live-on-air 1.6s ease-in-out infinite;
 }
 
 :root {
@@ -70,9 +82,27 @@
     scrollbar-width: none;
   }
 
-  /* Bloomberg-style Ticker Animation */
+  /* Bloomberg-style Ticker Animation — animate parent only; duplicate strips inside */
   .ticker-track {
-    @apply flex whitespace-nowrap animate-marquee;
+    display: inline-flex;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    width: max-content;
+    animation: marquee 90s linear infinite;
+    will-change: transform;
+  }
+
+  .pulse-ticker-crawl {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    width: max-content;
+    gap: 0;
+  }
+
+  .pulse-ticker-crawl .ticker-sep {
+    @apply text-white/25 px-3 text-[8px] select-none;
   }
 
   /* Scanline Effect */

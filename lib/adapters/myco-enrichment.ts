@@ -58,12 +58,65 @@ export async function fetchDexPoolsForMint(mint: string): Promise<MycoDexPool[] 
   const url = `https://api.dexscreener.com/latest/dex/tokens/${encodeURIComponent(mint)}`;
   try {
     const res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(12_000) });
-    if (!res.ok) return undefined;
-    const data = (await res.json()) as { pairs?: DexPairRaw[] };
-    const pairs = data.pairs ?? [];
-    const mapped = pairs.map(mapDexPair).filter((x): x is MycoDexPool => x != null);
-    mapped.sort((a, b) => (b.liquidityUsd ?? 0) - (a.liquidityUsd ?? 0));
-    return mapped.slice(0, 30);
+    if (res.ok) {
+      const data = (await res.json()) as { pairs?: DexPairRaw[] | null };
+      const pairs = Array.isArray(data.pairs) ? data.pairs : [];
+      const mapped = pairs.map(mapDexPair).filter((x): x is MycoDexPool => x != null);
+      if (mapped.length) {
+        mapped.sort((a, b) => (b.liquidityUsd ?? 0) - (a.liquidityUsd ?? 0));
+        return mapped.slice(0, 30);
+      }
+    }
+  } catch {
+    /* try gecko */
+  }
+
+  try {
+    const gtUrl = `https://api.geckoterminal.com/api/v2/networks/solana/tokens/${encodeURIComponent(mint)}/pools?page=1`;
+    const gtRes = await fetch(gtUrl, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(12_000),
+      headers: { Accept: "application/json" },
+    });
+    if (!gtRes.ok) return undefined;
+    const body = (await gtRes.json()) as {
+      data?: Array<{
+        attributes?: {
+          address?: string;
+          name?: string;
+          token_price_usd?: string;
+          reserve_in_usd?: string;
+          volume_usd?: { h24?: string };
+          price_change_percentage?: { h24?: string };
+        };
+      }>;
+    };
+    const pools = (body.data ?? [])
+      .map((p) => {
+        const a = p.attributes;
+        if (!a?.address) return null;
+        const priceUsd = a.token_price_usd != null ? parseFloat(a.token_price_usd) : undefined;
+        const liquidityUsd =
+          a.reserve_in_usd != null ? parseFloat(a.reserve_in_usd) : undefined;
+        const volumeH24 =
+          a.volume_usd?.h24 != null ? parseFloat(a.volume_usd.h24) : undefined;
+        const pch = a.price_change_percentage?.h24;
+        const priceChangeH24 = pch != null ? parseFloat(pch) : undefined;
+        return {
+          chainId: "solana",
+          dexId: "geckoterminal",
+          pairAddress: a.address,
+          baseToken: a.name?.split("/")[0]?.trim() ?? "MYCO",
+          quoteToken: a.name?.split("/")[1]?.trim() ?? "SOL",
+          liquidityUsd: Number.isFinite(liquidityUsd) ? liquidityUsd : undefined,
+          volumeH24: Number.isFinite(volumeH24) ? volumeH24 : undefined,
+          priceUsd: Number.isFinite(priceUsd) ? priceUsd : undefined,
+          priceChangeH24: Number.isFinite(priceChangeH24) ? priceChangeH24 : undefined,
+          url: `https://www.geckoterminal.com/solana/pools/${a.address}`,
+        } as MycoDexPool;
+      })
+      .filter((x): x is MycoDexPool => x !== null);
+    return pools.length ? pools.slice(0, 30) : undefined;
   } catch {
     return undefined;
   }

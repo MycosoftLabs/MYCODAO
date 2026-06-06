@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
-import { fetchNews } from "@/lib/adapters/news";
+import { fetchNews, invalidateNewsCache } from "@/lib/adapters/news";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const news = await fetchNews();
+    const refresh = new URL(request.url).searchParams.get("refresh") === "1";
+    if (refresh) invalidateNewsCache();
+    const news = await fetchNews({ bypassCache: refresh });
     return NextResponse.json(news);
   } catch (e) {
     console.error("news route:", e);

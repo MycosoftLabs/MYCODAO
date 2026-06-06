@@ -17,7 +17,10 @@ const rotateRpc = () => {
 };
 
 // The standard SPL Governance program ID on Mainnet
-export const SPL_GOVERNANCE_PROGRAM_ID = new PublicKey('GovER5Lthms3bLBqWub97yVrCmFqRvuWWeuV59ZpA3q');
+/** Canonical SPL Governance program on Solana mainnet (Realms V2). */
+export const SPL_GOVERNANCE_PROGRAM_ID = new PublicKey(
+  'GovER5Lthms3bLBqWub97yVrMmEogzX7xNjdXpPPCVZw'
+);
 
 // MYCO Realm Public Key
 export const MYCO_REALM_PK = new PublicKey('At93fiCMzEkZWBAHxSNjfk7zUHnF3JcxyCyPjZELjK9Y');

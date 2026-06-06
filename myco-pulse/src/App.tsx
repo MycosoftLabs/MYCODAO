@@ -56,6 +56,8 @@ import {
   Shield
 } from 'lucide-react';
 import { cn } from './lib/utils';
+import { mycodaoBlackLogo, mycodaoColorLogo } from './lib/brandLogos';
+import { RealmsDaoHub } from './components/RealmsDaoHub';
 import { 
   AreaChart, 
   Area, 
@@ -72,10 +74,13 @@ import * as RGL from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import { CNBCNewsWidget } from './components/CNBCNewsWidget';
+import { PulseMarqueeTicker, newsToTickerSegments } from './components/PulseMarqueeTicker';
 import { MatrixSwap } from './components/MatrixSwap';
 import { WhaleWatch } from './components/WhaleWatch';
 import { logToSupabase } from './lib/supabase';
 import { useRealTimeData } from './hooks/useRealTimeData';
+import { prefetchPulseNewsBundle } from './lib/pulseNewsPrefetch';
+import { formatMarketCapUsd, useChainStats } from './hooks/useChainStats';
 import { fetchLiquidityPools } from './services/apiService';
 import { WalletDisplay } from './components/WalletDisplay';
 import { TradeHistory } from './components/TradeHistory';
@@ -84,9 +89,20 @@ import {
   EMPTY_TICKER_GROUPS,
   tickerToAssetRow,
   buildTickerGroups,
+  buildBigMovers,
+  findTickerStrip,
 } from './lib/tickerDisplay';
+import type {
+  PulseCalendarEvent,
+  PulseLearnModule,
+  PulsePodcastEpisode,
+  PulseResearchItem,
+  PulseTicker,
+  PulseMycoSnapshot,
+} from './lib/pulseApi';
 import { fetchPulseConfigStatus } from './lib/pulseApi';
-import { STUDIO_ORACLE_INSIGHT, mergeTickerGroupsWithStudio } from './data/studioPresets';
+import { formatGlobalMarketSessionSummary } from './lib/marketSessions';
+import { mergeTickerGroupsWithStudio } from './data/studioPresets';
 
 // Handle RGL ESM/CJS interop
 const Grid = (RGL as any).default || RGL;
@@ -113,9 +129,9 @@ const initialLayouts = {
     { i: 'eco', x: 6, y: 6, w: 3, h: 2 },
     { i: 'funding', x: 9, y: 6, w: 3, h: 2 },
     
-    { i: 'research', x: 0, y: 8, w: 3, h: 2 },
-    { i: 'calendar', x: 3, y: 8, w: 3, h: 2 },
-    { i: 'quick_links', x: 6, y: 8, w: 3, h: 2 },
+    { i: 'bonds', x: 0, y: 8, w: 3, h: 2 },
+    { i: 'research', x: 3, y: 8, w: 3, h: 2 },
+    { i: 'calendar', x: 6, y: 8, w: 3, h: 2 },
     { i: 'status', x: 9, y: 8, w: 3, h: 2 },
 
     { i: 'whale_watch_mini', x: 0, y: 10, w: 6, h: 2 },
@@ -181,6 +197,15 @@ const NavItem = ({ icon: Icon, label, active, onClick }: any) => (
   </button>
 );
 
+function formatNewsAge(iso?: string): string {
+  if (!iso) return "—";
+  const mins = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60_000));
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 48) return `${hrs}h`;
+  return `${Math.floor(hrs / 24)}d`;
+}
+
 // --- SUB-VIEWS ---
 
 const PulseDashboard = ({ 
@@ -190,19 +215,99 @@ const PulseDashboard = ({
   onLayoutChange, 
   setActiveTab,
   tickerGroups = EMPTY_TICKER_GROUPS,
+  tickers = [] as PulseTicker[],
+  mycoSnapshot = null as PulseMycoSnapshot | null,
   chartData = EMPTY_CHART_DATA,
   whales = [],
+  news = [],
+  episodes = [] as PulsePodcastEpisode[],
+  calendar = [] as PulseCalendarEvent[],
+  research = [] as PulseResearchItem[],
+  learnModules = [] as PulseLearnModule[],
+  fearGreed = null as { value: number; classification: string } | null,
+  configStatus = null as { configured?: Record<string, boolean> } | null,
   loading = false
 }: any) => {
   const [fullWidget, setFullWidget] = useState<string | null>(null);
   const [savedLayouts, setSavedLayouts] = useState<any>(null);
+  const [mindexReachable, setMindexReachable] = useState<boolean | null>(null);
   const [globalMarket, setGlobalMarket] = useState<any>({ SOL: '...', BTC: '...', ETH: '...', status: 'SYNCING' });
+  const [exchangeSessionSummary, setExchangeSessionSummary] = useState(() =>
+    formatGlobalMarketSessionSummary()
+  );
 
   useEffect(() => {
     import('./services/apiService').then(({ fetchGlobalMarketData }) => {
       fetchGlobalMarketData().then(data => setGlobalMarket(data));
     });
   }, []);
+
+  useEffect(() => {
+    import('./lib/pulseApi').then(({ fetchPulseBackendHealth }) => {
+      fetchPulseBackendHealth().then((h) => {
+        if (h && typeof h.mindexReachable === 'boolean') setMindexReachable(h.mindexReachable);
+      });
+    });
+  }, []);
+
+  useEffect(() => {
+    const refresh = () => setExchangeSessionSummary(formatGlobalMarketSessionSummary());
+    refresh();
+    const t = setInterval(refresh, 30_000);
+    return () => clearInterval(t);
+  }, []);
+
+  const bigMovers = useMemo(() => buildBigMovers(tickers, 5), [tickers]);
+
+  const footerTapeItems = useMemo(
+    () => [
+      ...tickerGroups.crypto,
+      ...tickerGroups.metals,
+      ...tickerGroups.commodities,
+      ...tickerGroups.bio,
+      ...tickerGroups.tech,
+      ...tickerGroups.business,
+      ...tickerGroups.indicators,
+    ].filter((t) => t.p && t.p !== "—"),
+    [tickerGroups]
+  );
+
+  const overviewMajors = useMemo(() => {
+    const pick = (sym: string) =>
+      findTickerStrip(tickerGroups, sym) ??
+      tickerGroups.crypto.find((t) => t.s === sym);
+    return {
+      BTC: pick("BTC"),
+      ETH: pick("ETH"),
+      SOL: pick("SOL"),
+    };
+  }, [tickerGroups]);
+
+  const mycoStrip = useMemo(
+    () => findTickerStrip(tickerGroups, "MYCO") ?? tickerGroups.bio.find((t) => t.s === "MYCO"),
+    [tickerGroups]
+  );
+
+  const vixStrip = useMemo(
+    () => findTickerStrip(tickerGroups, "VIX") ?? tickerGroups.indicators.find((t) => t.s === "VIX"),
+    [tickerGroups]
+  );
+
+  const mycoDistPct = useMemo(() => {
+    const dist = mycoSnapshot?.canonical?.distribution ?? [];
+    const find = (needle: string) =>
+      dist.find((d) => d.title.toLowerCase().includes(needle))?.pct;
+    return {
+      supply: mycoSnapshot?.canonical?.totalSupplyLabel ?? (mycoSnapshot?.supply ? `${mycoSnapshot.supply.toLocaleString()} MYCO` : null),
+      community: find("community"),
+      biobank: find("biobank"),
+    };
+  }, [mycoSnapshot]);
+
+  const footerSegments = useMemo(
+    () => newsToTickerSegments(news, footerTapeItems),
+    [news, footerTapeItems]
+  );
 
   const toggleFull = (id: string) => {
     if (fullWidget === id) {
@@ -233,15 +338,17 @@ const PulseDashboard = ({
     <div className="h-full flex flex-col gap-6 animate-in fade-in duration-500">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {[
-          { label: 'BITCOIN', val: globalMarket.BTC, change: '+1.2%', color: 'text-orange-500' },
-          { label: 'ETHEREUM', val: globalMarket.ETH, change: '-0.4%', color: 'text-blue-400' },
-          { label: 'SOLANA', val: globalMarket.SOL, change: '+4.5%', color: 'text-myco-accent' }
+          { label: 'BITCOIN', sym: 'BTC', val: overviewMajors.BTC?.p ?? globalMarket.BTC, change: overviewMajors.BTC?.c, up: overviewMajors.BTC?.up, color: 'text-orange-500' },
+          { label: 'ETHEREUM', sym: 'ETH', val: overviewMajors.ETH?.p ?? globalMarket.ETH, change: overviewMajors.ETH?.c, up: overviewMajors.ETH?.up, color: 'text-blue-400' },
+          { label: 'SOLANA', sym: 'SOL', val: overviewMajors.SOL?.p ?? globalMarket.SOL, change: overviewMajors.SOL?.c, up: overviewMajors.SOL?.up, color: 'text-myco-accent' }
         ].map((m, i) => (
           <div key={i} className="p-4 glass-bento border-white/5 bg-white/[0.02]">
             <span className="text-[10px] font-black text-dim uppercase tracking-widest block mb-2">{m.label}</span>
             <div className="flex justify-between items-end">
               <span className="text-2xl font-black text-white font-mono">{m.val}</span>
-              <span className={cn("text-xs font-bold", m.change.startsWith('+') ? "text-myco-accent" : "text-red-400")}>{m.change}</span>
+              {m.change ? (
+                <span className={cn("text-xs font-bold", m.up ? "text-myco-accent" : "text-red-400")}>{m.change}</span>
+              ) : null}
             </div>
           </div>
         ))}
@@ -284,15 +391,20 @@ const PulseDashboard = ({
            <div className="glass-bento p-6 border-white/5 bg-black/40 flex flex-col justify-center items-center text-center gap-4">
               <Compass className="size-8 text-myco-accent animate-pulse" />
               <div>
-                <p className="text-[10px] font-black text-white uppercase tracking-widest mb-1">Market Sentiment</p>
-                <div className="text-2xl font-black text-myco-accent">GREED (74)</div>
+                <p className="text-[10px] font-black text-white uppercase tracking-widest mb-1">Crypto Fear &amp; Greed</p>
+                <div className="text-2xl font-black text-myco-accent">
+                  {fearGreed ? `${fearGreed.classification.toUpperCase()} (${fearGreed.value})` : '—'}
+                </div>
               </div>
            </div>
            <div className="glass-bento p-6 border-white/5 bg-black/40 flex flex-col justify-center items-center text-center gap-4">
               <Zap className="size-8 text-yellow-400" />
               <div>
-                <p className="text-[10px] font-black text-white uppercase tracking-widest mb-1">MINDEX Velocity</p>
-                <div className="text-2xl font-black text-white">4.2 TB/s</div>
+                <p className="text-[10px] font-black text-white uppercase tracking-widest mb-1">VIX (Volatility)</p>
+                <div className="text-2xl font-black text-white">{vixStrip?.p ?? '—'}</div>
+                {vixStrip?.c ? (
+                  <span className={cn("text-[10px] font-bold", vixStrip.up ? "text-myco-accent" : "text-red-400")}>{vixStrip.c}</span>
+                ) : null}
               </div>
            </div>
            <div className="col-span-2 glass-bento p-6 border-white/5 bg-white/[0.02] flex items-center justify-between">
@@ -301,8 +413,10 @@ const PulseDashboard = ({
                     <FlaskConical className="size-6 text-black" />
                  </div>
                  <div>
-                    <h5 className="text-[10px] font-black text-white uppercase tracking-widest">Protocol Intelligence</h5>
-                    <p className="text-[9px] text-dim font-bold uppercase leading-tight mt-1">Cross-chain liquidity bridge optimized via Myco Oracle X-402.</p>
+                    <h5 className="text-[10px] font-black text-white uppercase tracking-widest">Latest Research</h5>
+                    <p className="text-[9px] text-dim font-bold uppercase leading-tight mt-1 line-clamp-2">
+                      {research[0]?.title || news[0]?.title || 'Awaiting /api/research or /api/news'}
+                    </p>
                  </div>
               </div>
               <button className="px-4 py-2 border border-myco-accent text-myco-accent text-[9px] font-black uppercase hover:bg-myco-accent hover:text-black">Run Diagnostics</button>
@@ -313,34 +427,37 @@ const PulseDashboard = ({
   );
 
   const TickerList = ({ items }: any) => (
-    <div className="flex flex-col gap-0.5 overflow-hidden">
-      {items?.map((item: any, i: number) => (
-        <div 
-          key={i} 
-          className="flex items-center justify-between py-1 px-1 group cursor-pointer hover:bg-myco-accent/10 transition-colors"
-          onClick={() => setActiveTab('Markets')}
-        >
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold text-dim group-hover:text-white transition-colors w-12">{item.s}</span>
-            <span className="text-[11px] font-mono font-medium">{item.p}</span>
-          </div>
-          <div className="flex items-center gap-2">
-             <span className={cn("text-[9px] font-bold", item.up ? "text-myco-accent" : "text-red-500")}>
-               {item.c}
-             </span>
-             {/* Small Sparkline simulation */}
-             <div className="w-10 h-3 flex items-end gap-[1px] opacity-40">
-                {[1,2,3,4].map(j => (
-                   <div 
-                     key={j} 
-                     className={cn("w-full bg-current", item.up ? "text-myco-accent" : "text-red-500")}
-                     style={{ height: `${20 + Math.random() * 80}%` }}
-                   />
+    <div className="flex flex-col gap-0.5 overflow-y-auto no-scrollbar max-h-full">
+      {!items?.length ? (
+        <p className="text-[9px] font-bold text-dim uppercase py-2">Awaiting live feed…</p>
+      ) : (
+        items.map((item: any, i: number) => (
+          <div
+            key={`${item.s}-${i}`}
+            className="flex items-center justify-between py-1 px-1 group cursor-pointer hover:bg-myco-accent/10 transition-colors"
+            onClick={() => setActiveTab('Markets')}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-[10px] font-bold text-dim group-hover:text-white transition-colors w-12 shrink-0">{item.s}</span>
+              <span className="text-[11px] font-mono font-medium truncate">{item.p}</span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className={cn("text-[9px] font-bold", item.up ? "text-myco-accent" : "text-red-500")}>
+                {item.c}
+              </span>
+              <div className="w-10 h-3 flex items-end gap-[1px] opacity-40">
+                {[0, 1, 2, 3].map((j) => (
+                  <div
+                    key={j}
+                    className={cn("w-full bg-current", item.up ? "text-myco-accent" : "text-red-500")}
+                    style={{ height: `${item.up ? 28 + j * 18 : 88 - j * 18}%` }}
+                  />
                 ))}
-             </div>
+              </div>
+            </div>
           </div>
-        </div>
-      ))}
+        ))
+      )}
     </div>
   );
 
@@ -371,11 +488,11 @@ const PulseDashboard = ({
                 ) : (
                   <div className="h-full flex flex-col justify-between py-1">
                     <div className="space-y-1">
-                        <span className="text-[8px] font-bold text-dim uppercase tracking-[0.2em] block">Status: OPEN // {globalMarket.status}</span>
+                        <span className="text-[8px] font-bold text-dim uppercase tracking-[0.2em] block">Sessions: {exchangeSessionSummary} // Feed {globalMarket.status}</span>
                         <p className="text-xs font-bold leading-tight uppercase text-white/90">BTC at {globalMarket.BTC}, SOL at ${globalMarket.SOL}. Market sync stable.</p>
                     </div>
                     <div className="flex items-center gap-1 mt-2">
-                        <button className="flex-1 py-1 px-2 glass-bento border-white/10 text-[9px] font-bold uppercase hover:bg-myco-accent hover:text-black">Indices</button>
+                        <button className="flex-1 py-1 px-2 glass-bento border-white/10 text-[9px] font-bold uppercase hover:bg-myco-accent hover:text-black">Indexes</button>
                         <button className="flex-1 py-1 px-2 glass-bento border-white/10 text-[9px] font-bold uppercase hover:bg-myco-accent hover:text-black">Sentiment</button>
                     </div>
                   </div>
@@ -391,25 +508,27 @@ const PulseDashboard = ({
           </div>
           <div key="metals">
              <WidgetWrapper title="— METALS —" id="metals" onToggleFull={toggleFull} isFull={fullWidget === 'metals'}>
-                <TickerList items={tickerGroups.indicators} />
+                <TickerList items={tickerGroups.metals} />
              </WidgetWrapper>
           </div>
           <div key="big_movers">
              <WidgetWrapper title="— BIG MOVERS —" id="big_movers" onToggleFull={toggleFull} isFull={fullWidget === 'big_movers'}>
-                <div className="flex flex-col gap-0.5">
-                   {[
-                      { s: 'ATOM', p: '1.81', c: '+2.60%', up: true, d: 'DEX expansion...' },
-                      { s: 'MYCO', p: '0.0423', c: '+1.91%', up: true, d: 'Biobank milestone...' },
-                      { s: 'VIX', p: '14.25', c: '+1.90%', up: true, d: 'Volatility spike...' },
-                   ].map((m, i) => (
-                      <div key={i} className="flex flex-col border-b border-white/5 py-1">
+                <div className="flex flex-col gap-0.5 overflow-y-auto no-scrollbar">
+                   {bigMovers.length ? (
+                     bigMovers.map((m, i) => (
+                      <div key={`${m.s}-${i}`} className="flex flex-col border-b border-white/5 py-1">
                          <div className="flex justify-between items-center">
                             <span className="text-[10px] font-black text-white">{m.s}</span>
-                            <span className="text-myco-accent text-[10px] font-bold">{m.c}</span>
+                            <span className={cn("text-[10px] font-bold", m.up ? "text-myco-accent" : "text-red-500")}>{m.c}</span>
                          </div>
-                         <p className="text-[8px] text-dim truncate uppercase font-bold">{m.d}</p>
+                         {m.name ? (
+                           <p className="text-[8px] text-dim truncate uppercase font-bold">{m.name}</p>
+                         ) : null}
                       </div>
-                   ))}
+                     ))
+                   ) : (
+                     <p className="text-[9px] font-bold text-dim uppercase py-2">Awaiting live movers…</p>
+                   )}
                 </div>
              </WidgetWrapper>
           </div>
@@ -438,21 +557,25 @@ const PulseDashboard = ({
           <div key="news_mini">
              <WidgetWrapper title="— NEWS —" id="news_mini" onToggleFull={toggleFull} isFull={fullWidget === 'news_mini'}>
                 <div className="flex flex-col gap-3 h-full overflow-hidden">
-                   {[
-                      { t: '1h', m: 'Solana ecosystem sees sustained developer activity', tags: ['NETWORK', 'GOVERNANCE'] },
-                      { t: '2h', m: 'Decentralized biobanks gain traction for research data', tags: ['BIOBANK', 'MYCO'] },
-                      { t: '3h', m: 'TradFi indices hold steady amid macro uncertainty', tags: ['MACRO', 'SPY'] },
-                   ].map((n, i) => (
-                      <div key={i} className="flex gap-2">
-                         <span className="text-[9px] font-mono text-dim shrink-0">{n.t}</span>
-                         <div className="flex flex-col">
-                            <p className="text-[10px] font-bold text-white/90 leading-tight line-clamp-2">{n.m}</p>
-                            <div className="flex gap-1 mt-1">
-                               {n.tags.map(tag => <span key={tag} className="text-[7px] border border-white/10 px-1 text-dim uppercase">{tag}</span>)}
+                   {news.length ? (
+                     news.slice(0, 4).map((n: any, i: number) => (
+                      <div key={n.id || i} className="flex gap-2">
+                         <span className="text-[9px] font-mono text-dim shrink-0">
+                           {formatNewsAge(n.publishedAt)}
+                         </span>
+                         <div className="flex flex-col min-w-0">
+                            <p className="text-[10px] font-bold text-white/90 leading-tight line-clamp-2">{n.title}</p>
+                            <div className="flex gap-1 mt-1 flex-wrap">
+                               {(n.tags || []).slice(0, 3).map((tag: string) => (
+                                 <span key={tag} className="text-[7px] border border-white/10 px-1 text-dim uppercase">{tag}</span>
+                               ))}
                             </div>
                          </div>
                       </div>
-                   ))}
+                     ))
+                   ) : (
+                     <p className="text-[9px] font-bold text-dim uppercase">No live headlines — check RSS / API keys</p>
+                   )}
                 </div>
              </WidgetWrapper>
           </div>
@@ -460,19 +583,30 @@ const PulseDashboard = ({
           <div key="podcast_mini">
              <WidgetWrapper title="— PODCASTS —" id="podcast_mini" onToggleFull={toggleFull} isFull={fullWidget === 'podcast_mini'}>
                 <div className="flex flex-col gap-3">
-                   {[
-                      { l: 'Governance and Funding in DAOs', v: '30:42', i: Play },
-                      { l: 'Biobank Data and Tissue Licensing', v: '35:00', i: Volume2 },
-                      { l: 'Financial Literacy: Reading a Ticker', v: '15:00', i: Play },
-                   ].map((p, i) => (
-                      <div key={i} className="flex items-center gap-3 group cursor-pointer hover:bg-myco-accent/5 p-1">
-                         <p.i className="size-3 text-myco-accent" />
-                         <div className="flex flex-col">
-                            <span className="text-[9px] font-bold text-white group-hover:text-myco-accent transition-colors">{p.l}</span>
-                            <span className="text-[8px] text-dim uppercase">MycoDAO Podcast • {p.v}</span>
-                         </div>
-                      </div>
-                   ))}
+                   {episodes.length ? (
+                     episodes.slice(0, 3).map((ep) => {
+                       const mins = Math.max(1, Math.round((ep.durationSec || 0) / 60));
+                       const href = ep.audioUrl || ep.embedUrl || "#";
+                       return (
+                         <a
+                           key={ep.id}
+                           href={href}
+                           target="_blank"
+                           rel="noreferrer"
+                           className="flex items-center gap-3 group cursor-pointer hover:bg-myco-accent/5 p-1"
+                           onClick={() => setActiveTab('Podcasts')}
+                         >
+                           <Play className="size-3 text-myco-accent shrink-0" />
+                           <div className="flex flex-col min-w-0">
+                              <span className="text-[9px] font-bold text-white group-hover:text-myco-accent transition-colors line-clamp-2">{ep.title}</span>
+                              <span className="text-[8px] text-dim uppercase truncate">{ep.show} • {mins}m</span>
+                           </div>
+                         </a>
+                       );
+                     })
+                   ) : (
+                     <p className="text-[9px] font-bold text-dim uppercase">No crypto podcast RSS — check /api/podcasts</p>
+                   )}
                 </div>
              </WidgetWrapper>
           </div>
@@ -480,35 +614,40 @@ const PulseDashboard = ({
           <div key="learn_mini">
              <WidgetWrapper title="— LEARN —" id="learn_mini" onToggleFull={toggleFull} isFull={fullWidget === 'learn_mini'}>
                 <div className="flex flex-col gap-1.5 h-full overflow-hidden">
-                   {[
-                      { n: 'What is a Ticker?', d: '3m', l: 'Beginner' },
-                      { n: 'Governance Tokens Explained', d: '5m', l: 'Intermediate' },
-                      { n: 'Biobank Incentives and Data', d: '7m', l: 'Advanced' },
-                      { n: 'Reading Sparklines', d: '2m', l: 'Beginner' },
-                   ].map((l, i) => (
-                      <div key={i} className="flex justify-between items-center group cursor-pointer hover:bg-white/5 py-1">
-                         <div className="flex items-center gap-2">
-                           <span className={cn("text-[7px] border px-1 uppercase shrink-0 w-16 text-center", l.l === 'Beginner' ? 'border-myco-accent text-myco-accent' : 'border-dim text-dim')}>{l.l}</span>
-                           <span className="text-[9px] font-bold text-white/90 truncate">{l.n}</span>
+                   {learnModules.length ? (
+                     learnModules.slice(0, 4).map((l) => (
+                      <div key={l.id} className="flex justify-between items-center group cursor-pointer hover:bg-white/5 py-1" onClick={() => setActiveTab('Learn')}>
+                         <div className="flex items-center gap-2 min-w-0">
+                           <span className={cn("text-[7px] border px-1 uppercase shrink-0 w-16 text-center", l.level === 'beginner' ? 'border-myco-accent text-myco-accent' : 'border-dim text-dim')}>{l.level}</span>
+                           <span className="text-[9px] font-bold text-white/90 truncate">{l.title}</span>
                          </div>
-                         <span className="text-[8px] font-mono text-dim shrink-0">{l.d}</span>
+                         <span className="text-[8px] font-mono text-dim shrink-0">{l.readingTimeMin}m</span>
                       </div>
-                   ))}
-                   <button className="mt-auto text-[8px] font-bold text-dim uppercase text-left hover:text-myco-accent">All lessons →</button>
+                     ))
+                   ) : (
+                     <p className="text-[9px] font-bold text-dim uppercase">No learn modules — add data/learn-modules.json</p>
+                   )}
+                   <button className="mt-auto text-[8px] font-bold text-dim uppercase text-left hover:text-myco-accent" onClick={() => setActiveTab('Learn')}>All lessons →</button>
                 </div>
              </WidgetWrapper>
           </div>
 
           <div key="watchlist">
              <WidgetWrapper title="— WATCHLIST —" id="watchlist" onToggleFull={toggleFull} isFull={fullWidget === 'watchlist'}>
-                <TickerList items={tickerGroups.crypto.slice(0, 5)} />
+                <TickerList items={tickerGroups.watchlist} />
                 <button className="mt-2 text-[8px] font-bold text-dim uppercase text-left hover:text-myco-accent" onClick={() => setActiveTab('Markets')}>Markets →</button>
              </WidgetWrapper>
           </div>
 
           <div key="indicators">
-             <WidgetWrapper title="— MARKET INDICATORS —" id="indicators" onToggleFull={toggleFull} isFull={fullWidget === 'indicators'}>
+             <WidgetWrapper title="— GLOBAL INDEXES —" id="indicators" onToggleFull={toggleFull} isFull={fullWidget === 'indicators'}>
                 <TickerList items={tickerGroups.indicators} />
+             </WidgetWrapper>
+          </div>
+
+          <div key="bonds">
+             <WidgetWrapper title="— BONDS —" id="bonds" onToggleFull={toggleFull} isFull={fullWidget === 'bonds'}>
+                <TickerList items={tickerGroups.bonds} />
              </WidgetWrapper>
           </div>
 
@@ -517,14 +656,24 @@ const PulseDashboard = ({
                 <div className="h-full flex flex-col justify-between py-1">
                    <div className="flex justify-between items-start">
                       <div className="flex flex-col">
-                         <span className="text-sm font-black text-myco-accent">$0.0418</span>
-                         <span className="text-[8px] text-dim font-bold uppercase">Supply: 210M</span>
-                         <span className="text-[8px] text-dim font-bold uppercase">Community: 30%</span>
+                         <span className="text-sm font-black text-myco-accent">
+                           {mycoStrip?.p ? `$${mycoStrip.p}` : mycoSnapshot?.price ? `$${mycoSnapshot.price}` : '—'}
+                         </span>
+                         <span className="text-[8px] text-dim font-bold uppercase">
+                           Supply: {mycoDistPct.supply ?? '—'}
+                         </span>
+                         <span className="text-[8px] text-dim font-bold uppercase">
+                           Community: {mycoDistPct.community != null ? `${mycoDistPct.community}%` : '—'}
+                         </span>
                       </div>
                       <div className="flex flex-col items-end">
-                         <span className="text-[10px] font-bold text-myco-accent">+1.44%</span>
+                         <span className={cn("text-[10px] font-bold", (mycoStrip?.up ?? (mycoSnapshot?.changePct ?? 0) >= 0) ? "text-myco-accent" : "text-red-400")}>
+                           {mycoStrip?.c ?? (mycoSnapshot?.changePct != null ? `${mycoSnapshot.changePct >= 0 ? '+' : ''}${mycoSnapshot.changePct.toFixed(2)}%` : '—')}
+                         </span>
                          <span className="text-[8px] text-dim font-bold uppercase">Chain: Solana</span>
-                         <span className="text-[8px] text-dim font-bold uppercase">Biobank: 22%</span>
+                         <span className="text-[8px] text-dim font-bold uppercase">
+                           Biobank: {mycoDistPct.biobank != null ? `${mycoDistPct.biobank}%` : '—'}
+                         </span>
                       </div>
                    </div>
                    <button className="text-[8px] font-bold text-dim uppercase text-left hover:text-myco-accent mt-2" onClick={() => setActiveTab('MYCO')}>Token details →</button>
@@ -540,7 +689,7 @@ const PulseDashboard = ({
                          <span className="text-[10px] font-bold text-dim uppercase">Governance State</span>
                          <span className="text-xs font-mono text-myco-accent">SYNCHRONIZED</span>
                       </div>
-                      <a href="https://app.realms.today/dao/At93fiCMzEkZWBAHxSNjfk7zUHnF3JcxyCyPjZELjK9Y/treasury/v2" target="_blank" rel="noreferrer" className="w-full py-3 bg-white/5 border border-white/10 text-[9px] font-black uppercase tracking-widest text-white hover:bg-myco-accent hover:text-black text-center">
+                      <a href="https://v2.realms.today/dao/At93fiCMzEkZWBAHxSNjfk7zUHnF3JcxyCyPjZELjK9Y/treasury" target="_blank" rel="noreferrer" className="w-full py-3 bg-white/5 border border-white/10 text-[9px] font-black uppercase tracking-widest text-white hover:bg-myco-accent hover:text-black text-center">
                          View Realm Treasury
                       </a>
                    </div>
@@ -563,16 +712,21 @@ const PulseDashboard = ({
           <div key="research">
              <WidgetWrapper title="— RESEARCH —" id="research" onToggleFull={toggleFull} isFull={fullWidget === 'research'}>
                 <div className="flex flex-col gap-3 h-full overflow-hidden">
-                   {[
-                      { d: 'Mar 11', t: 'Q1 Community Grants: 12 projects funded', c: 'ECOSYSTEM' },
-                      { d: 'Mar 10', t: 'Science funding round opens March 1', c: 'FUNDING' },
-                      { d: 'Mar 9', t: 'Biobank activity: +23% samples indexed', c: 'BIOBANK' },
-                   ].map((r, i) => (
-                      <div key={i} className="flex flex-col gap-0.5">
-                         <span className="text-[8px] font-bold text-myco-accent uppercase tracking-widest">{r.c} {r.d}</span>
-                         <p className="text-[10px] font-bold text-white/90 leading-tight line-clamp-2">{r.t}</p>
-                      </div>
-                   ))}
+                   {research.length ? (
+                     research.slice(0, 3).map((r) => {
+                       const d = r.publishedAt
+                         ? new Date(r.publishedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                         : "—";
+                       return (
+                         <div key={r.id} className="flex flex-col gap-0.5">
+                            <span className="text-[8px] font-bold text-myco-accent uppercase tracking-widest">{r.category} {d}</span>
+                            <p className="text-[10px] font-bold text-white/90 leading-tight line-clamp-2">{r.title}</p>
+                         </div>
+                       );
+                     })
+                   ) : (
+                     <p className="text-[9px] font-bold text-dim uppercase">No research feed — OpenAlex / MINDEX</p>
+                   )}
                 </div>
              </WidgetWrapper>
           </div>
@@ -580,21 +734,20 @@ const PulseDashboard = ({
           <div key="calendar">
              <WidgetWrapper title="— CALENDAR / EVENTS —" id="calendar" onToggleFull={toggleFull} isFull={fullWidget === 'calendar'}>
                 <div className="flex flex-col gap-2 overflow-y-auto no-scrollbar h-full pr-1">
-                   {[
-                      { d: 'Feb 18', e: 'CPI Release', t: '8:30 ET' },
-                      { d: 'Feb 20', e: 'FOMC Minutes', t: '2:00 ET' },
-                      { d: 'Feb 21', e: 'NVDA Earnings', t: '4:00 ET' },
-                      { d: 'Feb 24', e: 'PCE Inflation', t: '8:30 ET' },
-                   ].map((c, i) => (
-                      <div key={i} className="flex items-center justify-between group cursor-pointer hover:bg-white/5">
+                   {calendar.length ? (
+                     calendar.slice(0, 6).map((c, i) => (
+                      <div key={`${c.label}-${i}`} className="flex items-center justify-between group cursor-pointer hover:bg-white/5">
                          <div className="flex items-center gap-2 shrink-0">
-                            <div className="size-1 rounded-full bg-dim group-hover:bg-myco-accent" />
-                            <span className="text-[9px] font-bold text-dim group-hover:text-white transition-colors">{c.d}</span>
+                            <div className={cn("size-1 rounded-full", c.importance === "high" ? "bg-myco-accent" : "bg-dim group-hover:bg-myco-accent")} />
+                            <span className="text-[9px] font-bold text-dim group-hover:text-white transition-colors">{c.date}</span>
                          </div>
-                         <span className="text-[10px] font-bold text-white truncate px-2">{c.e}</span>
-                         <span className="text-[8px] font-mono text-dim shrink-0">{c.t}</span>
+                         <span className="text-[10px] font-bold text-white truncate px-2">{c.label}</span>
+                         <span className="text-[8px] font-mono text-dim shrink-0">{c.time}</span>
                       </div>
-                   ))}
+                     ))
+                   ) : (
+                     <p className="text-[9px] font-bold text-dim uppercase">No calendar — set FINNHUB_API_KEY</p>
+                   )}
                 </div>
              </WidgetWrapper>
           </div>
@@ -620,29 +773,33 @@ const PulseDashboard = ({
                 <div className="flex flex-col gap-2 h-full justify-between">
                    <div className="flex items-center gap-2">
                        <div className="size-1.5 rounded-full bg-myco-accent shadow-[0_0_8px_var(--color-myco-accent)]" />
-                       <span className="text-[9px] font-bold text-myco-accent uppercase tracking-widest leading-none">LIVE</span>
+                       <span className="text-[9px] font-bold text-myco-accent uppercase tracking-widest leading-none">{loading ? "SYNCING" : "LIVE"}</span>
                    </div>
-                   <p className="text-[10px] font-bold text-white leading-tight uppercase">Fed signals data-dependent path on rates</p>
-                   <button className="text-[8px] font-bold text-dim uppercase text-left hover:text-myco-accent">Clear</button>
+                   <p className="text-[10px] font-bold text-white leading-tight line-clamp-3">
+                     {news[0]?.title || "Awaiting live headline from /api/news"}
+                   </p>
+                   <button className="text-[8px] font-bold text-dim uppercase text-left hover:text-myco-accent" onClick={() => setActiveTab('News')}>News →</button>
                 </div>
              </WidgetWrapper>
           </div>
 
           <div key="whale_watch_mini">
              <WidgetWrapper title="— WHALE WATCH —" id="whale_watch_mini" onToggleFull={toggleFull} isFull={fullWidget === 'whale_watch_mini'}>
-                <div className="grid grid-cols-2 gap-4 h-full overflow-hidden">
-                   <div className="space-y-1">
-                      <span className="text-[8px] font-bold text-blue-400 uppercase tracking-widest">Polymarket</span>
-                      <div className="p-2 bg-blue-500/5 border border-blue-500/20 rounded-sm">
-                         <p className="text-[9px] font-bold text-white leading-tight truncate uppercase">0xWhale bet $420k on Trump YES</p>
-                      </div>
-                   </div>
-                   <div className="space-y-1">
-                      <span className="text-[8px] font-bold text-red-400 uppercase tracking-widest">Politician</span>
-                      <div className="p-2 bg-red-500/5 border border-red-500/20 rounded-sm">
-                         <p className="text-[9px] font-bold text-white leading-tight truncate uppercase">Pelosi bought $1.2M NVDA</p>
-                      </div>
-                   </div>
+                <div className="grid grid-cols-1 gap-2 h-full overflow-hidden">
+                   {Array.isArray(whales) && whales.length ? (
+                     whales.slice(0, 2).map((w, i) => {
+                       const label = String(w.text || `${w.type} ${w.symbol}`).slice(0, 80);
+                       const detail = `${w.usd} · ${w.timeAgo}`;
+                       return (
+                         <div key={w.id || i} className="p-2 bg-blue-500/5 border border-blue-500/20 rounded-sm">
+                            <p className="text-[9px] font-bold text-white leading-tight line-clamp-2 uppercase">{label}</p>
+                            <p className="text-[8px] text-dim mt-0.5">{detail}</p>
+                         </div>
+                       );
+                     })
+                   ) : (
+                     <p className="text-[9px] font-bold text-dim uppercase">No whale feed — Whale Alert / Polymarket trades</p>
+                   )}
                 </div>
                 <button className="absolute bottom-2 right-2 text-[8px] font-bold text-dim uppercase hover:text-myco-accent" onClick={() => setActiveTab('Trade')}>Whale Terminal →</button>
              </WidgetWrapper>
@@ -653,13 +810,22 @@ const PulseDashboard = ({
                 <div className="flex items-center gap-4 h-full">
                    <div className="flex-1 space-y-1">
                       <div className="flex justify-between items-center">
-                         <span className="text-[8px] font-bold text-dim uppercase">Sync Stability</span>
-                         <span className="text-[9px] font-mono text-myco-accent">99.8%</span>
+                         <span className="text-[8px] font-bold text-dim uppercase">MINDEX API</span>
+                         <span className={cn("text-[9px] font-mono", mindexReachable ? "text-myco-accent" : "text-dim")}>
+                           {mindexReachable === null ? 'CHECKING' : mindexReachable ? 'ONLINE' : 'OFFLINE'}
+                         </span>
                       </div>
                       <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
-                         <div className="h-full bg-myco-accent animate-pulse" style={{ width: '99.8%' }} />
+                         <div
+                           className={cn("h-full", mindexReachable ? "bg-myco-accent" : "bg-dim")}
+                           style={{ width: mindexReachable ? '100%' : '12%' }}
+                         />
                       </div>
-                      <p className="text-[9px] text-dim font-bold uppercase mt-2">MINDEX node sync heartbeat stable.</p>
+                      <p className="text-[9px] text-dim font-bold uppercase mt-2">
+                        {configStatus?.configured?.MINDEX_API_URL
+                          ? 'Live health from /api/health?deep=1'
+                          : 'Set MINDEX_API_URL in MYCODAO .env.local'}
+                      </p>
                    </div>
                    <div className="size-10 glass-bento flex items-center justify-center bg-myco-accent text-black shrink-0">
                       <Database className="size-5" />
@@ -672,21 +838,10 @@ const PulseDashboard = ({
         </ResponsiveGridLayout>
       </div>
 
-      {/* FOOTER TAPE - BLOOMBERG STYLE */}
-      <div className="h-6 bg-black border-t border-white/10 flex items-center overflow-hidden shrink-0 z-50">
-         <div className="ticker-track">
-            <div className="inline-flex items-center gap-4 px-6 h-full">
-               <span className="text-[9px] font-black text-myco-accent uppercase">TAPE</span>
-               {[...tickerGroups.crypto, ...tickerGroups.tech, ...tickerGroups.indicators].map((t, i) => (
-                  <div key={i} className="flex items-center gap-2 border-r border-white/5 pr-4 h-full">
-                     <span className="text-[9px] font-bold text-white">{t.s}</span>
-                     <span className="text-[9px] font-mono text-white/70">{t.p}</span>
-                     <span className={cn("text-[9px] font-bold", t.up ? "text-myco-accent" : "text-red-500")}>{t.c}</span>
-                  </div>
-               ))}
-            </div>
-         </div>
-      </div>
+      <PulseMarqueeTicker
+        items={footerSegments.length ? undefined : footerTapeItems}
+        segments={footerSegments.length ? footerSegments : undefined}
+      />
       
       <div className="scanline" />
     </div>
@@ -963,12 +1118,25 @@ const TradeView = ({ prices, chartData, whales }: any) => {
   );
 };
 
-const PodcastView = () => {
-  const [episodes, setEpisodes] = useState<any[]>([]);
-  const [streamStats, setStreamStats] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+const PodcastView = ({
+  episodes: episodesProp = [] as PulsePodcastEpisode[],
+  streamStats: streamStatsProp = null as any,
+}: {
+  episodes?: PulsePodcastEpisode[];
+  streamStats?: any;
+}) => {
+  const [episodes, setEpisodes] = useState<PulsePodcastEpisode[]>(episodesProp);
+  const [streamStats, setStreamStats] = useState<any>(streamStatsProp);
+  const [loading, setLoading] = useState(episodesProp.length === 0);
 
   useEffect(() => {
+    setEpisodes(episodesProp);
+    setStreamStats(streamStatsProp);
+    if (episodesProp.length) setLoading(false);
+  }, [episodesProp, streamStatsProp]);
+
+  useEffect(() => {
+    if (episodesProp.length) return;
     const fetchPodcastData = async () => {
       try {
         const res = await fetch('/api/podcasts', { cache: 'no-store' });
@@ -978,7 +1146,6 @@ const PodcastView = () => {
         } else {
           setEpisodes([]);
         }
-        setStreamStats(null);
       } catch (e) {
          console.error('Error fetching podcast data', e);
          setEpisodes([]);
@@ -987,9 +1154,9 @@ const PodcastView = () => {
       }
     };
     fetchPodcastData();
-    const interval = setInterval(fetchPodcastData, 60000); // Polling for stream stats
+    const interval = setInterval(fetchPodcastData, 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [episodesProp.length]);
 
   return (
   <div className="flex-1 flex flex-col p-6 gap-6 h-screen overflow-hidden bg-[#050505]">
@@ -1026,17 +1193,20 @@ const PodcastView = () => {
 
       <div className="col-span-8 glass-bento relative flex flex-col overflow-hidden border-white/5">
         <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-transparent to-transparent pointer-events-none z-10" />
-        <img 
-          src={episodes[0]?.thumbnail || "https://picsum.photos/seed/pod_hero_3/1200/800"} 
-          className="absolute inset-0 size-full object-cover grayscale opacity-10" 
-          referrerPolicy="no-referrer"
-        />
+        {episodes[0]?.image ? (
+          <img
+            src={episodes[0].image}
+            alt=""
+            className="absolute inset-0 size-full object-cover grayscale opacity-10"
+            referrerPolicy="no-referrer"
+          />
+        ) : null}
         <div className="relative z-20 flex-1 p-8 flex flex-col justify-end">
            {/* RSS Status */}
            <div className="flex items-center gap-3 mb-4">
-            <a href="https://rss.com" target="_blank" rel="noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FF5C39] text-white text-[10px] font-black uppercase tracking-tighter">
-               <Wifi className="w-3 h-3" /> RSS.COM CONNECTED
-            </a>
+            <span className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FF5C39] text-white text-[10px] font-black uppercase tracking-tighter">
+               <Wifi className="w-3 h-3" /> CRYPTO RSS LIVE
+            </span>
             <span className="px-3 py-1.5 bg-white/5 border border-white/10 text-myco-accent text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
                <Radio className="w-3 h-3 animate-pulse" />
                STREAMLABS ENGINE ACTIVE
@@ -1049,7 +1219,9 @@ const PodcastView = () => {
             </span>
             <span className="text-xs font-bold uppercase tracking-widest text-white/60 line-clamp-1">{episodes[0] ? episodes[0].title : 'Loading Latest Episode...'}</span>
           </div>
-          <h1 className="text-4xl md:text-6xl font-black tracking-tighter mb-4 text-white leading-none">THE MYCO SYNDICATE</h1>
+          <h1 className="text-4xl md:text-6xl font-black tracking-tighter mb-4 text-white leading-none line-clamp-2">
+            {episodes[0]?.show?.toUpperCase() || 'CRYPTO PODCASTS'}
+          </h1>
           
           <div className="flex items-center gap-6 mt-8">
             <button className="flex items-center gap-3 px-10 py-5 bg-myco-accent text-black font-black uppercase tracking-widest text-sm hover:translate-y-[-2px] transition-all shadow-[0_5px_15px_rgba(0,255,136,0.3)]">
@@ -1062,7 +1234,7 @@ const PodcastView = () => {
                      <div className="absolute inset-y-0 left-0 w-3/4 bg-myco-accent animate-pulse" />
                   </div>
                </div>
-               <span className="text-[9px] font-bold text-dim uppercase tracking-[0.3em]">Audio Feed: Direct RSS.com API Stream</span>
+               <span className="text-[9px] font-bold text-dim uppercase tracking-[0.3em]">Audio Feed: Live crypto podcast RSS</span>
             </div>
           </div>
         </div>
@@ -1103,7 +1275,7 @@ const PodcastView = () => {
         <div className="flex-1 glass-bento border-white/5 flex flex-col overflow-hidden bg-black/40">
            <div className="p-4 border-b border-white/5 flex justify-between items-center bg-[#FF5C39]/5">
               <h3 className="text-[10px] font-black uppercase tracking-widest text-[#FF5C39] flex items-center gap-2">
-                 <Rss className="size-3" /> Recent RSS.com Episodes
+                 <Rss className="size-3" /> Crypto Podcast Feed
               </h3>
            </div>
            <div className="flex-1 overflow-y-auto no-scrollbar p-2">
@@ -1126,7 +1298,7 @@ const PodcastView = () => {
                    </div>
                 </div>
               )              ) : (
-                 <div className="p-4 text-[10px] text-dim text-center">Loading syndicate feed…</div>
+                 <div className="p-4 text-[10px] text-dim text-center">No crypto podcast episodes — check /api/podcasts</div>
               )}
            </div>
         </div>
@@ -1137,13 +1309,11 @@ const PodcastView = () => {
 };
 
 
-const NewsView = () => {
-  return (
-    <div className="flex-1 overflow-hidden">
-      <CNBCNewsWidget />
-    </div>
-  );
-};
+const NewsView = () => (
+  <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+    <CNBCNewsWidget />
+  </div>
+);
 const FungIPView = () => {
   const [activeTool, setActiveTool] = useState('INSCRIPTION');
   const [searchQuery, setSearchQuery] = useState('');
@@ -1478,36 +1648,18 @@ const FungIPView = () => {
   );
 };
 
-const LearnView = () => {
-  const modules = [
-    { 
-       id: 'BIO_IP',
-       name: 'The Biological IP Stack', 
-       time: '12 min', 
-       level: 'Intro', 
-       desc: 'Understanding how MINDEX and FungIP collaborate to create a new asset class for biological discoveries.',
-       video: 'https://vjs.zencdn.net/v/oceans.mp4'
-    },
-    { 
-       id: 'FIELD_OPS',
-       name: 'Field Operations: Nature App', 
-       time: '8 min', 
-       level: 'Practical', 
-       desc: 'Step-by-step guide to using the Nature App for decentralized fungal mapping and real-time syncing.',
-       video: 'https://vjs.zencdn.net/v/oceans.mp4'
-    },
-    { 
-       id: 'ORDINAL_INS',
-       name: 'Ordinal Inscription Pro', 
-       time: '15 min', 
-       level: 'Technical', 
-       desc: 'Advanced technical overview of storing genetic sequence data on the Bitcoin blockchain permanently.',
-       video: 'https://vjs.zencdn.net/v/oceans.mp4'
-    }
-  ];
-
+const LearnView = ({ learnModules = [] as PulseLearnModule[] }: { learnModules?: PulseLearnModule[] }) => {
   const [activeIdx, setActiveIdx] = useState(0);
+  const modules = learnModules;
   const activeModule = modules[activeIdx];
+
+  if (!modules.length) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-12 text-dim text-[11px] uppercase tracking-widest">
+        No learn modules — add data/learn-modules.json or /api/learn
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 flex overflow-hidden bg-[#050505]">
@@ -1520,7 +1672,7 @@ const LearnView = () => {
           <div className="flex-1 py-4">
              {modules.map((m, i) => (
                 <button 
-                  key={i} 
+                  key={m.id} 
                   onClick={() => setActiveIdx(i)}
                   className={cn(
                     "w-full p-6 text-left border-b border-white/5 flex flex-col gap-2 transition-all",
@@ -1529,8 +1681,9 @@ const LearnView = () => {
                 >
                    <div className="flex justify-between items-center">
                       <span className="text-[9px] font-bold text-dim uppercase tracking-widest">{m.level}</span>
+                      <span className="text-[8px] font-mono text-dim">{m.readingTimeMin}m</span>
                    </div>
-                   <h3 className={cn("text-lg font-bold tracking-tight", activeIdx === i ? "text-myco-accent" : "text-white")}>{m.name}</h3>
+                   <h3 className={cn("text-lg font-bold tracking-tight", activeIdx === i ? "text-myco-accent" : "text-white")}>{m.title}</h3>
                 </button>
              ))}
           </div>
@@ -1542,11 +1695,11 @@ const LearnView = () => {
              <div className="flex justify-between items-start">
                 <div className="space-y-4 max-w-2xl">
                    <div className="flex items-center gap-3">
-                      <span className="px-2 py-0.5 bg-myco-accent/10 border border-myco-accent/20 text-[9px] font-bold text-myco-accent uppercase tracking-[0.2em]">{activeModule.level} PROTOCOL</span>
-                      <span className="text-dim text-[10px] uppercase font-bold tracking-widest">{activeModule.time}</span>
+                      <span className="px-2 py-0.5 bg-myco-accent/10 border border-myco-accent/20 text-[9px] font-bold text-myco-accent uppercase tracking-[0.2em]">{activeModule.level}</span>
+                      <span className="text-dim text-[10px] uppercase font-bold tracking-widest">{activeModule.readingTimeMin} min read</span>
                    </div>
-                   <h1 className="text-5xl font-black tracking-tighter uppercase leading-none">{activeModule.name}</h1>
-                   <p className="text-lg text-dim leading-relaxed">{activeModule.desc}</p>
+                   <h1 className="text-5xl font-black tracking-tighter uppercase leading-none">{activeModule.title}</h1>
+                   <p className="text-lg text-dim leading-relaxed">{activeModule.summary}</p>
                 </div>
                 <div className="flex gap-2">
                    <button className="size-10 glass-bento flex items-center justify-center hover:bg-white/5 transition-all">
@@ -1558,36 +1711,34 @@ const LearnView = () => {
                 </div>
              </div>
 
-             <div className="aspect-video glass-bento border-white/10 overflow-hidden bg-black relative group shadow-[0_30px_60px_rgba(0,0,0,0.5)]">
-                <iframe 
-                  src={activeModule.video}
-                  className="size-full border-none opacity-80"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
-             </div>
+             {activeModule.contentMd ? (
+               <div className="prose prose-invert max-w-none space-y-4 text-sm text-slate-300 leading-relaxed whitespace-pre-wrap border-t border-white/5 pt-8">
+                 {activeModule.contentMd}
+               </div>
+             ) : (
+               <p className="text-sm text-dim border-t border-white/5 pt-8">Module body not loaded — check /api/learn.</p>
+             )}
 
-             <div className="grid grid-cols-2 gap-8">
-                <div className="space-y-6">
-                   <h4 className="text-sm font-black tracking-[0.3em] uppercase border-b border-white/5 pb-4">Internal Documentation</h4>
-                   <div className="space-y-3">
-                      {[1,2,3].map(i => (
-                        <div key={i} className="p-4 bg-white/5 border border-white/10 hover:border-myco-accent transition-all cursor-pointer group flex items-center justify-between">
-                           <span className="text-xs font-bold uppercase tracking-widest text-white/80 group-hover:text-myco-accent transition-colors">Module Section 0{i}: Integration Architecture</span>
-                           <ArrowDownRight className="size-3 text-dim group-hover:text-myco-accent" />
-                        </div>
-                      ))}
-                   </div>
-                </div>
-                <div className="p-10 glass-bento bg-myco-accent/5 border-myco-accent/30 flex flex-col justify-center items-center text-center space-y-6">
-                   <Video className="size-10 text-myco-accent" />
-                   <div>
-                      <h4 className="text-lg font-bold uppercase mb-2">Satellite Walkthrough Available</h4>
-                      <p className="text-xs text-dim mb-6">Complete this module to earn veMYCO reputation points and unlock the next protocol layer.</p>
-                      <button className="px-8 py-3 bg-myco-accent text-black font-black uppercase text-xs tracking-widest hover:shadow-[0_0_20px_rgba(0,255,136,0.3)] transition-all">Mark as Complete</button>
-                   </div>
-                </div>
-             </div>
+             {(activeModule.resourceLinks?.length ?? 0) > 0 && (
+               <div className="border-t border-white/5 pt-8 space-y-4">
+                 <h4 className="text-sm font-black tracking-[0.3em] uppercase">Resources</h4>
+                 <ul className="space-y-2">
+                   {activeModule.resourceLinks!.map((link) => (
+                     <li key={link.href}>
+                       <a
+                         href={link.href}
+                         target="_blank"
+                         rel="noopener noreferrer"
+                         className="text-sm text-myco-accent hover:underline inline-flex items-center gap-2"
+                       >
+                         <ExternalLink className="size-3" />
+                         {link.label}
+                       </a>
+                     </li>
+                   ))}
+                 </ul>
+               </div>
+             )}
           </div>
        </div>
     </div>
@@ -1769,225 +1920,7 @@ const TokenomicsView = ({ setActiveTab }: { setActiveTab: (tab: string) => void 
   );
 };
 
-const DAOView = ({ setActiveTab }: any) => {
-  const [proposals, setProposals] = useState<any[]>([]);
-  const [realm, setRealm] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [votingId, setVotingId] = useState<string | null>(null);
-
-  useEffect(() => {
-    let isSubscribed = true;
-    import('./services/solanaGovernance').then(async ({ fetchRealmProposals, fetchRealmInfo }) => {
-       try {
-         const realmInfo = await fetchRealmInfo();
-         if (isSubscribed) setRealm(realmInfo);
-         const props = await fetchRealmProposals();
-         if (isSubscribed) {
-           setProposals(props);
-           setLoading(false);
-         }
-       } catch (e) {
-          if (isSubscribed) setLoading(false);
-       }
-    });
-    return () => { isSubscribed = false; };
-  }, []);
-
-  const handleVote = (id: string, side: 'yes' | 'no') => {
-    setVotingId(id);
-    // Simulate transaction delay
-    setTimeout(() => {
-      setProposals(prev => prev.map(p => {
-        if (p.id === id) {
-          return { ...p, [side]: p[side] + 1000 }; // Boost by 1k for demo
-        }
-        return p;
-      }));
-      setVotingId(null);
-    }, 1500);
-  };
-
-  return (
-  <div className="flex-1 p-6 overflow-hidden flex flex-col">
-    <div className="flex-1 grid grid-cols-12 gap-6 max-w-7xl mx-auto w-full">
-      {/* Left: Proposals List */}
-      <div className="col-span-12 lg:col-span-8 flex flex-col gap-6 overflow-y-auto no-scrollbar pb-32">
-         <div className="flex justify-between items-end mb-4">
-            <div>
-               <h2 className="text-4xl font-black tracking-tighter uppercase mb-1">DAO Governance</h2>
-               <p className="text-xs text-dim uppercase tracking-widest font-bold font-mono text-myco-accent">Solana SPL Governance / Realm Integration</p>
-            </div>
-            <div className="flex gap-2">
-               <button 
-                 className="px-6 py-3 bg-myco-accent text-black text-[10px] font-black border border-myco-accent hover:bg-transparent hover:text-myco-accent transition-all uppercase tracking-widest flex items-center gap-2 shadow-[0_0_20px_rgba(0,255,136,0.2)]"
-               >
-                 Connect Solana Wallet <Zap className="size-3" />
-               </button>
-            </div>
-         </div>
-
-         {loading ? (
-             <div className="glass-bento p-12 flex flex-col items-center justify-center text-center space-y-4">
-                 <RefreshCw className="size-8 text-myco-accent animate-spin" />
-                 <p className="text-xs uppercase tracking-widest text-dim font-bold">Synchronizing with SPL Governance...</p>
-             </div>
-         ) : proposals.length > 0 ? proposals.map((p: any) => {
-           // Basic mapping of proposal state Enum from SPL Governance to UI string
-           const stateString = p.state === 1 ? 'VOTING' : p.state === 3 ? 'EXECUTING' : p.state === 4 ? 'PASSED' : p.state === 5 ? 'DEFEATED' : 'DRAFT';
-           const yesPct = p.yes + p.no > 0 ? (p.yes / (p.yes + p.no)) * 100 : 0;
-           return (
-           <div key={p.id} className="glass-bento p-8 hover:bg-white/[0.02] cursor-pointer transition-all border-l-2 border-transparent hover:border-myco-accent group">
-              <div className="flex justify-between items-start mb-6">
-                 <div className="flex items-center gap-4">
-                    <div className={cn("px-2 py-1 text-[9px] font-bold uppercase tracking-widest rounded-sm", 
-                      stateString === 'VOTING' ? "bg-myco-accent text-black" : 
-                      stateString === 'PASSED' ? "bg-white/10 text-white" : "bg-white/5 text-dim"
-                    )}>
-                      {stateString}
-                    </div>
-                    <span className="text-xs font-bold font-mono opacity-40">#{p.id}</span>
-                 </div>
-                 <span className="text-[10px] font-bold text-dim uppercase tracking-widest">LIVE DATA</span>
-              </div>
-              <h3 className="text-2xl font-bold tracking-tight mb-8 group-hover:text-myco-accent transition-colors">{p.title}</h3>
-              <div className="space-y-4">
-                 <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest mb-1">
-                    <span className="text-myco-accent">Support: {yesPct.toFixed(1)}%</span>
-                    <span className="text-dim">Oppose: {(100 - yesPct).toFixed(1)}%</span>
-                 </div>
-                 <div className="h-1.5 w-full bg-white/5 rounded-full flex overflow-hidden">
-                    <div className="h-full bg-myco-accent" style={{ width: `${yesPct}%` }} />
-                    <div className="h-full bg-red-400 opacity-40" style={{ width: `${100 - yesPct}%` }} />
-                 </div>
-              </div>
-              <div className="mt-8 pt-8 border-t border-white/5 flex justify-between items-center">
-                 <div className="flex items-center gap-2">
-                    <div className="size-6 rounded-full bg-white/5 border border-white/10" />
-                    <span className="text-[10px] font-bold text-dim uppercase tracking-widest">Authored by {p.author}</span>
-                 </div>
-                 <div className="flex gap-2">
-                    <button 
-                      onClick={() => handleVote(p.id, 'yes')}
-                      disabled={votingId === p.id}
-                      className={cn(
-                        "px-4 py-2 bg-myco-accent/10 border border-myco-accent/30 text-myco-accent text-[9px] font-black uppercase hover:bg-myco-accent hover:text-black transition-all",
-                        votingId === p.id && "animate-pulse"
-                      )}
-                    >
-                      {votingId === p.id ? 'TRANSMITTING...' : 'APPROVE'}
-                    </button>
-                    <button 
-                      onClick={() => handleVote(p.id, 'no')}
-                      disabled={votingId === p.id}
-                      className="px-4 py-2 bg-red-400/10 border border-red-400/30 text-red-400 text-[9px] font-black uppercase hover:bg-red-400 hover:text-white transition-all"
-                    >
-                      {votingId === p.id ? '...' : 'REJECT'}
-                    </button>
-                 </div>
-              </div>
-           </div>
-         )}) : (
-             <div className="glass-bento p-12 border-myco-accent/20 bg-myco-accent/5 flex flex-col items-center justify-center text-center space-y-4">
-                 <p className="text-sm font-bold text-white uppercase tracking-widest">Connected to Realm</p>
-                 <p className="text-[10px] text-dim font-mono">No active proposals found for the configured SPL Governance address.</p>
-             </div>
-         )}
-      </div>
-
-      {/* Right: Proposals Stats & DAO Feed */}
-      <div className="col-span-12 lg:col-span-4 space-y-6 overflow-y-auto no-scrollbar pb-20">
-         <div className="glass-bento p-8 bg-myco-accent/5 border-myco-accent/20">
-            <h3 className="text-xs font-bold uppercase tracking-[0.3em] text-myco-accent mb-6">SPL Governance Account</h3>
-            <div className="space-y-6">
-               <div className="flex justify-between items-center">
-                  <span className="text-[9px] font-bold uppercase tracking-widest text-dim">Realm Public Key</span>
-                  <span className="text-xs font-mono font-bold text-white">{realm ? realm.pubkey.toBase58().substring(0,6) + '...' + realm.pubkey.toBase58().slice(-4) : '...'}</span>
-               </div>
-               <div className="flex justify-between items-center">
-                  <span className="text-[9px] font-bold uppercase tracking-widest text-dim">Total Proposals</span>
-                  <span className="text-xs font-mono font-bold text-white">{proposals.length}</span>
-               </div>
-               <div className="flex justify-between items-center">
-                  <span className="text-[9px] font-bold uppercase tracking-widest text-dim">Network</span>
-                  <span className="text-xs font-mono font-bold text-myco-accent">Solana Mainnet-Beta</span>
-               </div>
-               <a href="https://app.realms.today/dao/At93fiCMzEkZWBAHxSNjfk7zUHnF3JcxyCyPjZELjK9Y/treasury/v2" target="_blank" rel="noreferrer" className="w-full py-4 bg-transparent border border-myco-accent text-myco-accent text-[10px] font-black uppercase tracking-widest hover:bg-myco-accent hover:text-black transition-all block text-center mt-4">
-                  Open Treasury in Realms
-               </a>
-            </div>
-         </div>
-
-         <div className="glass-bento p-8">
-            <h3 className="text-xs font-bold uppercase tracking-[0.3em] text-dim mb-6 border-b border-white/5 pb-2">Interaction Log</h3>
-            <div className="space-y-6">
-               {[
-                 { t: 'IP-TOKEN MINT', d: 'New tokenized license for SEQ-842.', e: '1h ago' },
-                 { t: 'PROPOSAL SYNC', d: 'MIP-088 quorum reached 65%.', e: '3h ago' },
-                 { t: 'DAO NEWS', d: 'ValleyDAO partnership finalized.', e: '5h ago' },
-                 { t: 'MEMBER JOIN', d: '0xScience staking 50k MYCO.', e: '8h ago' },
-               ].map((l, i) => (
-                 <div key={i} className="space-y-1">
-                    <div className="flex justify-between text-[9px] font-bold">
-                       <span className="text-myco-accent uppercase tracking-widest">{l.t}</span>
-                       <span className="text-dim opacity-40 uppercase">{l.e}</span>
-                    </div>
-                    <p className="text-[11px] leading-tight text-white/80">{l.d}</p>
-                 </div>
-               ))}
-               <button className="w-full py-3 border border-white/5 text-[10px] font-bold uppercase tracking-widest hover:bg-white/5">Expand DAO History</button>
-            </div>
-         </div>
-
-         <div className="glass-bento p-8 bg-black">
-            <h4 className="text-[10px] font-bold uppercase tracking-widest text-dim mb-4">Project Progress</h4>
-            <div className="space-y-4">
-               {[
-                 { p: 'Fungal Longevity FL-1', s: 'Phase 2: Sequencing', c: 'text-myco-accent' },
-                 { p: 'Neural Link V1', s: 'Phase 1: Prototyping', c: 'text-dim' },
-                 { p: 'MINDEX Expansion', s: 'Syncing Nodes', c: 'text-myco-accent' }
-               ].map((prj, i) => (
-                 <div key={i} className="flex justify-between items-center text-[10px] font-bold">
-                    <span className="uppercase tracking-tight">{prj.p}</span>
-                    <span className={cn("uppercase tracking-widest opacity-80", prj.c)}>{prj.s}</span>
-                 </div>
-               ))}
-            </div>
-         </div>
-
-         <div className="glass-bento p-8 bg-black">
-            <h4 className="text-[10px] font-bold uppercase tracking-widest text-dim mb-6">IP Token Portfolio</h4>
-            <div className="space-y-4">
-               {[
-                 { t: 'FL-1-GENOME', b: '4,200', v: '$12k', u: true },
-                 { t: 'NL-V1-NEURO', b: '120,000', v: '$88k', u: true },
-                 { t: 'MINDEX-CORE', b: '85', v: '$210k', u: false }
-               ].map((tk, i) => (
-                 <div key={i} className="flex justify-between items-end border-b border-white/5 pb-3">
-                    <div className="flex flex-col">
-                       <span className="text-[10px] font-bold text-white uppercase">{tk.t}</span>
-                       <span className="text-[9px] font-mono text-dim">{tk.b} tokens</span>
-                    </div>
-                    <div className="text-right">
-                       <span className="text-[10px] font-bold text-white block">{tk.v}</span>
-                       <span className={cn("text-[8px] font-bold uppercase", tk.u ? "text-myco-accent" : "text-red-500")}>{tk.u ? 'Sync active' : 'Stable'}</span>
-                    </div>
-                 </div>
-               ))}
-               <button className="w-full py-3 mt-2 border border-white/10 text-white text-[9px] font-black uppercase tracking-widest hover:bg-white/5" onClick={() => setActiveTab('FungIP')}>Mint IP-NFT</button>
-            </div>
-         </div>
-
-         <div className="glass-bento p-8 bg-black">
-            <h4 className="text-[10px] font-bold uppercase tracking-widest text-dim mb-4">DAO Intelligence</h4>
-            <div className="p-4 border border-myco-accent/20 bg-myco-accent/5 italic text-xs leading-relaxed text-myco-accent">
-               "Sentiment analysis suggests 78% alignment on MIP-088. Treasury reserves are optimal for expansion. No critical bottlenecks detected in the MINDEX layer."
-            </div>
-         </div>
-      </div>
-    </div>
-  </div>
-);
-};
+const DAOView = () => <RealmsDaoHub />;
 
 const SettingsView = ({ isDarkMode, setIsDarkMode }: any) => (
   <div className="flex-1 p-6 flex items-center justify-center">
@@ -2074,7 +2007,22 @@ export default function App() {
   const [layouts, setLayouts] = useState<any>(initialLayouts);
   
   // Real-Time Data Hook
-  const { tickers, history, whales, episodes, streamStats, configStatus, loading } = useRealTimeData();
+  const {
+    tickers,
+    mycoSnapshot,
+    history,
+    whales,
+    news,
+    episodes,
+    calendar,
+    research,
+    learnModules,
+    streamStats,
+    configStatus,
+    fearGreed,
+    loading,
+  } = useRealTimeData();
+  const { stats: chainStats } = useChainStats();
 
   const assetTickers = useMemo(() => tickers.map(tickerToAssetRow), [tickers]);
   const tickerGroups = useMemo(
@@ -2102,16 +2050,17 @@ export default function App() {
         keys.MAS_API_URL && "MAS",
         keys.MINDEX_API_URL && "MINDEX",
         keys.FINNHUB_API_KEY && "MARKETS",
-        keys.GNEWS_API_KEY || keys.NEWS_API_KEY ? "NEWS" : null,
+        keys.CRYPTO_NEWS_RSS && "CRYPTO RSS",
+        keys.GNEWS_API_KEY || keys.NEWS_API_KEY ? "NEWS API" : null,
         keys.PODCAST_RSS_URLS && "PODCAST",
       ].filter(Boolean);
       setAiInsight(
         live.length
-          ? `LIVE FEEDS: ${live.join(" · ")}. STUDIO PRESETS FILL GAPS UNTIL CODEX WIRING.`
-          : STUDIO_ORACLE_INSIGHT
+          ? `LIVE FEEDS: ${live.join(" · ")}.`
+          : "Configure MYCODAO API keys for live markets, news, calendar, and podcasts."
       );
     } catch {
-      setAiInsight(STUDIO_ORACLE_INSIGHT);
+      setAiInsight("Pulse API status unavailable — check Next server on :3004.");
     } finally {
       setIsAiLoading(false);
     }
@@ -2122,20 +2071,24 @@ export default function App() {
     return () => clearTimeout(timer);
   }, []);
 
+  useEffect(() => {
+    void prefetchPulseNewsBundle();
+  }, []);
+
   const onLayoutChange = (currentLayout: any, allLayouts: any) => {
     setLayouts(allLayouts);
   };
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'Pulse': return <PulseDashboard aiInsight={aiInsight} layouts={layouts} setLayouts={setLayouts} onLayoutChange={onLayoutChange} setActiveTab={setActiveTab} tickerGroups={tickerGroups} chartData={history.length > 0 ? history : EMPTY_CHART_DATA} whales={whales} loading={loading} />;
-      case 'DAO': return <DAOView setActiveTab={setActiveTab} />;
+      case 'Pulse': return <PulseDashboard aiInsight={aiInsight} layouts={layouts} setLayouts={setLayouts} onLayoutChange={onLayoutChange} setActiveTab={setActiveTab} tickerGroups={tickerGroups} tickers={tickers} mycoSnapshot={mycoSnapshot} chartData={history.length > 0 ? history : EMPTY_CHART_DATA} whales={whales} news={news} episodes={episodes} calendar={calendar} research={research} learnModules={learnModules} fearGreed={fearGreed} configStatus={configStatus} loading={loading} />;
+      case 'DAO': return <DAOView />;
       case 'Markets': return <MarketView assets={assetTickers} />;
       case 'Trade': return <TradeView prices={assetTickers} chartData={history.length > 0 ? history : EMPTY_CHART_DATA} whales={whales} />;
       case 'News': return <NewsView />;
-      case 'Podcasts': return <PodcastView />;
+      case 'Podcasts': return <PodcastView episodes={episodes} streamStats={streamStats} />;
       case 'FungIP': return <FungIPView />;
-      case 'Learn': return <LearnView />;
+      case 'Learn': return <LearnView learnModules={learnModules} />;
       case 'MYCO': return <TokenomicsView setActiveTab={setActiveTab} />;
       case 'Settings': return <SettingsView isDarkMode={isDarkMode} setIsDarkMode={setIsDarkMode} />;
       default: return null;
@@ -2147,15 +2100,19 @@ export default function App() {
       {/* Sidebar - Terminal Rail */}
       <aside className="w-16 md:w-56 shrink-0 border-r border-white/5 flex flex-col transition-all duration-300 z-50 bg-[#050505]">
         <div className="p-6 border-b border-white/5 flex items-center justify-center md:justify-start gap-4">
-          <div className="size-10 glass-bento flex items-center justify-center bg-myco-accent shadow-[0_0_20px_rgba(0,255,136,0.3)] shrink-0">
-             <Zap className="size-6 text-black fill-black" />
+          <div className="size-12 glass-bento flex items-center justify-center bg-myco-accent shadow-[0_0_20px_rgba(0,255,136,0.3)] shrink-0 overflow-hidden">
+             <img
+               src={mycodaoBlackLogo}
+               alt="MycoDAO"
+               className="h-full w-full object-contain scale-[1.28]"
+             />
           </div>
           <span className="hidden md:block text-xl font-black tracking-tighter leading-none">PULSE</span>
         </div>
         <div className="flex-1 py-8 flex flex-col">
           <nav className="flex-1 space-y-1">
             <NavItem icon={LayoutDashboard} label="Pulse" active={activeTab === 'Pulse'} onClick={() => setActiveTab('Pulse')} />
-            <NavItem icon={Users} label="DAO" active={activeTab === 'DAO'} onClick={() => setActiveTab('DAO')} />
+            <NavItem icon={Users} label="Organizations" active={activeTab === 'DAO'} onClick={() => setActiveTab('DAO')} />
             <NavItem icon={TrendingUp} label="Markets" active={activeTab === 'Markets'} onClick={() => setActiveTab('Markets')} />
             <NavItem icon={BarChart3} label="Trade" active={activeTab === 'Trade'} onClick={() => setActiveTab('Trade')} />
             <NavItem icon={Globe} label="News" active={activeTab === 'News'} onClick={() => setActiveTab('News')} />
@@ -2186,35 +2143,74 @@ export default function App() {
         {/* Top Header Rail */}
         <header className="h-16 shrink-0 border-b border-white/5 flex items-center justify-between px-6 bg-[#050505]/80 backdrop-blur-xl z-40">
            <div className="flex items-center gap-10">
-              <div className="flex items-center gap-3">
-                 <div className="size-2 rounded-full bg-myco-accent shadow-[0_0_8px_var(--color-myco-accent)]" />
-                 <span className="text-[10px] font-bold uppercase tracking-[0.4em] opacity-80">Network Matrix Live</span>
-              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab('News')}
+                className={cn(
+                  "flex items-center gap-3 text-left transition-opacity hover:opacity-100 focus:outline-none focus-visible:ring-1 focus-visible:ring-myco-accent/60 rounded-sm",
+                  activeTab === 'News' ? "opacity-100" : "opacity-80 hover:opacity-95"
+                )}
+                aria-label="Open Block News Live"
+                aria-current={activeTab === 'News' ? 'page' : undefined}
+              >
+                 <div className="size-2 rounded-full bg-myco-accent shadow-[0_0_8px_var(--color-myco-accent)] shrink-0" />
+                 <span className="text-[10px] font-bold uppercase tracking-[0.4em]">
+                   Block News.{' '}
+                   <span className="text-myco-accent opacity-100 animate-live-on-air">Live</span>
+                 </span>
+              </button>
               <div className="hidden lg:flex items-center gap-8 border-l border-white/5 pl-8">
-                 <div className="flex flex-col">
-                   <span className="text-[9px] font-bold text-dim uppercase tracking-widest leading-none mb-1">Block Index</span>
-                   <span className="text-xs font-mono">18,442,109</span>
-                 </div>
-                 <div className="flex flex-col">
-                   <span className="text-[9px] font-bold text-dim uppercase tracking-widest leading-none mb-1">Compute Unit</span>
-                   <span className="text-xs font-mono">5,000 LAMPS</span>
-                 </div>
-                 <div className="flex flex-col">
-                   <span className="text-[9px] font-bold text-dim uppercase tracking-widest leading-none mb-1">Matrix Stability</span>
-                   <span className="text-xs font-mono text-myco-accent">98.42%</span>
-                 </div>
+                 <a
+                   href={chainStats?.sources.bitcoin ?? "https://mempool.space/"}
+                   target="_blank"
+                   rel="noreferrer"
+                   className="flex flex-col group"
+                 >
+                   <span className="text-[9px] font-bold text-dim uppercase tracking-widest leading-none mb-1 group-hover:text-myco-accent transition-colors">Bitcoin Block</span>
+                   <span className="text-xs font-mono group-hover:text-white transition-colors">
+                     {chainStats?.bitcoinBlockHeight != null
+                       ? chainStats.bitcoinBlockHeight.toLocaleString()
+                       : "—"}
+                   </span>
+                 </a>
+                 <a
+                   href={chainStats?.sources.solana ?? "https://solanabeach.io/validators"}
+                   target="_blank"
+                   rel="noreferrer"
+                   className="flex flex-col group"
+                 >
+                   <span className="text-[9px] font-bold text-dim uppercase tracking-widest leading-none mb-1 group-hover:text-myco-accent transition-colors">Solana Validators</span>
+                   <span className="text-xs font-mono group-hover:text-white transition-colors">
+                     {chainStats?.solanaValidators != null
+                       ? chainStats.solanaValidators.toLocaleString()
+                       : "—"}
+                   </span>
+                 </a>
+                 <a
+                   href={chainStats?.sources.marketCap ?? "https://coinmarketcap.com/charts/"}
+                   target="_blank"
+                   rel="noreferrer"
+                   className="flex flex-col group"
+                 >
+                   <span className="text-[9px] font-bold text-dim uppercase tracking-widest leading-none mb-1 group-hover:text-myco-accent transition-colors">Market Cap</span>
+                   <span className="text-xs font-mono text-myco-accent group-hover:text-white transition-colors">
+                     {formatMarketCapUsd(chainStats?.globalMarketCapUsd)}
+                   </span>
+                 </a>
               </div>
            </div>
 
            <div className="flex items-center gap-6">
               <a 
-                href="https://app.realms.today/dao/At93fiCMzEkZWBAHxSNjfk7zUHnF3JcxyCyPjZELjK9Y/treasury/v2"
+                href="https://v2.realms.today/dao/At93fiCMzEkZWBAHxSNjfk7zUHnF3JcxyCyPjZELjK9Y/treasury"
                 target="_blank"
                 rel="noreferrer"
-                className="flex flex-col items-end group"
+                className="flex items-center group"
               >
-                 <span className="text-[9px] font-bold text-dim uppercase tracking-widest leading-none mb-1 group-hover:text-myco-accent transition-colors">MYCO DAO TREASURY</span>
-                 <span className="text-sm font-bold tracking-tighter group-hover:text-white">Real-Time Realm Sync <ExternalLink className="inline size-2.5 ml-1 opacity-40" /></span>
+                 <span className="text-sm font-bold tracking-tighter group-hover:text-white">
+                   M Y C O D A O Treasury
+                   <ExternalLink className="inline size-2.5 ml-1 opacity-40" />
+                 </span>
               </a>
               
               <button className="px-6 h-10 border border-myco-accent bg-myco-accent/10 text-myco-accent font-bold uppercase tracking-widest text-[10px] hover:bg-myco-accent hover:text-black transition-all">
@@ -2232,9 +2228,19 @@ export default function App() {
                    {isDarkMode ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
                  </button>
               </div>
-              <div className="size-10 rounded-full overflow-hidden border border-white/10 hover:ring-2 ring-myco-accent transition-all cursor-pointer">
-                 <img src="https://picsum.photos/seed/cyber/100/100" className="opacity-80 grayscale" referrerPolicy="no-referrer" />
-              </div>
+              <a
+                href="https://mycodao.com"
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center justify-center shrink-0 hover:opacity-90 transition-opacity"
+                aria-label="MycoDAO"
+              >
+                <img
+                  src={mycodaoColorLogo}
+                  alt="MycoDAO"
+                  className="h-8 w-auto max-w-[108px] object-contain"
+                />
+              </a>
            </div>
         </header>
 

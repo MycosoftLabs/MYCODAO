@@ -1,4 +1,4 @@
-import { STUDIO_WHALE_LEDGER, type StudioWhaleRow } from "../data/studioPresets";
+import type { StudioWhaleRow } from "../data/studioPresets";
 
 const JUP_QUOTE_API = "https://quote-api.jup.ag/v6/quote";
 
@@ -36,5 +36,5 @@ export const getJupiterQuote = async (
 export const MATRIX_MINT = "EzYEwn4R5tNkNGw4K2a5a58MJFQESdf1r4UJrV7cpUF3";
 export const SOL_MINT = "So11111111111111111111111111111111111111112";
 
-/** Live whale index when API exists; studio ledger rows until Codex wires MAS/MINDEX. */
-export const getWhaleActivity = async (): Promise<StudioWhaleRow[]> => STUDIO_WHALE_LEDGER;
+/** On-chain whale ledger — empty until MAS/MINDEX whale index is wired. */
+export const getWhaleActivity = async (): Promise<StudioWhaleRow[]> => [];

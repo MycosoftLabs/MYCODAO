@@ -5,27 +5,25 @@
 
 import {
   fetchLiquidityPoolsFromDex,
-  fetchPolymarketActivity,
+  fetchPredictionMarkets,
   fetchPulseGlobalMarket,
   fetchPulseMyco,
   fetchPulseNews,
   fetchPulseOhlc,
   fetchPulsePodcasts,
   fetchPulseTickers,
+  fetchWhaleMovements,
   type LiquidityPoolRow,
   type PulseMycoSnapshot,
   type PulseNewsItem,
   type PulsePodcastEpisode,
+  type PulsePredictionMarketsBundle,
+  type PulseWhaleMovement,
 } from "../lib/pulseApi";
-import {
-  STUDIO_CHART_DATA,
-  STUDIO_DAO_PROPOSALS,
-  STUDIO_NEURAL_REPORT,
-  STUDIO_STREAMLABS,
-  mergeEpisodesWithStudio,
-  mergeNewsWithStudio,
-} from "../data/studioPresets";
-import { fetchRealmProposals } from "./solanaGovernance";
+import { mergeEpisodesWithStudio, mergeNewsWithStudio } from "../data/studioPresets";
+import { fetchRealmsDaoDetail } from "../lib/pulseApi";
+
+const MYCO_REALM_PK = "At93fiCMzEkZWBAHxSNjfk7zUHnF3JcxyCyPjZELjK9Y";
 
 export type { LiquidityPoolRow };
 
@@ -93,28 +91,36 @@ export const fetchLiveMycoTokenMetrics = async () => {
 
 export const fetchGlobalMarketData = async () => {
   const tickers = await fetchPulseTickers();
-  const market = await fetchPulseGlobalMarket(tickers);
-  if (market.status !== "NO_DATA") return market;
-  return { SOL: "162.40", BTC: "$98,420", ETH: "3,842", status: "STUDIO" };
+  return fetchPulseGlobalMarket(tickers);
 };
 
-/** Streamlabs — studio preset until STREAMLABS_* env on MYCODAO. */
-export const fetchStreamlabsStats = async () => STUDIO_STREAMLABS;
+/** Streamlabs — real stats only when STREAMLABS_* env is configured. */
+export const fetchStreamlabsStats = async () => null;
 
-/** Neural brief — studio text until MAS / Gemini wired in Codex. */
-export const generateNeuralReport = async (_marketContext: string) => STUDIO_NEURAL_REPORT;
+/** Neural brief — MAS / Gemini when wired; no placeholder text. */
+export const generateNeuralReport = async (_marketContext: string) => "";
 
 export const fetchRSSEpisodes = async (): Promise<PulsePodcastEpisode[]> =>
   mergeEpisodesWithStudio(await fetchPulsePodcasts());
 
 export const fetchDAOProposals = async () => {
-  const live = await fetchRealmProposals();
-  return live.length ? live : STUDIO_DAO_PROPOSALS;
+  const { proposals } = await fetchRealmsDaoDetail(MYCO_REALM_PK, { withProposals: true });
+  if (!proposals.length) return [];
+  return proposals.map((p) => ({
+    id: p.pubkey.slice(0, 8),
+    title: p.name,
+    state: p.state,
+    stateLabel: p.stateLabel,
+    author: "Realms",
+    yes: Number(p.yesVoteWeight) || 0,
+    no: Number(p.denyVoteWeight) || 0,
+    realmsUrl: p.realmsUrl,
+  }));
 };
 
 export const fetchHistory = async (symbol: string) => {
   const bars = await fetchPulseOhlc(symbol, "1h");
-  if (!bars.length) return STUDIO_CHART_DATA;
+  if (!bars.length) return [];
   return bars.map((b) => ({
     time: b.time,
     value: b.close ?? b.open ?? 0,
@@ -122,7 +128,18 @@ export const fetchHistory = async (symbol: string) => {
   }));
 };
 
-export const fetchPolymarketWhales = async () => fetchPolymarketActivity();
+export const fetchPolymarketWhales = async () => {
+  const bundle = await fetchPredictionMarkets();
+  return bundle.polymarket;
+};
+
+export const fetchWhaleWatchMovements = async (): Promise<PulseWhaleMovement[]> => {
+  const res = await fetchWhaleMovements();
+  return res.movements;
+};
+
+export const fetchWhaleWatchMarkets = async (): Promise<PulsePredictionMarketsBundle> =>
+  fetchPredictionMarkets();
 
 export const fetchLiquidityPools = async (): Promise<LiquidityPoolRow[]> =>
   fetchLiquidityPoolsFromDex();

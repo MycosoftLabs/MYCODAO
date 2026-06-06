@@ -17,7 +17,15 @@ type RssItem = {
 
 const parser = new Parser();
 
-const RSS_PARSE_TIMEOUT_MS = 8000;
+const RSS_PARSE_TIMEOUT_MS = 18_000;
+
+/** Real crypto podcast RSS — used when PODCAST_RSS_URLS is unset (no MYCO studio episodes). */
+const DEFAULT_CRYPTO_PODCAST_RSS = [
+  "https://feeds.megaphone.fm/LSHML4761942757",
+  "https://feeds.megaphone.fm/the-breakdown",
+  "https://decrypt.co/feed/podcast",
+  "https://feeds.transistor.fm/the-scoop",
+] as const;
 
 function parseUrlWithTimeout(feedUrl: string): Promise<Awaited<ReturnType<Parser["parseURL"]>>> {
   return Promise.race([
@@ -30,14 +38,12 @@ function parseUrlWithTimeout(feedUrl: string): Promise<Awaited<ReturnType<Parser
 
 export async function fetchPodcastEpisodes(): Promise<PodcastEpisode[]> {
   const raw = process.env.PODCAST_RSS_URLS?.trim();
-  if (!raw) {
-    return [];
-  }
-
   const urls = raw
-    .split(",")
-    .map((u) => u.trim())
-    .filter(Boolean);
+    ? raw
+        .split(",")
+        .map((u) => u.trim())
+        .filter(Boolean)
+    : [...DEFAULT_CRYPTO_PODCAST_RSS];
   const out: PodcastEpisode[] = [];
   let idx = 0;
   for (const feedUrl of urls.slice(0, 5)) {

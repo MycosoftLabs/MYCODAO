@@ -27,6 +27,18 @@ export type CatalystType =
 
 export type ImpactLevel = "high" | "medium" | "low";
 
+export type NewsTopic =
+  | "bitcoin"
+  | "solana"
+  | "defi"
+  | "regulation"
+  | "macro"
+  | "markets"
+  | "business"
+  | "politics"
+  | "crypto"
+  | "mycodao";
+
 export type NewsItem = {
   id: string;
   source: string;
@@ -43,6 +55,12 @@ export type NewsItem = {
   catalystType?: CatalystType;
   /** Optional: market impact (API or upstream). */
   impactLevel?: ImpactLevel;
+  /** Pulse broadcast bumper label (BITCOIN, SOLANA, BREAKING, etc.). */
+  broadcastLabel?: string;
+  /** Curator topic bucket for balancing feeds. */
+  newsTopic?: NewsTopic;
+  /** Source feed priority weight (RSS adapters). */
+  feedPriority?: number;
 };
 
 /** RSS / enclosure derived: video (YouTube, mp4, live) vs audio-only. */
@@ -199,7 +217,10 @@ export type MycoSnapshot = {
     tokenPage: string;
     governanceUrl?: string;
     buyUrl?: string;
+    dexscreenerUrl?: string;
   };
+  fdv?: number;
+  liquidityUsd?: number;
   updatedAt: string;
   researchFunding?: ResearchFundingMetrics;
   biobank?: BiobankActivity;
@@ -221,4 +242,58 @@ export type ResearchItem = {
   summary: string;
   category: "ecosystem" | "funding" | "biobank" | "science";
   publishedAt: string;
+};
+
+/** Large on-chain or curated crypto transfer (Whale Alert API or supplemental feeds). */
+export type WhaleMovement = {
+  id: string;
+  source: "whale_alert" | "polymarket_trade";
+  blockchain?: string;
+  symbol: string;
+  amount: string;
+  usd: string;
+  usdValue: number;
+  from: string;
+  to: string;
+  wallet: string;
+  type: "BUY" | "SELL" | "TRANSFER" | "MINT" | "BURN";
+  timeAgo: string;
+  timestamp: number;
+  text?: string;
+  url?: string;
+  txHash?: string;
+};
+
+/** Live prediction market row (Polymarket or Kalshi). */
+export type PredictionMarketRow = {
+  id: string;
+  platform: "polymarket" | "kalshi";
+  title: string;
+  outcome?: string;
+  probability?: string;
+  probabilityNum?: number;
+  volume?: string;
+  volumeNum?: number;
+  category?: string;
+  url?: string;
+  updatedAt?: string;
+};
+
+export type PredictionMarketsBundle = {
+  polymarket: PredictionMarketRow[];
+  kalshi: PredictionMarketRow[];
+  politics: PredictionMarketRow[];
+  fetchedAt: string;
+  sources: {
+    whaleAlertConfigured: boolean;
+    polymarket: boolean;
+    kalshi: boolean;
+  };
+};
+
+export type WhalesApiResponse = {
+  movements: WhaleMovement[];
+  fetchedAt: string;
+  whaleAlertConfigured: boolean;
+  message?: string;
 };

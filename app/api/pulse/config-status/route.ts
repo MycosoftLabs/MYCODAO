@@ -17,6 +17,8 @@ export async function GET() {
       NATUREOS_API_URL: present(process.env.NATUREOS_API_URL),
       MINDEX_INTERNAL_TOKEN: present(process.env.MINDEX_INTERNAL_TOKEN),
       FINNHUB_API_KEY: present(process.env.FINNHUB_API_KEY),
+      FINNHUB_WEBHOOK_SECRET: present(process.env.FINNHUB_WEBHOOK_SECRET),
+      CRYPTO_NEWS_RSS: true,
       GNEWS_API_KEY: present(process.env.GNEWS_API_KEY),
       NEWS_API_KEY: present(process.env.NEWS_API_KEY),
       TRADING_BROKER_BASE_URL: present(process.env.TRADING_BROKER_BASE_URL),
@@ -29,6 +31,13 @@ export async function GET() {
       PULSE_MAS_PROXY_SECRET: present(process.env.PULSE_MAS_PROXY_SECRET),
       NEXT_PUBLIC_BASE_PATH: present(process.env.NEXT_PUBLIC_BASE_PATH),
       NEXT_PUBLIC_PULSE_SSE: present(process.env.NEXT_PUBLIC_PULSE_SSE),
+      WHALE_ALERT_API_KEY: present(process.env.WHALE_ALERT_API_KEY),
+      REALMS_V2_API_URL: present(process.env.REALMS_V2_API_URL),
+    },
+    realms: {
+      exploreUrl: "https://v2.realms.today/explore",
+      launchpadUrl: "https://v2.realms.today/launchpad",
+      publicApiDefault: "https://v2.realms.today/api/v1",
     },
   });
 }

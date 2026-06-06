@@ -13,7 +13,13 @@ export const SolanaProvider = ({ children }: { children: React.ReactNode }) => {
     const network = WalletAdapterNetwork.Mainnet;
 
     // You can also provide a custom RPC endpoint.
-    const endpoint = useMemo(() => clusterApiUrl(network), [network]);
+    const endpoint = useMemo(
+        () =>
+            import.meta.env.VITE_SOLANA_RPC_URL?.trim() ||
+            import.meta.env.VITE_PHANTOM_SOLANA_RPC?.trim() ||
+            clusterApiUrl(network),
+        [network]
+    );
 
     const wallets = useMemo(
         () => [
