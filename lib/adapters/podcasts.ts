@@ -1,5 +1,6 @@
 /**
  * Podcast episodes: RSS feeds (PODCAST_RSS_URLS comma-separated). No placeholder episodes.
+ * Show copy & Season 1 guide: docs/MYCOPOD_PODCAST_REFERENCE_JUN06_2026.md, myco-pulse/src/data/mycopodShow.ts
  */
 
 import type { PodcastEpisode, PodcastMediaKind } from "@/lib/types";

@@ -68,7 +68,7 @@ if [ ! -d .git ]; then echo 'Missing git repo at $RemoteDir — clone https://gi
 git fetch origin
 git checkout $Branch
 git reset --hard origin/$Branch
-docker compose build --no-cache mycodao
+docker compose build mycodao
 docker compose up -d
 docker compose --env-file .env.production --profile tunnel up -d
 docker compose --env-file .env.production ps

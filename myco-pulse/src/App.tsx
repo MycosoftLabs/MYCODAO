@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SPECIMENS } from './data/fungIp';
+import {
+  MYCOPOD_COVER_URL,
+  MYCOPOD_HOST_BIOS,
+  MYCOPOD_SEASON_ONE_GUIDE,
+  MYCOPOD_SHOW,
+} from './data/mycopodShow';
 import { 
   BarChart3, 
   BookOpen, 
@@ -1250,50 +1256,77 @@ const PodcastView = ({
       </div>
 
       <div className="col-span-12 lg:col-span-8 glass-bento relative flex flex-col overflow-hidden border-white/5 min-h-[280px] lg:min-h-0">
-        <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-transparent to-transparent pointer-events-none z-10" />
-        {episodes[0]?.image ? (
-          <img
-            src={episodes[0].image}
-            alt=""
-            className="absolute inset-0 size-full object-cover grayscale opacity-10"
-            referrerPolicy="no-referrer"
-          />
-        ) : null}
-        <div className="relative z-20 flex-1 p-4 md:p-6 lg:p-8 flex flex-col justify-end">
-           {/* RSS Status */}
-           <div className="flex items-center gap-3 mb-4">
-            <span className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FF5C39] text-white text-[10px] font-black uppercase tracking-tighter">
-               <Wifi className="w-3 h-3" /> MYCOPOD RSS LIVE
+        <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/80 to-transparent pointer-events-none z-10" />
+        <img
+          src={episodes[0]?.image || MYCOPOD_COVER_URL}
+          alt=""
+          className="absolute inset-0 size-full object-cover opacity-20"
+          referrerPolicy="no-referrer"
+        />
+        <div className="relative z-20 flex-1 p-4 md:p-6 lg:p-8 flex flex-col justify-end min-h-[280px]">
+           <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-3">
+            <span className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FF5C39] text-white text-[10px] font-black uppercase tracking-tighter min-h-[44px]">
+               <Wifi className="w-3 h-3 shrink-0" /> MYCOPOD RSS
             </span>
-            <span className="px-3 py-1.5 bg-white/5 border border-white/10 text-myco-accent text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
-               <Radio className="w-3 h-3 animate-pulse" />
-               STREAMLABS ENGINE ACTIVE
-            </span>
+            <a
+              href={MYCOPOD_SHOW.rssUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-1.5 bg-white/5 border border-white/10 text-white/80 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 min-h-[44px] hover:bg-white/10 touch-manipulation"
+            >
+               <Rss className="w-3 h-3 shrink-0" /> Feed
+            </a>
           </div>
 
-          <div className="flex items-center gap-3 mb-4">
-            <span className="flex items-center gap-1.5 px-2 py-1 bg-red-500 text-white text-[10px] font-bold uppercase animate-pulse">
-              <Radio className="w-3 h-3" /> LIVE BROADCAST
-            </span>
-            <span className="text-xs font-bold uppercase tracking-widest text-white/60 line-clamp-1">{episodes[0] ? episodes[0].title : 'Loading Latest Episode...'}</span>
-          </div>
-          <h1 className="text-2xl sm:text-4xl lg:text-6xl font-black tracking-tighter mb-4 text-white leading-none line-clamp-2">
-            {episodes[0]?.show?.toUpperCase() || 'MYCOPOD'}
+          <p className="text-[10px] sm:text-xs font-bold uppercase tracking-[0.25em] text-[#FF5C39] mb-2">
+            {MYCOPOD_SHOW.subtitle}
+          </p>
+          <h1 className="text-2xl sm:text-4xl lg:text-5xl font-black tracking-tighter mb-2 text-white leading-none">
+            {MYCOPOD_SHOW.title.toUpperCase()}
           </h1>
-          
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 sm:gap-6 mt-6 md:mt-8">
-            <button type="button" className="flex items-center justify-center gap-3 px-6 md:px-10 py-4 md:py-5 min-h-[44px] bg-myco-accent text-black font-black uppercase tracking-widest text-xs sm:text-sm hover:translate-y-[-2px] transition-all shadow-[0_5px_15px_rgba(0,255,136,0.3)] touch-manipulation">
-              <Play className="w-5 h-5 sm:w-6 sm:h-6 fill-black" /> JOIN LIVE HUB
-            </button>
-            <div className="flex flex-col gap-2">
-               <div className="flex items-center gap-3 text-dim">
-                  <Volume2 className="w-5 h-5" />
-                  <div className="w-48 h-1 bg-white/10 rounded-full relative overflow-hidden">
-                     <div className="absolute inset-y-0 left-0 w-3/4 bg-myco-accent animate-pulse" />
-                  </div>
-               </div>
-               <span className="text-[9px] font-bold text-dim uppercase tracking-[0.3em]">Audio Feed: MycoPOD RSS</span>
+          <p className="text-sm sm:text-base font-bold text-myco-accent mb-3">{MYCOPOD_SHOW.tagline}</p>
+          <p className="text-xs sm:text-sm text-white/70 leading-relaxed max-w-2xl mb-4 line-clamp-3 sm:line-clamp-none">
+            {MYCOPOD_SHOW.about}
+          </p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-dim mb-4">
+            Hosted by {MYCOPOD_SHOW.hosts.join(' & ')}
+          </p>
+
+          {episodes[0] ? (
+            <div className="flex items-center gap-3 mb-4">
+              <span className="flex items-center gap-1.5 px-2 py-1 bg-red-500 text-white text-[10px] font-bold uppercase">
+                <Radio className="w-3 h-3" /> Latest
+              </span>
+              <span className="text-xs font-bold uppercase tracking-wide text-white/80 line-clamp-2">{episodes[0].title}</span>
             </div>
+          ) : (
+            <div className="flex items-center gap-3 mb-4">
+              <span className="px-2 py-1 bg-white/10 text-white text-[10px] font-bold uppercase">Season 1</span>
+              <span className="text-xs font-bold text-dim">
+                {loading ? 'Loading feed…' : 'Episodes publishing to RSS soon'}
+              </span>
+            </div>
+          )}
+
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 sm:gap-6">
+            <a
+              href={MYCOPOD_SHOW.websiteUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-3 px-6 md:px-10 py-4 md:py-5 min-h-[44px] bg-myco-accent text-black font-black uppercase tracking-widest text-xs sm:text-sm hover:translate-y-[-2px] transition-all shadow-[0_5px_15px_rgba(0,255,136,0.3)] touch-manipulation"
+            >
+              <ExternalLink className="w-5 h-5 shrink-0" /> MycoDAO.com
+            </a>
+            {episodes[0]?.audioUrl ? (
+              <a
+                href={episodes[0].audioUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-3 px-6 py-4 min-h-[44px] bg-white/10 border border-white/20 text-white font-black uppercase tracking-widest text-xs hover:bg-white/15 touch-manipulation"
+              >
+                <Play className="w-5 h-5 fill-current" /> Listen
+              </a>
+            ) : null}
           </div>
         </div>
       </div>
@@ -1330,34 +1363,60 @@ const PodcastView = ({
            </div>
         </div>
 
-        <div className="flex-1 glass-bento border-white/5 flex flex-col overflow-hidden bg-black/40">
+        <div className="glass-bento p-4 border-white/5 bg-black/40 flex flex-col gap-3">
+          <h3 className="text-[10px] font-black uppercase tracking-widest text-myco-accent">Hosts</h3>
+          {MYCOPOD_HOST_BIOS.map((host) => (
+            <div key={host.name} className="border-b border-white/5 pb-3 last:border-0 last:pb-0">
+              <p className="text-xs font-bold text-white">{host.name}</p>
+              <p className="text-[9px] font-bold uppercase text-dim tracking-wide mb-1">{host.role}</p>
+              <p className="text-[10px] text-white/60 leading-snug">{host.bio}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex-1 glass-bento border-white/5 flex flex-col overflow-hidden bg-black/40 min-h-[200px]">
            <div className="p-4 border-b border-white/5 flex justify-between items-center bg-[#FF5C39]/5">
               <h3 className="text-[10px] font-black uppercase tracking-widest text-[#FF5C39] flex items-center gap-2">
-                 <Rss className="size-3" /> Crypto Podcast Feed
+                 <Rss className="size-3 shrink-0" />
+                 {episodes.length > 0 ? 'MycoPOD Episodes' : 'Season 1 Guide'}
               </h3>
            </div>
-           <div className="flex-1 overflow-y-auto no-scrollbar p-2">
+           <div className="flex-1 overflow-y-auto overflow-x-hidden no-scrollbar p-2">
               {loading ? (
-                  <div className="h-full flex items-center justify-center p-4">
+                  <div className="h-full flex items-center justify-center p-4 min-h-[120px]">
                       <RefreshCw className="size-5 text-[#FF5C39] animate-spin" />
                   </div>
-              ) : episodes.length > 0 ? episodes.slice(0, 5).map((ep: any, i: number) => (
-                <div key={i} className="group p-4 hover:bg-white/5 cursor-pointer transition-all border-b border-white/5 last:border-0 hover:border-l-2 border-l-transparent hover:border-l-[#FF5C39]">
-                   <div className="flex justify-between items-start mb-2">
-                      <span className="text-[8px] font-bold uppercase tracking-widest text-[#FF5C39]">Episode {episodes.length - i}</span>
+              ) : episodes.length > 0 ? episodes.slice(0, 8).map((ep: any, i: number) => (
+                <a
+                  key={ep.id ?? i}
+                  href={ep.audioUrl || ep.embedUrl || MYCOPOD_SHOW.rssUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group block p-4 hover:bg-white/5 transition-all border-b border-white/5 last:border-0 hover:border-l-2 border-l-transparent hover:border-l-[#FF5C39] min-h-[44px] touch-manipulation"
+                >
+                   <div className="flex justify-between items-start mb-2 gap-2">
+                      <span className="text-[8px] font-bold uppercase tracking-widest text-[#FF5C39] shrink-0">Episode</span>
                       <span className="text-[8px] font-bold text-dim">{ep.publishedAt ? new Date(ep.publishedAt).toLocaleDateString() : '—'}</span>
                    </div>
                    <h4 className="text-sm font-bold text-white leading-tight mb-2 group-hover:text-[#FF5C39] transition-colors line-clamp-2">{ep.title}</h4>
-                   <div className="flex items-center gap-3">
-                      <button className="size-6 bg-white/10 rounded-full flex items-center justify-center group-hover:bg-[#FF5C39]/20 transition-colors">
-                         <Play className="w-2.5 h-2.5 fill-current text-[#FF5C39]" />
-                      </button>
-                      <span className="text-[10px] font-bold uppercase text-dim tracking-widest">Listen Now</span>
-                   </div>
+                   <span className="text-[10px] font-bold uppercase text-dim tracking-widest flex items-center gap-2">
+                      <Play className="w-2.5 h-2.5 fill-current text-[#FF5C39]" /> Listen
+                   </span>
+                </a>
+              )) : MYCOPOD_SEASON_ONE_GUIDE.map((ep) => (
+                <div
+                  key={ep.number}
+                  className="p-3 border-b border-white/5 last:border-0"
+                >
+                  <div className="flex gap-2 items-start">
+                    <span className="text-[9px] font-black text-[#FF5C39] shrink-0 pt-0.5">E{ep.number}</span>
+                    <div className="min-w-0">
+                      <h4 className="text-xs font-bold text-white leading-snug line-clamp-2">{ep.title}</h4>
+                      <p className="text-[9px] text-dim mt-1">{ep.focus}</p>
+                    </div>
+                  </div>
                 </div>
-              )              ) : (
-                 <div className="p-4 text-[10px] text-dim text-center">No crypto podcast episodes — check /api/podcasts</div>
-              )}
+              ))}
            </div>
         </div>
       </div>
