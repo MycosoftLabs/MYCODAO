@@ -297,3 +297,38 @@ export type WhalesApiResponse = {
   whaleAlertConfigured: boolean;
   message?: string;
 };
+
+/** ResearchHub paper / fundraise row (live API only). */
+export type ResearchHubFeedItem = {
+  id: string;
+  title: string;
+  hub?: string;
+  authors?: string;
+  score?: number;
+  fundingGoal?: number;
+  fundingRaised?: number;
+  url: string;
+  publishedAt?: string;
+  needsFunding?: boolean;
+};
+
+export type FundingBundleStats = {
+  grantPoolMyco: number;
+  grantsDeployedMyco: number;
+  activeProposals: number;
+  activeResearchProjects: number;
+  samplesIndexed: number;
+  treasuryLiquidityUsd: number;
+  mycoPrice: number;
+};
+
+export type FundingBundle = {
+  stats: FundingBundleStats;
+  researchHub: {
+    configured: boolean;
+    papers: ResearchHubFeedItem[];
+    portalUrl: string;
+    docsUrl: string;
+  };
+  updatedAt: string;
+};
