@@ -93,7 +93,8 @@ reload_proxy() {
 }
 
 wait_healthy() {
-  local slot="$1" cid="mycodao-$slot"
+  local slot="$1"
+  local cid="mycodao-${slot}"
   local deadline=$(( $(date +%s) + HEALTH_TIMEOUT )) streak=0
   log "Health $cid ($HEALTH_STREAK×, ${HEALTH_TIMEOUT}s)"
   while (( $(date +%s) < deadline )); do
@@ -125,7 +126,8 @@ purge_cloudflare() {
 }
 
 stop_slot() {
-  local slot="$1" cid="mycodao-$slot"
+  local slot="$1"
+  local cid="mycodao-${slot}"
   docker ps --format '{{.Names}}' | grep -qx "$cid" || return 0
   docker stop -t 30 "$cid" >/dev/null || true
   docker rm -f "$cid" >/dev/null || true
