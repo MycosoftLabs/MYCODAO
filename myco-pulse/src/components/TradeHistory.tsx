@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { ensureSupabase } from '../lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
 import { History, ExternalLink, ArrowRightLeft, TrendingUp, ShieldCheck, Clock } from 'lucide-react';
 import { useWallet } from '@solana/wallet-adapter-react';
@@ -15,7 +15,7 @@ export const TradeHistory = () => {
             return;
         }
 
-        const client = supabase;
+        const client = await ensureSupabase();
         if (!client) {
             console.warn("Supabase client not initialized - history fetch skipped.");
             setLoading(false);
