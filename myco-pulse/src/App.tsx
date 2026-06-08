@@ -64,6 +64,7 @@ import {
 import { cn } from './lib/utils';
 import { mycodaoBlackLogo, mycodaoColorLogo } from './lib/brandLogos';
 import { RealmsDaoHub } from './components/RealmsDaoHub';
+import { MycoTerminalView } from './components/MycoTerminalView';
 import { 
   AreaChart, 
   Area, 
@@ -153,32 +154,31 @@ function gridColsForWidth(width: number): number {
 }
 
 const lgLayout = [
-    { i: 'overview', x: 0, y: 0, w: 4, h: 2 },
-    { i: 'crypto', x: 4, y: 0, w: 3, h: 2 },
-    { i: 'metals', x: 7, y: 0, w: 2, h: 2 },
-    { i: 'big_movers', x: 9, y: 0, w: 3, h: 2 },
-    
-    { i: 'commodities', x: 0, y: 2, w: 3, h: 2 },
-    { i: 'bio_assets', x: 3, y: 2, w: 3, h: 2 },
-    { i: 'tech', x: 6, y: 2, w: 3, h: 2 },
-    { i: 'business', x: 9, y: 2, w: 3, h: 2 },
-    
-    { i: 'news_mini', x: 0, y: 4, w: 4, h: 2 },
-    { i: 'podcast_mini', x: 4, y: 4, w: 4, h: 2 },
-    { i: 'learn_mini', x: 8, y: 4, w: 4, h: 2 },
-    
-    { i: 'watchlist', x: 0, y: 6, w: 3, h: 2 },
-    { i: 'indicators', x: 3, y: 6, w: 3, h: 2 },
-    { i: 'eco', x: 6, y: 6, w: 3, h: 2 },
-    { i: 'funding', x: 9, y: 6, w: 3, h: 2 },
-    
-    { i: 'bonds', x: 0, y: 8, w: 3, h: 2 },
-    { i: 'research', x: 3, y: 8, w: 3, h: 2 },
-    { i: 'calendar', x: 6, y: 8, w: 3, h: 2 },
-    { i: 'status', x: 9, y: 8, w: 3, h: 2 },
+    { i: 'overview', x: 0, y: 0, w: 4, h: 4 },
+    { i: 'crypto', x: 4, y: 0, w: 3, h: 4 },
+    { i: 'metals', x: 7, y: 0, w: 2, h: 4 },
+    { i: 'big_movers', x: 9, y: 0, w: 3, h: 4 },
 
-    { i: 'whale_watch_mini', x: 0, y: 10, w: 6, h: 2 },
-    { i: 'mindex_mini', x: 6, y: 10, w: 6, h: 2 },
+    { i: 'commodities', x: 0, y: 4, w: 3, h: 4 },
+    { i: 'bio_assets', x: 3, y: 4, w: 3, h: 4 },
+    { i: 'tech', x: 6, y: 4, w: 3, h: 4 },
+    { i: 'business', x: 9, y: 4, w: 3, h: 4 },
+
+    { i: 'news_mini', x: 0, y: 8, w: 4, h: 4 },
+    { i: 'podcast_mini', x: 4, y: 8, w: 4, h: 4 },
+    { i: 'learn_mini', x: 8, y: 8, w: 4, h: 4 },
+
+    { i: 'watchlist', x: 0, y: 12, w: 3, h: 4 },
+    { i: 'indicators', x: 3, y: 12, w: 3, h: 4 },
+    { i: 'eco', x: 6, y: 12, w: 3, h: 4 },
+    { i: 'funding', x: 9, y: 12, w: 3, h: 4 },
+
+    { i: 'bonds', x: 0, y: 16, w: 3, h: 4 },
+    { i: 'research', x: 3, y: 16, w: 3, h: 4 },
+    { i: 'calendar', x: 6, y: 16, w: 3, h: 4 },
+    { i: 'status', x: 9, y: 16, w: 3, h: 4 },
+
+    { i: 'whale_watch_mini', x: 0, y: 20, w: 12, h: 4 },
 ];
 
 const initialLayouts = {
@@ -236,7 +236,7 @@ const WidgetWrapper = ({ children, title, onToggleFull, isFull, id }: any) => {
           </div>
         ) : null}
       </div>
-      <div className="flex-1 p-3 overflow-hidden relative touch-pan-y">
+      <div className="flex-1 p-3 overflow-y-auto no-scrollbar relative touch-pan-y min-h-0">
         {children}
       </div>
     </div>
@@ -278,7 +278,6 @@ const PulseDashboard = ({
   const [savedLayouts, setSavedLayouts] = useState<any>(null);
   const pulseGridRef = useRef<HTMLDivElement>(null);
   const [pulseGridWidth, setPulseGridWidth] = useState(0);
-  const [mindexReachable, setMindexReachable] = useState<boolean | null>(null);
   const [globalMarket, setGlobalMarket] = useState<any>({ SOL: '...', BTC: '...', ETH: '...', status: 'SYNCING' });
   const [exchangeSessionSummary, setExchangeSessionSummary] = useState(() =>
     formatGlobalMarketSessionSummary()
@@ -287,14 +286,6 @@ const PulseDashboard = ({
   useEffect(() => {
     import('./services/apiService').then(({ fetchGlobalMarketData }) => {
       fetchGlobalMarketData().then(data => setGlobalMarket(data));
-    });
-  }, []);
-
-  useEffect(() => {
-    import('./lib/pulseApi').then(({ fetchPulseBackendHealth }) => {
-      fetchPulseBackendHealth().then((h) => {
-        if (h && typeof h.mindexReachable === 'boolean') setMindexReachable(h.mindexReachable);
-      });
     });
   }, []);
 
@@ -325,7 +316,7 @@ const PulseDashboard = ({
 
   const isTouchPulse = pulseGridWidth > 0 && pulseGridWidth < 768;
 
-  const bigMovers = useMemo(() => buildBigMovers(tickers, 5), [tickers]);
+  const bigMovers = useMemo(() => buildBigMovers(tickers, 10), [tickers]);
 
   const footerTapeItems = useMemo(
     () => [
@@ -392,9 +383,9 @@ const PulseDashboard = ({
         newLayouts[bp] = newLayouts[bp].map((item: any) => {
           if (item.i === id) {
              const growW = bp === 'lg' ? 12 : bp === 'md' ? 6 : 4;
-             return { ...item, x: 0, y: 0, w: growW, h: 10 }; 
+             return { ...item, x: 0, y: 0, w: growW, h: 16 };
           }
-          return { ...item, w: bp === 'lg' ? 3 : 2, h: 2 };
+          return { ...item, w: bp === 'lg' ? 3 : 2, h: 4 };
         });
       });
       setLayouts(newLayouts);
@@ -634,7 +625,7 @@ const PulseDashboard = ({
              <WidgetWrapper title="— NEWS —" id="news_mini" onToggleFull={toggleFull} isFull={fullWidget === 'news_mini'}>
                 <div className="flex flex-col gap-3 h-full overflow-hidden">
                    {news.length ? (
-                     news.slice(0, 4).map((n: any, i: number) => (
+                     news.slice(0, 8).map((n: any, i: number) => (
                       <div key={n.id || i} className="flex gap-2">
                          <span className="text-[9px] font-mono text-dim shrink-0">
                            {formatNewsAge(n.publishedAt)}
@@ -660,7 +651,7 @@ const PulseDashboard = ({
              <WidgetWrapper title="— PODCASTS —" id="podcast_mini" onToggleFull={toggleFull} isFull={fullWidget === 'podcast_mini'}>
                 <div className="flex flex-col gap-3">
                    {episodes.length ? (
-                     episodes.slice(0, 3).map((ep) => {
+                     episodes.slice(0, 6).map((ep) => {
                        const mins = Math.max(1, Math.round((ep.durationSec || 0) / 60));
                        const href = ep.audioUrl || ep.embedUrl || "#";
                        return (
@@ -691,7 +682,7 @@ const PulseDashboard = ({
              <WidgetWrapper title="— LEARN —" id="learn_mini" onToggleFull={toggleFull} isFull={fullWidget === 'learn_mini'}>
                 <div className="flex flex-col gap-1.5 h-full overflow-hidden">
                    {learnModules.length ? (
-                     learnModules.slice(0, 4).map((l) => (
+                     learnModules.slice(0, 8).map((l) => (
                       <div key={l.id} className="flex justify-between items-center group cursor-pointer hover:bg-white/5 py-1" onClick={() => setActiveTab('Learn')}>
                          <div className="flex items-center gap-2 min-w-0">
                            <span className={cn("text-[7px] border px-1 uppercase shrink-0 w-16 text-center", l.level === 'beginner' ? 'border-myco-accent text-myco-accent' : 'border-dim text-dim')}>{l.level}</span>
@@ -789,7 +780,7 @@ const PulseDashboard = ({
              <WidgetWrapper title="— RESEARCH —" id="research" onToggleFull={toggleFull} isFull={fullWidget === 'research'}>
                 <div className="flex flex-col gap-3 h-full overflow-hidden">
                    {research.length ? (
-                     research.slice(0, 3).map((r) => {
+                     research.slice(0, 6).map((r) => {
                        const d = r.publishedAt
                          ? new Date(r.publishedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })
                          : "—";
@@ -801,7 +792,7 @@ const PulseDashboard = ({
                        );
                      })
                    ) : (
-                     <p className="text-[9px] font-bold text-dim uppercase">No research feed — OpenAlex / MINDEX</p>
+                     <p className="text-[9px] font-bold text-dim uppercase">No research feed — OpenAlex / ResearchHub</p>
                    )}
                 </div>
              </WidgetWrapper>
@@ -811,7 +802,7 @@ const PulseDashboard = ({
              <WidgetWrapper title="— CALENDAR / EVENTS —" id="calendar" onToggleFull={toggleFull} isFull={fullWidget === 'calendar'}>
                 <div className="flex flex-col gap-2 overflow-y-auto no-scrollbar h-full pr-1">
                    {calendar.length ? (
-                     calendar.slice(0, 6).map((c, i) => (
+                     calendar.slice(0, 12).map((c, i) => (
                       <div key={`${c.label}-${i}`} className="flex items-center justify-between group cursor-pointer hover:bg-white/5">
                          <div className="flex items-center gap-2 shrink-0">
                             <div className={cn("size-1 rounded-full", c.importance === "high" ? "bg-myco-accent" : "bg-dim group-hover:bg-myco-accent")} />
@@ -863,7 +854,7 @@ const PulseDashboard = ({
              <WidgetWrapper title="— WHALE WATCH —" id="whale_watch_mini" onToggleFull={toggleFull} isFull={fullWidget === 'whale_watch_mini'}>
                 <div className="grid grid-cols-1 gap-2 h-full overflow-hidden">
                    {Array.isArray(whales) && whales.length ? (
-                     whales.slice(0, 2).map((w, i) => {
+                     whales.slice(0, 4).map((w, i) => {
                        const label = String(w.text || `${w.type} ${w.symbol}`).slice(0, 80);
                        const detail = `${w.usd} · ${w.timeAgo}`;
                        return (
@@ -878,36 +869,6 @@ const PulseDashboard = ({
                    )}
                 </div>
                 <button className="absolute bottom-2 right-2 text-[8px] font-bold text-dim uppercase hover:text-myco-accent" onClick={() => setActiveTab('Trade')}>Whale Terminal →</button>
-             </WidgetWrapper>
-          </div>
-
-          <div key="mindex_mini">
-             <WidgetWrapper title="— MINDEX SYSTEM —" id="mindex_mini" onToggleFull={toggleFull} isFull={fullWidget === 'mindex_mini'}>
-                <div className="flex items-center gap-4 h-full">
-                   <div className="flex-1 space-y-1">
-                      <div className="flex justify-between items-center">
-                         <span className="text-[8px] font-bold text-dim uppercase">MINDEX API</span>
-                         <span className={cn("text-[9px] font-mono", mindexReachable ? "text-myco-accent" : "text-dim")}>
-                           {mindexReachable === null ? 'CHECKING' : mindexReachable ? 'ONLINE' : 'OFFLINE'}
-                         </span>
-                      </div>
-                      <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
-                         <div
-                           className={cn("h-full", mindexReachable ? "bg-myco-accent" : "bg-dim")}
-                           style={{ width: mindexReachable ? '100%' : '12%' }}
-                         />
-                      </div>
-                      <p className="text-[9px] text-dim font-bold uppercase mt-2">
-                        {configStatus?.configured?.MINDEX_API_URL
-                          ? 'Live health from /api/health?deep=1'
-                          : 'Set MINDEX_API_URL in MYCODAO .env.local'}
-                      </p>
-                   </div>
-                   <div className="size-10 glass-bento flex items-center justify-center bg-myco-accent text-black shrink-0">
-                      <Database className="size-5" />
-                    </div>
-                </div>
-                <button className="absolute bottom-2 right-2 text-[8px] font-bold text-dim uppercase hover:text-myco-accent" onClick={() => setActiveTab('FungIP')}>FungIP Console →</button>
              </WidgetWrapper>
           </div>
 
@@ -1210,21 +1171,17 @@ const TradeView = ({ prices, chartData, whales }: any) => {
 
 const PodcastView = ({
   episodes: episodesProp = [] as PulsePodcastEpisode[],
-  streamStats: streamStatsProp = null as any,
 }: {
   episodes?: PulsePodcastEpisode[];
-  streamStats?: any;
 }) => {
   const [episodes, setEpisodes] = useState<PulsePodcastEpisode[]>(episodesProp);
-  const [streamStats, setStreamStats] = useState<any>(streamStatsProp);
   const [loading, setLoading] = useState(episodesProp.length === 0);
   const [selectedEpisode, setSelectedEpisode] = useState<PulsePodcastEpisode | null>(null);
 
   useEffect(() => {
     setEpisodes(episodesProp);
-    setStreamStats(streamStatsProp);
     if (episodesProp.length) setLoading(false);
-  }, [episodesProp, streamStatsProp]);
+  }, [episodesProp]);
 
   useEffect(() => {
     if (episodesProp.length) return;
@@ -1257,213 +1214,161 @@ const PodcastView = ({
   }, [episodes, selectedEpisode]);
 
   return (
-  <div className="flex-1 flex flex-col min-h-0 overflow-y-auto overflow-x-hidden pulse-view-surface p-3 md:p-4 lg:p-6 gap-3 md:gap-4 pb-8">
-    <section className="shrink-0 w-full" aria-label="Episode player">
-      <PodcastMediaPlayer episode={selectedEpisode} />
-      {selectedEpisode ? (
-        <p className="mt-2 px-1 text-[10px] sm:text-xs font-bold uppercase tracking-wide text-white/80 line-clamp-2 lg:hidden">
-          {selectedEpisode.title}
-        </p>
-      ) : null}
-    </section>
+    <div className="flex flex-col flex-1 min-h-full pulse-view-surface p-3 md:p-4 lg:p-6 gap-3 md:gap-4 lg:pb-8">
+      <div className="flex flex-col flex-1 min-h-full lg:grid lg:grid-cols-12 lg:min-h-0 gap-3 md:gap-4 lg:gap-6 relative">
+        <div className="col-span-12 lg:col-span-5 xl:col-span-6 glass-bento relative flex flex-col overflow-hidden border-white/5 min-h-0 max-lg:flex-1 max-lg:shrink-0">
+          <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/60 to-transparent pointer-events-none z-10" />
+          <img
+            src={episodes[0]?.image || MYCOPOD_COVER_URL}
+            alt=""
+            className="absolute inset-0 size-full object-cover opacity-15 hidden sm:block"
+            referrerPolicy="no-referrer"
+          />
+          <div className="relative z-20 p-3 sm:p-4 md:p-5 lg:p-6 flex flex-col flex-1 min-h-0 gap-2">
+            <section className="shrink-0" aria-label="Episode player">
+              <PodcastMediaPlayer
+                episode={selectedEpisode}
+                layout="square"
+                idlePresentation="cover"
+                className="mb-1.5 sm:mb-2"
+              />
+            </section>
 
-    <div className="flex flex-col lg:grid lg:grid-cols-12 gap-3 md:gap-4 lg:gap-6 relative">
-      {/* Streamlabs overlay — desktop only */}
-      <div className="hidden lg:flex absolute top-6 left-6 z-50 pointer-events-none group flex-col gap-4">
-         <motion.div 
-           initial={{ opacity: 0, x: -20 }}
-           animate={{ opacity: 1, x: 0 }}
-           className="bg-black/80 border-l-4 border-myco-accent p-4 shadow-2xl backdrop-blur-xl"
-         >
-            <div className="flex items-center gap-3">
-               <div className="size-10 bg-myco-accent flex items-center justify-center">
-                  <Coins className="text-black" />
-               </div>
-               <div>
-                  <p className="text-[10px] font-bold text-myco-accent uppercase tracking-widest">Streamlabs Alert</p>
-                  <p className="text-xs font-bold text-white">{streamStats?.recentTips[0]?.amount || 'Tip'} from {streamStats?.recentTips[0]?.user || 'Viewer'}</p>
-               </div>
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <span className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FF5C39] text-white text-[10px] font-black uppercase tracking-tighter min-h-[44px]">
+                <Wifi className="w-3 h-3 shrink-0" /> MYCOPOD RSS
+              </span>
+              <a
+                href={MYCOPOD_SHOW.rssUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-1.5 bg-white/5 border border-white/10 text-white/80 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 min-h-[44px] hover:bg-white/10 touch-manipulation"
+              >
+                <Rss className="w-3 h-3 shrink-0" /> Feed
+              </a>
             </div>
-         </motion.div>
-         
-         <div className="bg-black/60 border border-white/10 p-4 backdrop-blur-sm flex flex-col gap-2">
-             <div className="flex justify-between items-center w-48">
-                 <span className="text-[8px] font-bold text-dim uppercase">Live Viewers</span>
-                 <span className="text-[10px] font-mono text-myco-accent flex items-center gap-1"><div className="size-1 bg-myco-accent rounded-full animate-ping" /> {streamStats?.viewerCount || '---'}</span>
-             </div>
-             <div className="flex justify-between items-center w-48">
-                 <span className="text-[8px] font-bold text-dim uppercase">Followers</span>
-                 <span className="text-[10px] font-mono text-white">{streamStats?.followersCount?.toLocaleString() || '---'}</span>
-             </div>
-         </div>
-      </div>
 
-      <div className="col-span-12 lg:col-span-5 xl:col-span-6 glass-bento relative flex flex-col overflow-hidden border-white/5 min-h-0">
-        <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/60 to-transparent pointer-events-none z-10" />
-        <img
-          src={episodes[0]?.image || MYCOPOD_COVER_URL}
-          alt=""
-          className="absolute inset-0 size-full object-cover opacity-15 hidden sm:block"
-          referrerPolicy="no-referrer"
-        />
-        <div className="relative z-20 p-4 md:p-5 lg:p-6 flex flex-col">
-           <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-3">
-            <span className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FF5C39] text-white text-[10px] font-black uppercase tracking-tighter min-h-[44px]">
-               <Wifi className="w-3 h-3 shrink-0" /> MYCOPOD RSS
-            </span>
+            <div className="flex-1 min-h-0 flex flex-col justify-end overflow-hidden gap-1">
+              <p className="text-[8px] sm:text-[10px] font-bold uppercase tracking-[0.2em] text-[#FF5C39] line-clamp-1">
+                {MYCOPOD_SHOW.subtitle}
+              </p>
+              <h1 className="text-base sm:text-3xl lg:text-4xl font-black tracking-tighter text-white leading-none line-clamp-2 sm:line-clamp-none">
+                {MYCOPOD_SHOW.title.toUpperCase()}
+              </h1>
+              <p className="text-[11px] sm:text-base font-bold text-myco-accent line-clamp-1 sm:line-clamp-2">
+                {MYCOPOD_SHOW.tagline}
+              </p>
+              <p className="hidden md:block text-[11px] sm:text-sm text-white/70 leading-snug max-w-2xl line-clamp-2 lg:line-clamp-none">
+                {MYCOPOD_SHOW.about}
+              </p>
+
+              {episodes[0] ? (
+                <div className="flex items-center gap-2 shrink-0 min-h-0">
+                  <span className="flex items-center gap-1.5 px-2 py-1 bg-red-500 text-white text-[9px] font-bold uppercase shrink-0">
+                    <Radio className="w-3 h-3" /> Latest
+                  </span>
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-white/80 line-clamp-1 min-w-0">
+                    {episodes[0].title}
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="px-2 py-1 bg-white/10 text-white text-[9px] font-bold uppercase shrink-0">
+                    Season 1
+                  </span>
+                  <span className="text-[10px] font-bold text-dim line-clamp-1">
+                    {loading ? 'Loading feed…' : 'Episodes publishing to RSS soon'}
+                  </span>
+                </div>
+              )}
+            </div>
+
             <a
-              href={MYCOPOD_SHOW.rssUrl}
+              href={MYCOPOD_SHOW.websiteUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="px-3 py-1.5 bg-white/5 border border-white/10 text-white/80 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 min-h-[44px] hover:bg-white/10 touch-manipulation"
+              className="mt-auto shrink-0 inline-flex items-center justify-center gap-2 px-5 py-3 min-h-[44px] w-full bg-myco-accent text-black font-black uppercase tracking-widest text-xs hover:translate-y-[-2px] transition-all shadow-[0_5px_15px_rgba(0,255,136,0.3)] touch-manipulation"
             >
-               <Rss className="w-3 h-3 shrink-0" /> Feed
+              <ExternalLink className="w-4 h-4 shrink-0" /> MycoDAO.com
             </a>
           </div>
-
-          <p className="text-[10px] sm:text-xs font-bold uppercase tracking-[0.25em] text-[#FF5C39] mb-2">
-            {MYCOPOD_SHOW.subtitle}
-          </p>
-          <h1 className="text-xl sm:text-3xl lg:text-4xl font-black tracking-tighter mb-2 text-white leading-none">
-            {MYCOPOD_SHOW.title.toUpperCase()}
-          </h1>
-          <p className="text-sm sm:text-base font-bold text-myco-accent mb-3">{MYCOPOD_SHOW.tagline}</p>
-          <p className="text-xs sm:text-sm text-white/70 leading-relaxed max-w-2xl mb-4 line-clamp-3 sm:line-clamp-none">
-            {MYCOPOD_SHOW.about}
-          </p>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-dim mb-4">
-            Hosted by {MYCOPOD_SHOW.hosts.join(' & ')}
-          </p>
-
-          {episodes[0] ? (
-            <div className="flex items-center gap-3 mb-4">
-              <span className="flex items-center gap-1.5 px-2 py-1 bg-red-500 text-white text-[10px] font-bold uppercase">
-                <Radio className="w-3 h-3" /> Latest
-              </span>
-              <span className="text-xs font-bold uppercase tracking-wide text-white/80 line-clamp-2">{episodes[0].title}</span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-3 mb-4">
-              <span className="px-2 py-1 bg-white/10 text-white text-[10px] font-bold uppercase">Season 1</span>
-              <span className="text-xs font-bold text-dim">
-                {loading ? 'Loading feed…' : 'Episodes publishing to RSS soon'}
-              </span>
-            </div>
-          )}
-
-          <a
-            href={MYCOPOD_SHOW.websiteUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center justify-center gap-2 px-5 py-3 min-h-[44px] w-full sm:w-auto bg-myco-accent text-black font-black uppercase tracking-widest text-xs hover:translate-y-[-2px] transition-all shadow-[0_5px_15px_rgba(0,255,136,0.3)] touch-manipulation"
-          >
-            <ExternalLink className="w-4 h-4 shrink-0" /> MycoDAO.com
-          </a>
         </div>
-      </div>
 
-      <div className="col-span-12 lg:col-span-7 xl:col-span-6 flex flex-col gap-3 md:gap-4 order-first lg:order-none">
-        <div className="flex-1 glass-bento border-white/5 flex flex-col overflow-hidden bg-black/40 min-h-[200px] lg:min-h-0">
-           <div className="p-3 sm:p-4 border-b border-white/5 flex justify-between items-center bg-[#FF5C39]/5 shrink-0">
+        <div className="col-span-12 lg:col-span-7 xl:col-span-6 flex flex-col gap-3 md:gap-4 max-lg:shrink-0 max-lg:overflow-visible lg:min-h-0 lg:overflow-hidden">
+          <div className="glass-bento p-4 border-white/5 bg-black/40 flex flex-col gap-3 shrink-0">
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-myco-accent">Hosts</h3>
+            {MYCOPOD_HOST_BIOS.map((host) => (
+              <div key={host.name} className="border-b border-white/5 pb-3 last:border-0 last:pb-0">
+                <p className="text-xs font-bold text-white">{host.name}</p>
+                <p className="text-[9px] font-bold uppercase text-dim tracking-wide mb-1">{host.role}</p>
+                <p className="text-[10px] text-white/60 leading-snug">{host.bio}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="glass-bento border-white/5 flex flex-col overflow-hidden bg-black/40 lg:flex-1 lg:min-h-0 max-lg:shrink-0">
+            <div className="p-3 sm:p-4 border-b border-white/5 flex justify-between items-center bg-[#FF5C39]/5 shrink-0">
               <h3 className="text-[10px] font-black uppercase tracking-widest text-[#FF5C39] flex items-center gap-2">
-                 <Rss className="size-3 shrink-0" />
-                 {episodes.length > 0 ? 'MycoPOD Episodes' : 'Season 1 Guide'}
+                <Rss className="size-3 shrink-0" />
+                {episodes.length > 0 ? 'MycoPOD Episodes' : 'Season 1 Guide'}
               </h3>
-           </div>
-           <div className="flex-1 overflow-y-auto overflow-x-hidden no-scrollbar p-2">
+            </div>
+            <div className="lg:flex-1 lg:overflow-y-auto overflow-x-hidden no-scrollbar p-2 max-lg:overflow-visible">
               {loading ? (
-                  <div className="h-full flex items-center justify-center p-4 min-h-[120px]">
-                      <RefreshCw className="size-5 text-[#FF5C39] animate-spin" />
-                  </div>
-              ) : episodes.length > 0 ? episodes.slice(0, 12).map((ep: PulsePodcastEpisode, i: number) => {
-                const isSelected = selectedEpisode?.id === ep.id;
-                return (
-                <button
-                  type="button"
-                  key={ep.id ?? i}
-                  onClick={() => setSelectedEpisode(ep)}
-                  className={cn(
-                    "group w-full text-left p-3 sm:p-4 transition-all border-b border-white/5 last:border-0 min-h-[44px] touch-manipulation",
-                    isSelected
-                      ? "bg-[#FF5C39]/15 border-l-2 border-l-[#FF5C39]"
-                      : "hover:bg-white/5 border-l-2 border-l-transparent hover:border-l-[#FF5C39]/60"
-                  )}
-                >
-                   <div className="flex justify-between items-start mb-2 gap-2">
-                      <span className="text-[8px] font-bold uppercase tracking-widest text-[#FF5C39] shrink-0">
-                        {ep.mediaKind === 'video' ? 'Video' : 'Audio'}
+                <div className="h-full flex items-center justify-center p-4 min-h-[120px]">
+                  <RefreshCw className="size-5 text-[#FF5C39] animate-spin" />
+                </div>
+              ) : episodes.length > 0 ? (
+                episodes.slice(0, 12).map((ep: PulsePodcastEpisode, i: number) => {
+                  const isSelected = selectedEpisode?.id === ep.id;
+                  return (
+                    <button
+                      type="button"
+                      key={ep.id ?? i}
+                      onClick={() => setSelectedEpisode(ep)}
+                      className={cn(
+                        'group w-full text-left p-3 sm:p-4 transition-all border-b border-white/5 last:border-0 min-h-[44px] touch-manipulation',
+                        isSelected
+                          ? 'bg-[#FF5C39]/15 border-l-2 border-l-[#FF5C39]'
+                          : 'hover:bg-white/5 border-l-2 border-l-transparent hover:border-l-[#FF5C39]/60'
+                      )}
+                    >
+                      <div className="flex justify-between items-start mb-2 gap-2">
+                        <span className="text-[8px] font-bold uppercase tracking-widest text-[#FF5C39] shrink-0">
+                          {ep.mediaKind === 'video' ? 'Video' : 'Audio'}
+                        </span>
+                        <span className="text-[8px] font-bold text-dim">
+                          {ep.publishedAt ? new Date(ep.publishedAt).toLocaleDateString() : '—'}
+                        </span>
+                      </div>
+                      <h4 className="text-sm font-bold text-white leading-tight mb-2 group-hover:text-[#FF5C39] transition-colors line-clamp-2">
+                        {ep.title}
+                      </h4>
+                      <span className="text-[10px] font-bold uppercase text-dim tracking-widest flex items-center gap-2">
+                        <Play className="w-2.5 h-2.5 fill-current text-[#FF5C39]" />{' '}
+                        {isSelected ? 'Playing' : 'Play'}
                       </span>
-                      <span className="text-[8px] font-bold text-dim">{ep.publishedAt ? new Date(ep.publishedAt).toLocaleDateString() : '—'}</span>
-                   </div>
-                   <h4 className="text-sm font-bold text-white leading-tight mb-2 group-hover:text-[#FF5C39] transition-colors line-clamp-2">{ep.title}</h4>
-                   <span className="text-[10px] font-bold uppercase text-dim tracking-widest flex items-center gap-2">
-                      <Play className="w-2.5 h-2.5 fill-current text-[#FF5C39]" /> {isSelected ? 'Playing' : 'Play'}
-                   </span>
-                </button>
-              )}) : MYCOPOD_SEASON_ONE_GUIDE.map((ep) => (
-                <div
-                  key={ep.number}
-                  className="p-3 border-b border-white/5 last:border-0"
-                >
-                  <div className="flex gap-2 items-start">
-                    <span className="text-[9px] font-black text-[#FF5C39] shrink-0 pt-0.5">E{ep.number}</span>
-                    <div className="min-w-0">
-                      <h4 className="text-xs font-bold text-white leading-snug line-clamp-2">{ep.title}</h4>
-                      <p className="text-[9px] text-dim mt-1">{ep.focus}</p>
+                    </button>
+                  );
+                })
+              ) : (
+                MYCOPOD_SEASON_ONE_GUIDE.map((ep) => (
+                  <div key={ep.number} className="p-3 border-b border-white/5 last:border-0">
+                    <div className="flex gap-2 items-start">
+                      <span className="text-[9px] font-black text-[#FF5C39] shrink-0 pt-0.5">E{ep.number}</span>
+                      <div className="min-w-0">
+                        <h4 className="text-xs font-bold text-white leading-snug line-clamp-2">{ep.title}</h4>
+                        <p className="text-[9px] text-dim mt-1">{ep.focus}</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-           </div>
-        </div>
-
-        <div className="glass-bento p-4 border-white/5 bg-black/40 flex flex-col gap-3 shrink-0">
-          <h3 className="text-[10px] font-black uppercase tracking-widest text-myco-accent">Hosts</h3>
-          {MYCOPOD_HOST_BIOS.map((host) => (
-            <div key={host.name} className="border-b border-white/5 pb-3 last:border-0 last:pb-0">
-              <p className="text-xs font-bold text-white">{host.name}</p>
-              <p className="text-[9px] font-bold uppercase text-dim tracking-wide mb-1">{host.role}</p>
-              <p className="text-[10px] text-white/60 leading-snug">{host.bio}</p>
+                ))
+              )}
             </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="hidden lg:flex col-span-12 xl:col-span-12 flex-col gap-4 min-h-0">
-        {/* Streamlabs — large screens only */}
-        <div className="glass-bento p-6 border-white/5 bg-black/40 flex flex-col gap-4 max-w-md ml-auto">
-           <div className="flex justify-between items-center border-b border-white/5 pb-2">
-              <h3 className="text-[10px] font-black uppercase text-myco-accent tracking-widest">Streamlabs Config</h3>
-              <ExternalLink className="size-3 text-dim" />
-           </div>
-           <div className="grid grid-cols-2 gap-3">
-              {[
-                { l: 'Donation Goal', p: 85, c: 'bg-myco-accent', v: '$2.1k / $2.5k' },
-                { l: 'Subscriber Goal', p: 42, c: 'bg-blue-400', v: '42 / 100' }
-              ].map((g, i) => (
-                <div key={i} className="flex flex-col gap-1">
-                   <div className="flex items-center justify-between">
-                     <span className="text-[8px] font-bold uppercase text-dim">{g.l}</span>
-                     <span className="text-[8px] font-mono text-white/50">{g.v}</span>
-                   </div>
-                   <div className="h-1 bg-white/5 rounded-full overflow-hidden">
-                      <div className={`h-full ${g.c}`} style={{ width: `${g.p}%` }} />
-                   </div>
-                </div>
-              ))}
-           </div>
-           <div className="flex gap-2">
-              <button className="flex-1 py-2 bg-white/5 border border-white/10 text-[8px] font-bold uppercase hover:bg-white/10 transition-all text-white relative flex justify-center items-center gap-1">
-                 <Bell className="size-3" /> Alerts
-              </button>
-              <button className="flex-1 py-2 bg-white/5 border border-white/10 text-[8px] font-bold uppercase hover:bg-white/10 transition-all text-white relative flex justify-center items-center gap-1">
-                 <Bot className="size-3" /> Cloudbot
-              </button>
-           </div>
+          </div>
         </div>
       </div>
     </div>
-  </div>
   );
 };
 
@@ -2197,7 +2102,6 @@ export default function App() {
     calendar,
     research,
     learnModules,
-    streamStats,
     configStatus,
     fearGreed,
     loading,
@@ -2278,7 +2182,7 @@ export default function App() {
       case 'Markets': return <MarketView assets={assetTickers} />;
       case 'Trade': return <TradeView prices={assetTickers} chartData={history.length > 0 ? history : EMPTY_CHART_DATA} whales={whales} />;
       case 'News': return <NewsView />;
-      case 'Podcasts': return <PodcastView episodes={episodes} streamStats={streamStats} />;
+      case 'Podcasts': return <PodcastView episodes={episodes} />;
       case 'Funding': return (
         <FundingView
           mycoSnapshot={mycoSnapshot}
@@ -2297,7 +2201,7 @@ export default function App() {
       case 'Research': return <ResearchView research={research} loading={loading} />;
       case 'FungIP': return <FungIPView />;
       case 'Learn': return <LearnView learnModules={learnModules} />;
-      case 'MYCO': return <TokenomicsView setActiveTab={setActiveTab} />;
+      case 'MYCO': return <MycoTerminalView setActiveTab={setActiveTab} />;
       case 'Settings': return <SettingsView isDarkMode={isDarkMode} setIsDarkMode={setIsDarkMode} />;
       default: return null;
     }

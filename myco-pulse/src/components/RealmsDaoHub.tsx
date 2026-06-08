@@ -34,6 +34,7 @@ import {
   saveRealmDao,
   type SavedRealmDao,
 } from "../lib/realmsSavedDaos";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 
 const MYCO_REALM_PK = "At93fiCMzEkZWBAHxSNjfk7zUHnF3JcxyCyPjZELjK9Y";
 const REALMS_EXPLORE = "https://v2.realms.today/explore";
@@ -56,6 +57,7 @@ function proposalBadgeClass(stateLabel: string) {
 
 export function RealmsDaoHub() {
   const daoWallet = useDaoWallet();
+  const isOrgMobile = useMediaQuery("(max-width: 767px)");
 
   const [tab, setTab] = useState<HubTab>("EXPLORE");
   const [search, setSearch] = useState("");
@@ -115,6 +117,10 @@ export function RealmsDaoHub() {
   useEffect(() => {
     if (tab === "DAO" && selectedPk) loadDetail(selectedPk);
   }, [tab, selectedPk, loadDetail]);
+
+  useEffect(() => {
+    if (isOrgMobile && tab !== "DAO") setTab("DAO");
+  }, [isOrgMobile, tab]);
 
   const refreshParticipation = useCallback(async () => {
     if (!daoWallet.solanaAddress || !selectedPk) {
@@ -254,6 +260,7 @@ export function RealmsDaoHub() {
       ) : null}
 
       <DaoSessionBar
+        className="hidden md:block"
         wallet={daoWallet}
         participation={walletParticipation}
         participationLoading={participationLoading}
@@ -261,7 +268,7 @@ export function RealmsDaoHub() {
         activeDao={activeDao}
       />
 
-      <div className="flex flex-nowrap gap-1 mb-4 shrink-0 overflow-x-auto no-scrollbar pb-1">
+      <div className="hidden md:flex flex-nowrap gap-1 mb-4 shrink-0 overflow-x-auto no-scrollbar pb-1">
         {(
           [
             { id: "EXPLORE" as const, label: "Directory", icon: <Search className="size-3" /> },
@@ -522,17 +529,19 @@ function DaoSessionBar({
   participationLoading,
   participationError,
   activeDao,
+  className,
 }: {
   wallet: DaoWalletSession;
   participation: PulseRealmsWalletParticipation | null;
   participationLoading: boolean;
   participationError: string | null;
   activeDao: PulseRealmsDao | null;
+  className?: string;
 }) {
   const daoLabel = activeDao?.displayName ?? activeDao?.name ?? "organization";
 
   return (
-    <div className="glass-bento border border-white/10 p-3 md:p-4 mb-4 shrink-0">
+    <div className={cn("glass-bento border border-white/10 p-3 md:p-4 mb-4 shrink-0", className)}>
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[9px] font-black uppercase tracking-widest text-myco-accent flex items-center gap-2">

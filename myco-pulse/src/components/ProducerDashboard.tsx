@@ -6,6 +6,8 @@ import {
   HardDrive,
   Image,
   Loader2,
+  LogOut,
+  Mail,
   Radio,
   RefreshCw,
   Save,
@@ -14,12 +16,8 @@ import {
   Video,
 } from "lucide-react";
 import { cn } from "../lib/utils";
-import {
-  getStoredProducerKey,
-  setStoredProducerKey,
-  useNewsProducer,
-  type BroadcastTalentLine,
-} from "../hooks/useNewsProducer";
+import { useNewsProducer, type BroadcastTalentLine } from "../hooks/useNewsProducer";
+import { useProducerAuth } from "../hooks/useProducerAuth";
 import {
   useProducerNas,
   type BlocksMediaAsset,
@@ -48,12 +46,14 @@ function formatBytes(n: number): string {
 }
 
 export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
+  const auth = useProducerAuth();
   const { view, presets, loading, error, patch, reload } = useNewsProducer({
     includePresets: true,
+    accessToken: auth.accessToken,
   });
   const nas = useProducerNas();
-  const [apiKey, setApiKey] = useState("");
   const [authError, setAuthError] = useState<string | null>(null);
+  const [authOk, setAuthOk] = useState(false);
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState<
     "overview" | "nas" | "schedule" | "talent" | "program"
@@ -67,34 +67,49 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
   );
 
   useEffect(() => {
-    setApiKey(getStoredProducerKey());
-  }, []);
-
-  useEffect(() => {
     if (nas.schedule) setScheduleDraft(nas.schedule);
   }, [nas.schedule]);
+
+  useEffect(() => {
+    if (!auth.isAuthenticated) {
+      setAuthOk(false);
+      return;
+    }
+    let cancelled = false;
+    void auth.verifySession().then((result) => {
+      if (cancelled) return;
+      setAuthOk(result.ok);
+      if (!result.ok) setAuthError(result.message);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.isAuthenticated, auth.accessToken, auth.verifySession]);
 
   const filteredAssets = useMemo(() => {
     if (nasFilter === "all") return nas.assets;
     return nas.assets.filter((a) => a.category === nasFilter);
   }, [nas.assets, nasFilter]);
 
+  const controlsLocked = !auth.isAuthenticated || !authOk;
+
   async function runPatch(body: Record<string, unknown>) {
+    if (!auth.accessToken) {
+      setAuthError("Sign in with an authorized producer email first");
+      return;
+    }
     setBusy(true);
     setAuthError(null);
     try {
-      await patch(body);
+      await patch(body, { accessToken: auth.accessToken });
+      setAuthOk(true);
       await nas.reload();
     } catch (e) {
+      setAuthOk(false);
       setAuthError(e instanceof Error ? e.message : "Update failed");
     } finally {
       setBusy(false);
     }
-  }
-
-  function saveKey() {
-    setStoredProducerKey(apiKey);
-    setAuthError(null);
   }
 
   async function setTalentPreset(id: string) {
@@ -195,12 +210,18 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
 
   async function saveScheduleDraft() {
     if (!scheduleDraft) return;
+    if (!auth.accessToken) {
+      setAuthError("Sign in with an authorized producer email first");
+      return;
+    }
     setBusy(true);
     setAuthError(null);
     try {
-      await nas.saveSchedule(scheduleDraft);
+      await nas.saveSchedule(scheduleDraft, auth.accessToken);
+      setAuthOk(true);
       await reload();
     } catch (e) {
+      setAuthOk(false);
       setAuthError(e instanceof Error ? e.message : "Schedule save failed");
     } finally {
       setBusy(false);
@@ -288,28 +309,67 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 max-w-5xl mx-auto w-full">
         <section className="border border-amber-500/30 bg-amber-500/5 p-4 space-y-3">
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-400">
-            Producer key
+            Producer sign-in
           </p>
-          <div className="flex flex-col sm:flex-row gap-2">
-            <input
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder="NEWS_PRODUCER_API_KEY"
-              className="flex-1 h-12 px-4 text-base bg-black border border-white/20 rounded-sm"
-              autoComplete="off"
-            />
-            <button
-              type="button"
-              onClick={saveKey}
-              className="min-h-[48px] px-4 flex items-center justify-center gap-2 bg-white text-black text-[10px] font-black uppercase tracking-widest touch-manipulation"
-            >
-              <Save className="size-4" />
-              Save key
-            </button>
-          </div>
+          <p className="text-xs text-white/60">
+            Only approved Mycosoft emails can control the news feed. No shared
+            keys — Supabase magic link required.
+          </p>
+          {auth.isAuthenticated && auth.userEmail ? (
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <p className="text-sm text-emerald-400 font-bold flex-1">
+                Signed in as {auth.userEmail}
+                {authOk ? " · controls unlocked" : " · verifying…"}
+              </p>
+              <button
+                type="button"
+                onClick={() => void auth.signOut()}
+                disabled={busy || auth.sendingLink}
+                className="min-h-[48px] px-4 flex items-center justify-center gap-2 border border-white/20 text-[10px] font-black uppercase tracking-widest touch-manipulation disabled:opacity-50"
+              >
+                <LogOut className="size-4" />
+                Sign out
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="email"
+                value={auth.email}
+                onChange={(e) => auth.setEmail(e.target.value)}
+                placeholder="morgan@mycosoft.org"
+                className="flex-1 h-12 px-4 text-base bg-black border border-white/20 rounded-sm"
+                autoComplete="email"
+                disabled={auth.sendingLink || auth.loading}
+              />
+              <button
+                type="button"
+                onClick={() => void auth.signInWithMagicLink()}
+                disabled={busy || auth.sendingLink || auth.loading}
+                className="min-h-[48px] px-4 flex items-center justify-center gap-2 bg-white text-black text-[10px] font-black uppercase tracking-widest touch-manipulation disabled:opacity-50"
+              >
+                {auth.sendingLink ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Mail className="size-4" />
+                )}
+                Send magic link
+              </button>
+            </div>
+          )}
+          {auth.statusMessage ? (
+            <p className="text-xs text-[#5eb3ff] font-bold">{auth.statusMessage}</p>
+          ) : null}
+          {auth.error ? (
+            <p className="text-xs text-red-400 font-bold">{auth.error}</p>
+          ) : null}
           {authError ? (
             <p className="text-xs text-red-400 font-bold">{authError}</p>
+          ) : null}
+          {controlsLocked ? (
+            <p className="text-xs text-amber-300/90 font-bold">
+              Controls locked until you sign in with an authorized email.
+            </p>
           ) : null}
         </section>
 
@@ -423,7 +483,7 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
 
             <button
               type="button"
-              disabled={busy}
+              disabled={busy || controlsLocked}
               onClick={() => void returnToLive()}
               className="w-full min-h-[52px] bg-white text-black text-[11px] font-black uppercase tracking-[0.2em] touch-manipulation disabled:opacity-50"
             >
@@ -475,11 +535,12 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
               <div className="border border-red-500/40 bg-red-500/10 p-4 text-sm">
                 <p className="font-bold text-red-300">NAS not mounted</p>
                 <p className="text-xs text-white/70 mt-2">
-                  Set <code>BLOCKS_NAS_ROOT</code> or mount{" "}
-                  <code>\\192.168.0.105\mycosoft.com\MYCODAO\BLOCKS</code> on
-                  the MYCODAO server. Uses same{" "}
-                  <code>NAS_SMB_USER</code> / <code>NAS_SMB_PASSWORD</code> as
-                  MINDEX library.
+                  Windows dev: run <code>npm run mount:nas</code> from the
+                  MYCODAO repo (loads <code>NAS_SMB_PASSWORD</code> from{" "}
+                  <code>.credentials.local</code>). Or set{" "}
+                  <code>BLOCKS_NAS_ROOT</code> to a mounted UNC path. Offline
+                  fallback: <code>data/blocks-nas-dev/</code> when the share is
+                  down.
                 </p>
               </div>
             ) : null}
@@ -525,7 +586,7 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
                       </a>
                       <button
                         type="button"
-                        disabled={busy}
+                        disabled={busy || controlsLocked}
                         onClick={() => void fireNasAsset(asset)}
                         className="min-h-[44px] px-4 bg-[#0055cc] text-[10px] font-black uppercase touch-manipulation disabled:opacity-50"
                       >
@@ -540,7 +601,7 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
             {view?.activeGraphicNasPath ? (
               <button
                 type="button"
-                disabled={busy}
+                disabled={busy || controlsLocked}
                 onClick={() => void clearGraphic()}
                 className="w-full min-h-[48px] border border-amber-400/50 text-amber-300 text-[10px] font-black uppercase touch-manipulation"
               >
@@ -710,7 +771,7 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
               </button>
               <button
                 type="button"
-                disabled={busy}
+                disabled={busy || controlsLocked}
                 onClick={() => void saveScheduleDraft()}
                 className="flex-1 min-h-[48px] bg-[#0055cc] text-[10px] font-black uppercase touch-manipulation disabled:opacity-50"
               >
@@ -731,7 +792,7 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
                 <button
                   key={t.id}
                   type="button"
-                  disabled={busy}
+                  disabled={busy || controlsLocked}
                   onClick={() => void setTalentPreset(t.id)}
                   className={cn(
                     "min-h-[52px] px-3 py-3 text-left text-[11px] font-black uppercase tracking-wide border touch-manipulation transition-colors disabled:opacity-50",
@@ -759,7 +820,7 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
               />
               <button
                 type="button"
-                disabled={busy || !customName.trim()}
+                disabled={busy || controlsLocked || !customName.trim()}
                 onClick={() => void applyCustomTalent()}
                 className="w-full min-h-[48px] bg-[#0055cc] text-white text-[10px] font-black uppercase touch-manipulation disabled:opacity-50"
               >
@@ -777,7 +838,7 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
             </h2>
             <button
               type="button"
-              disabled={busy}
+              disabled={busy || controlsLocked}
               onClick={() => void returnToLive()}
               className="w-full min-h-[52px] bg-white text-black text-[11px] font-black uppercase tracking-[0.2em] touch-manipulation disabled:opacity-50"
             >
@@ -788,7 +849,11 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
                 <button
                   key={p.id}
                   type="button"
-                  disabled={busy || (p.type !== "live" && !p.hasSource)}
+                  disabled={
+                    busy ||
+                    controlsLocked ||
+                    (p.type !== "live" && !p.hasSource)
+                  }
                   onClick={() => void fireProgram(p.id)}
                   className={cn(
                     "min-h-[52px] px-4 py-3 text-left border touch-manipulation disabled:opacity-40",
@@ -813,7 +878,7 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
               />
               <button
                 type="button"
-                disabled={busy || !customVideoUrl.trim()}
+                disabled={busy || controlsLocked || !customVideoUrl.trim()}
                 onClick={() => void fireCustomProgram()}
                 className="w-full min-h-[48px] border border-white/30 text-[10px] font-black uppercase touch-manipulation disabled:opacity-50"
               >

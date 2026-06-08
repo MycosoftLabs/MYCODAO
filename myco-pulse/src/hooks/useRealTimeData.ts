@@ -29,7 +29,7 @@ import {
   type StreamlabsStats,
 } from "../data/studioPresets";
 import { EMPTY_CHART_DATA } from "../lib/tickerDisplay";
-import { ensureMycoInTickers } from "../lib/mycoPriceClient";
+import { ensureMycoInTickers, fetchClientMycoQuote } from "../lib/mycoPriceClient";
 import {
   fetchDAOProposals,
   fetchStreamlabsStats,
@@ -62,6 +62,10 @@ export const useRealTimeData = () => {
   const [loading, setLoading] = useState(boot.length === 0);
   const hasPaintedRef = useRef(boot.length > 0);
 
+  function keepIfEmpty<T>(next: T[], prev: T[]): T[] {
+    return next.length ? next : prev.length ? prev : next;
+  }
+
   const refreshData = useCallback(async () => {
     if (!hasPaintedRef.current) setLoading(true);
     const forceTickerRefresh = !hasPaintedRef.current;
@@ -88,7 +92,7 @@ export const useRealTimeData = () => {
       fetchDAOProposals(),
       fetchPulsePodcasts(),
       fetchPulseCalendar(),
-      fetchPulseResearch(),
+      fetchPulseResearch(24),
       fetchPulseLearn(),
       fetchStreamlabsStats(),
       fetchPulseConfigStatus(),
@@ -97,16 +101,44 @@ export const useRealTimeData = () => {
 
     const chart = ohlcBarsToChartData(ohlcBars);
     const withMyco = await ensureMycoInTickers(tickerRows);
-    setTickers(withMyco);
-    setMycoSnapshot(myco);
-    setHistory(chart.length ? chart : EMPTY_CHART_DATA);
-    setWhales(Array.isArray(whaleMovements) ? whaleMovements : []);
-    setNews(mergeNewsWithStudio(marketNews));
-    setProposals(Array.isArray(daoProposals) ? daoProposals : []);
-    setEpisodes(mergeEpisodesWithStudio(podcastEpisodes));
-    setCalendar(Array.isArray(calendarRows) ? calendarRows : []);
-    setResearch(Array.isArray(researchRows) ? researchRows : []);
-    setLearnModules(Array.isArray(learnRows) ? learnRows : []);
+
+    let mycoResolved = myco;
+    if (!mycoResolved?.price || mycoResolved.price <= 0) {
+      const quote = await fetchClientMycoQuote();
+      if (quote) {
+        mycoResolved = {
+          price: quote.priceUsd,
+          changePct: quote.change24h,
+          chain: "Solana",
+          updatedAt: new Date().toISOString(),
+        };
+      }
+    }
+
+    setTickers((prev) => (withMyco.length ? withMyco : prev.length ? prev : withMyco));
+    setMycoSnapshot((prev) =>
+      mycoResolved?.price && mycoResolved.price > 0 ? mycoResolved : prev?.price ? prev : mycoResolved
+    );
+    setHistory((prev) => (chart.length ? chart : prev.length ? prev : EMPTY_CHART_DATA));
+    setWhales((prev) =>
+      keepIfEmpty(Array.isArray(whaleMovements) ? whaleMovements : [], prev)
+    );
+    setNews((prev) => keepIfEmpty(mergeNewsWithStudio(marketNews), prev));
+    setProposals((prev) =>
+      keepIfEmpty(Array.isArray(daoProposals) ? daoProposals : [], prev)
+    );
+    setEpisodes((prev) =>
+      keepIfEmpty(mergeEpisodesWithStudio(podcastEpisodes), prev)
+    );
+    setCalendar((prev) =>
+      keepIfEmpty(Array.isArray(calendarRows) ? calendarRows : [], prev)
+    );
+    setResearch((prev) =>
+      keepIfEmpty(Array.isArray(researchRows) ? researchRows : [], prev)
+    );
+    setLearnModules((prev) =>
+      keepIfEmpty(Array.isArray(learnRows) ? learnRows : [], prev)
+    );
     setStreamStats(stats);
     setConfigStatus(status);
     setFearGreed(sentiment);

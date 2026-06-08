@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { pulseApiUrl } from "../lib/apiOrigin";
-import { getNewsLiveConfig } from "../config/newsLive";
 
 export interface NewsProgramNow {
   channel: string;
@@ -21,7 +20,6 @@ export interface NewsProgramNow {
 const POLL_MS = 5_000;
 
 export function useNewsProgram() {
-  const fallback = getNewsLiveConfig();
   const [program, setProgram] = useState<NewsProgramNow | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -51,34 +49,28 @@ export function useNewsProgram() {
     };
   }, []);
 
-  const defaultBumper = `${import.meta.env.BASE_URL}broadcast/news-idle-bumper.png`;
   const apiLoaded = program !== null;
 
   const playbackActive = apiLoaded
     ? (program.playbackActive ??
       Boolean(program.embedUrl?.trim() || program.mediaUrl?.trim()))
-    : Boolean(fallback.embedUrl);
+    : false;
 
-  const embedUrl = playbackActive
-    ? apiLoaded
-      ? program.embedUrl
-      : fallback.embedUrl
-    : null;
+  const embedUrl =
+    playbackActive && apiLoaded ? program.embedUrl?.trim() || null : null;
 
   const mediaUrl =
-    playbackActive && program?.mediaUrl
+    playbackActive && apiLoaded && program.mediaUrl
       ? pulseApiUrl(program.mediaUrl)
       : null;
 
-  const graphicUrl = program?.graphicUrl
-    ? pulseApiUrl(program.graphicUrl)
-    : null;
+  const graphicUrl =
+    apiLoaded && program.graphicUrl ? pulseApiUrl(program.graphicUrl) : null;
 
-  const bumperUrl = apiLoaded
-    ? (program.bumperUrl ?? defaultBumper)
-    : defaultBumper;
+  const bumperUrl =
+    apiLoaded && playbackActive ? program.bumperUrl?.trim() || "" : "";
 
-  const label = program?.label ?? fallback.streamLabel;
+  const label = program?.label ?? "MycoDAO News";
   const playbackUrl = mediaUrl ?? embedUrl ?? null;
 
   return {

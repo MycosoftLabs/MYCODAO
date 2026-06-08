@@ -1,5 +1,9 @@
 node_modules
-.next
+.next/*
+!.next/standalone
+!.next/standalone/**
+!.next/static
+!.next/static/**
 .git
 .gitignore
 *.md

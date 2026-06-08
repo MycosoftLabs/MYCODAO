@@ -47,7 +47,7 @@ export const MYCOPOD_HOST_BIOS = [
   },
   {
     name: "Abelardo Rodriguez",
-    role: "Co-Host · MycoDAO Co-Founder & Secretary",
-    bio: "Partnerships, governance, and community — connecting researchers, institutions, and sponsors to decentralized scientific funding.",
+    role: "Co-Host · Broadcast Media Producer · News Anchor · MycoDAO Co-Founder & Secretary",
+    bio: "Broadcast media producer and news anchor for MycoDAO programming — plus partnerships, governance, and community outreach connecting researchers, institutions, and sponsors to decentralized scientific funding.",
   },
 ] as const;

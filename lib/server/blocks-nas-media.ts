@@ -1,6 +1,6 @@
 /**
  * BLOCKS producer media library on UniFi NAS (same SMB creds as MINDEX library).
- * Canonical share: //192.168.0.105/.../MYCODAO/BLOCKS
+ * Canonical share: //192.168.0.105/MYCODAO/BLOCKS (dedicated MYCODAO SMB share)
  */
 import fs from "fs";
 import path from "path";
@@ -40,23 +40,42 @@ export interface BlocksNasStatus {
   error?: string;
 }
 
-function blocksNasRoot(): string {
-  const fromEnv = process.env.BLOCKS_NAS_ROOT?.trim();
-  if (fromEnv) return path.normalize(fromEnv);
+function blocksNasRootCandidates(): string[] {
+  const out: string[] = [];
+
+  const push = (p: string | undefined) => {
+    if (!p?.trim()) return;
+    out.push(path.normalize(p.trim()));
+  };
+
+  push(process.env.BLOCKS_NAS_ROOT);
 
   const cifs = process.env.BLOCKS_NAS_CIFS_URL?.trim();
   if (cifs) {
-    const unc = cifs
-      .replace(/^\/\//, "\\\\")
-      .replace(/\//g, "\\");
-    return path.normalize(unc);
+    const unc = cifs.replace(/^\/\//, "\\\\").replace(/\//g, "\\");
+    push(unc);
   }
 
   if (process.platform === "win32") {
-    return "\\\\192.168.0.105\\mycosoft.com\\MYCODAO\\BLOCKS";
+    push("\\\\192.168.0.105\\MYCODAO\\BLOCKS");
+  } else {
+    push("/mnt/nas/mycodao/BLOCKS");
   }
 
-  return "/mnt/nas/mycodao/BLOCKS";
+  if (process.env.NODE_ENV !== "production") {
+    push(process.env.BLOCKS_NAS_DEV_MIRROR);
+    push(path.join(process.cwd(), "data", "blocks-nas-dev"));
+  }
+
+  return [...new Set(out)];
+}
+
+/** First reachable root, or primary candidate for error messages. */
+function blocksNasRoot(): string {
+  for (const candidate of blocksNasRootCandidates()) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return blocksNasRootCandidates()[0] ?? "";
 }
 
 function assetId(relPath: string): string {
@@ -170,7 +189,10 @@ export function scanBlocksNasLibrary(): {
           categories,
           totalAssets: 0,
           lastScanAt: new Date().toISOString(),
-          error: `NAS path not reachable: ${root}`,
+          error:
+            process.platform === "win32"
+              ? `NAS path not reachable: ${root}. Run: npm run mount:nas (Windows) or mount the UNC share with NAS_SMB_USER / NAS_SMB_PASSWORD.`
+              : `NAS path not reachable: ${root}`,
         },
         assets: [],
       };
@@ -213,7 +235,7 @@ export function blocksNasConfigPublic() {
     host: process.env.NAS_HOST?.trim() || "192.168.0.105",
     shareHint:
       process.env.BLOCKS_NAS_CIFS_URL?.trim() ||
-      "//192.168.0.105/mycosoft.com/MYCODAO/BLOCKS",
+      "//192.168.0.105/MYCODAO/BLOCKS",
     webDriveUrl: "https://192.168.0.105/drive/shared-drives/MYCODAO/BLOCKS",
     dropUrl: "https://drop.ui.com/8b266a1c-8adb-4cdd-b127-cbb216741114",
     folders: BLOCKS_MEDIA_CATEGORIES,

@@ -43,14 +43,15 @@ NEWS_PRODUCER_API_KEY=<your-key>
 NAS_HOST=192.168.0.105
 NAS_SMB_USER=mycosoft
 NAS_SMB_PASSWORD=<from .credentials.local>
-BLOCKS_NAS_CIFS_URL=//192.168.0.105/mycosoft.com/MYCODAO/BLOCKS
+BLOCKS_NAS_CIFS_URL=//192.168.0.105/MYCODAO/BLOCKS
 BLOCKS_NAS_ROOT=/mnt/nas/mycodao/BLOCKS   # Linux VM after CIFS mount
 ```
 
 Windows dev:
 
 ```env
-BLOCKS_NAS_ROOT=\\192.168.0.105\mycosoft.com\MYCODAO\BLOCKS
+BLOCKS_NAS_ROOT=\\192.168.0.105\MYCODAO\BLOCKS
+npm run mount:nas   # mounts \\192.168.0.105\MYCODAO (loads NAS_SMB_* from .credentials.local)
 ```
 
 Web upload: [NAS BLOCKS folder](https://192.168.0.105/drive/shared-drives/MYCODAO/BLOCKS) · [UniFi Drop](https://drop.ui.com/8b266a1c-8adb-4cdd-b127-cbb216741114)

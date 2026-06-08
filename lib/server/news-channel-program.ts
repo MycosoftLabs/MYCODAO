@@ -190,7 +190,7 @@ function withPlaybackFlags(
   return {
     ...program,
     playbackActive: active,
-    bumperUrl: program.bumperUrl ?? newsIdleBumperUrl(),
+    bumperUrl: program.bumperUrl ?? (active ? newsIdleBumperUrl() : ""),
   };
 }
 
@@ -199,15 +199,16 @@ function isProducerOffAir(state: NewsProducerState): boolean {
   return state.programMode === "schedule" && !state.programOverride;
 }
 
-function idleBumperProgram(
+/** Off-air: black stage — no stale YouTube VOD, no idle bumper until full-time channel. */
+function idleOffAirProgram(
   producerGraphic: string | null,
   scheduleVersion: string,
 ): NewsProgramNow {
   return withPlaybackFlags({
     channel: "MycoDAO News",
-    label: "MycoDAO News",
+    label: "Off air",
     sourceType: "default",
-    slotId: "idle-bumper",
+    slotId: "off-air",
     embedUrl: null,
     mediaUrl: null,
     graphicUrl: producerGraphic,
@@ -216,7 +217,7 @@ function idleBumperProgram(
     nextChangeAt: null,
     scheduleVersion,
     playbackActive: false,
-    bumperUrl: newsIdleBumperUrl(),
+    bumperUrl: "",
   });
 }
 
@@ -260,47 +261,24 @@ function resolveScheduleProgramNow(
   });
 }
 
-function envFallback(): NewsProgramNow | null {
+/** Operator-only live inject (Streamlabs/OBS test). Never use stale build-time YouTube IDs. */
+function envLiveOverride(): NewsProgramNow | null {
   const override = process.env.NEWS_CHANNEL_LIVE_OVERRIDE_URL?.trim();
-  if (override) {
-    const path = normalizeYoutubeEmbedPath(override);
-    return withPlaybackFlags({
-      channel: "MycoDAO News",
-      label: process.env.NEWS_CHANNEL_LIVE_OVERRIDE_LABEL?.trim() || "Live",
-      sourceType: "live_override",
-      slotId: "env-live-override",
-      embedUrl: path ? withNewsPlayerParams(path) : null,
-      timezone: "America/Los_Angeles",
-      nextChangeAt: null,
-      mediaUrl: null,
-      graphicUrl: null,
-      nasPath: null,
-      scheduleVersion: "env-override",
-    });
-  }
-
-  const embed = process.env.NEXT_PUBLIC_PULSE_NEWS_VIDEO_EMBED_URL?.trim();
-  const channelId = process.env.NEXT_PUBLIC_PULSE_NEWS_YOUTUBE_CHANNEL_ID?.trim();
-  const videoId = process.env.NEXT_PUBLIC_PULSE_NEWS_YOUTUBE_VIDEO_ID?.trim();
-  const built = buildYoutubeEmbedFromSource({
-    videoUrl: embed,
-    videoId,
-    channelId,
-  });
-  if (!built) return null;
-
+  if (!override) return null;
+  const path = normalizeYoutubeEmbedPath(override);
+  if (!path) return null;
   return withPlaybackFlags({
     channel: "MycoDAO News",
-    label: process.env.NEXT_PUBLIC_PULSE_NEWS_STREAM_LABEL?.trim() || "MycoDAO News",
-    sourceType: "default",
-    slotId: "env-default",
-    embedUrl: built,
+    label: process.env.NEWS_CHANNEL_LIVE_OVERRIDE_LABEL?.trim() || "Live",
+    sourceType: "live_override",
+    slotId: "env-live-override",
+    embedUrl: withNewsPlayerParams(path),
     timezone: "America/Los_Angeles",
     nextChangeAt: null,
     mediaUrl: null,
     graphicUrl: null,
     nasPath: null,
-    scheduleVersion: "env-default",
+    scheduleVersion: "env-override",
   });
 }
 
@@ -330,37 +308,20 @@ export function resolveNewsProgramNow(now = new Date()): NewsProgramNow {
     });
   }
 
+  const liveOverride = envLiveOverride();
+  if (liveOverride) return liveOverride;
+
   if (isProducerOffAir(producerState)) {
     const scheduled = resolveScheduleProgramNow(now, producerGraphic);
     if (scheduled) return scheduled;
-    return idleBumperProgram(
+    return idleOffAirProgram(
       producerGraphic,
       `producer-off-air-${producerState.updatedAt}`,
     );
   }
 
-  if (producerGraphic) {
-    const fb = envFallback();
-    if (fb) {
-      return withPlaybackFlags({
-        ...fb,
-        graphicUrl: producerGraphic,
-        scheduleVersion: `producer-graphic-${producerState.updatedAt}`,
-      });
-    }
-  }
-
-  const override = process.env.NEWS_CHANNEL_LIVE_OVERRIDE_URL?.trim();
-  if (override) {
-    const resolved = envFallback();
-    if (resolved) return resolved;
-  }
-
   const scheduled = resolveScheduleProgramNow(now, producerGraphic);
   if (scheduled) return scheduled;
 
-  const fb = envFallback();
-  if (fb) return fb;
-
-  return idleBumperProgram(producerGraphic, "empty");
+  return idleOffAirProgram(producerGraphic, "empty");
 }

@@ -80,8 +80,11 @@ export async function fetchMycoSnapshot(): Promise<MycoSnapshot> {
         ...base.links,
         tokenPage: process.env.NEXT_PUBLIC_MYCO_TOKEN_PAGE || base.links.tokenPage,
         governanceUrl: process.env.NEXT_PUBLIC_MYCO_GOV_URL ?? base.links.governanceUrl,
-        buyUrl: process.env.NEXT_PUBLIC_MYCO_BUY_URL ?? base.links.buyUrl,
-        dexscreenerUrl: ext.dexscreener,
+        buyUrl:
+          process.env.NEXT_PUBLIC_MYCO_BUY_URL ?? ext.jupiter ?? base.links.buyUrl,
+        dexscreenerUrl: quote.url ?? ext.dexscreener,
+        solscanUrl: ext.solscan,
+        jupiterUrl: ext.jupiter,
       };
       const merged: MycoSnapshot = {
         ...base,
@@ -91,6 +94,22 @@ export async function fetchMycoSnapshot(): Promise<MycoSnapshot> {
         liquidityUsd: quote.liquidityUsd,
         updatedAt: now,
         links,
+        dexPools: quote.pairAddress
+          ? [
+              {
+                chainId: "solana",
+                dexId: quote.dexId ?? "dexscreener",
+                pairAddress: quote.pairAddress,
+                baseToken: "MYCO",
+                quoteToken: "SOL",
+                liquidityUsd: quote.liquidityUsd,
+                volumeH24: quote.volume24h,
+                priceUsd: quote.priceUsd,
+                priceChangeH24: quote.change24h,
+                url: quote.url,
+              },
+            ]
+          : base.dexPools,
       };
       return ensurePhase3Fields(await enrichMycoSnapshot(merged));
     }

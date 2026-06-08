@@ -299,15 +299,35 @@ export function buildProducerPublicView(): NewsProducerPublic {
   };
 }
 
-export function verifyProducerApiKey(req: Request): boolean {
-  const expected = process.env.NEWS_PRODUCER_API_KEY?.trim();
-  if (!expected) {
-    return process.env.NODE_ENV !== "production";
+function normalizeProducerKey(value: string | undefined): string {
+  if (!value) return "";
+  let v = value.trim();
+  if (
+    (v.startsWith('"') && v.endsWith('"')) ||
+    (v.startsWith("'") && v.endsWith("'"))
+  ) {
+    v = v.slice(1, -1).trim();
   }
-  const header =
-    req.headers.get("x-news-producer-key")?.trim() ||
-    req.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim();
-  return Boolean(header && header === expected);
+  return v;
+}
+
+export function readProducerApiKeyFromRequest(req: Request): string {
+  return (
+    normalizeProducerKey(req.headers.get("x-news-producer-key") ?? undefined) ||
+    normalizeProducerKey(
+      req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? undefined,
+    )
+  );
+}
+
+/** @deprecated Producer writes use Supabase session auth — see lib/server/producer-auth.ts */
+export function verifyProducerApiKey(req: Request): boolean {
+  const expected = normalizeProducerKey(process.env.NEWS_PRODUCER_API_KEY);
+  if (!expected) {
+    return false;
+  }
+  const provided = readProducerApiKeyFromRequest(req);
+  return Boolean(provided && provided === expected);
 }
 
 type PatchBody = Partial<{

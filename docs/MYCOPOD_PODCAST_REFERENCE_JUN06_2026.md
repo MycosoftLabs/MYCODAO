@@ -40,7 +40,7 @@ Topics include DeSci, BioDAOs, fungal biotechnology, drug discovery, environment
 
 **Morgan Rockwell** — Founder and CEO of Mycosoft and Co-Founder of MycoDAO. Pioneer in Bitcoin, decentralized systems, biological computing, and fungal technology. Work spans fungal computer interfaces, environmental sensing, biotechnology, and decentralized governance.
 
-**Abelardo Rodriguez** — Co-Founder and Secretary of MycoDAO. Fifteen+ years building partnerships, nonprofit support, and community initiatives. Focus: governance, outreach, and connecting researchers, institutions, and sponsors to decentralized scientific funding.
+**Abelardo Rodriguez** — Co-Founder and Secretary of MycoDAO; **Broadcast Media Producer** and **News Anchor** for MycoDAO / BLOCKS programming. Fifteen+ years building partnerships, nonprofit support, and community initiatives. Focus: governance, outreach, broadcast production, on-air news delivery, and connecting researchers, institutions, and sponsors to decentralized scientific funding.
 
 ---
 
@@ -89,6 +89,7 @@ Detail: see `MycoPod_Game_Plan_and_Technical_Implementation.docx`.
 |---------|--------|
 | Episode list | RSS → `lib/adapters/podcasts.ts` → `GET /api/podcasts` |
 | Show copy, tagline, hosts, S1 guide | `myco-pulse/src/data/mycopodShow.ts` |
+| News on-air credits (anchor / producer) | `myco-pulse/src/data/broadcastTalent.ts` → News tab lower-third |
 | Env override | `PODCAST_RSS_URLS` (default: MycoPOD feed only) |
 
 ---

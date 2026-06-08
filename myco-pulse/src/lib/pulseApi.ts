@@ -9,6 +9,7 @@ import {
   hasAnyChainStat,
   mergeChainStats,
 } from "./chainStatsClient";
+import { MYCO_DEX_PAIR, MYCO_SOLANA_MINT } from "./mycoTokenConfig";
 import type { PulseChainStats } from "./pulseTypes";
 
 export type { PulseChainStats } from "./pulseTypes";
@@ -55,6 +56,18 @@ export interface PulsePodcastEpisode {
   publishedAt: string;
 }
 
+export interface PulseMycoDexPool {
+  dexId?: string;
+  pairAddress?: string;
+  baseToken?: string;
+  quoteToken?: string;
+  liquidityUsd?: number;
+  volumeH24?: number;
+  priceUsd?: number;
+  priceChangeH24?: number;
+  url?: string;
+}
+
 export interface PulseMycoSnapshot {
   price: number;
   changePct: number;
@@ -62,14 +75,39 @@ export interface PulseMycoSnapshot {
   chain?: string;
   fdv?: number;
   liquidityUsd?: number;
-  links?: Record<string, string | undefined>;
+  links?: {
+    tokenPage?: string;
+    governanceUrl?: string;
+    buyUrl?: string;
+    dexscreenerUrl?: string;
+    solscanUrl?: string;
+    jupiterUrl?: string;
+  };
   updatedAt?: string;
   researchFunding?: Record<string, number>;
   biobank?: Record<string, number>;
   governance?: Record<string, number>;
+  dexPools?: PulseMycoDexPool[];
+  solana?: {
+    mint?: string;
+    tokenExplorerUrl?: string;
+    mintExplorerUrl?: string;
+    decimals?: number;
+  };
   canonical?: {
+    headline?: string;
+    summary?: string;
     totalSupplyLabel?: string;
-    distribution?: { pct: number; title: string }[];
+    totalSupplyAmount?: number;
+    distribution?: { pct: number; title: string; description?: string }[];
+    externalLinks?: { label: string; href: string }[];
+    realmsDaoUrl?: string;
+  };
+  coinmarketcap?: {
+    marketCapUsd?: number;
+    volume24hUsd?: number;
+    percentChange24h?: number;
+    url?: string;
   };
 }
 
@@ -123,6 +161,40 @@ export interface PulseLearnModule {
   resourceLinks?: { label: string; href: string }[];
 }
 
+export interface PulseResearchHubPaper {
+  id: string;
+  title: string;
+  hub?: string;
+  authors?: string;
+  score?: number;
+  fundingGoal?: number;
+  fundingRaised?: number;
+  url: string;
+  publishedAt?: string;
+  needsFunding?: boolean;
+}
+
+export interface PulseFundingBundleStats {
+  grantPoolMyco: number;
+  grantsDeployedMyco: number;
+  activeProposals: number;
+  activeResearchProjects: number;
+  samplesIndexed: number;
+  treasuryLiquidityUsd: number;
+  mycoPrice: number;
+}
+
+export interface PulseFundingBundle {
+  stats: PulseFundingBundleStats;
+  researchHub: {
+    configured: boolean;
+    papers: PulseResearchHubPaper[];
+    portalUrl: string;
+    docsUrl: string;
+  };
+  updatedAt: string;
+}
+
 export interface LiquidityPoolRow {
   id: string;
   name: string;
@@ -143,7 +215,7 @@ async function fetchJson<T>(path: string): Promise<T | null> {
     try {
       const res = await fetch(url, {
         cache: "no-store",
-        signal: AbortSignal.timeout(12_000),
+        signal: AbortSignal.timeout(30_000),
       });
       if (!res.ok) continue;
       return (await res.json()) as T;
@@ -182,37 +254,77 @@ export async function fetchPulseTickers(forceRefresh = false): Promise<PulseTick
 }
 
 export async function fetchPulseNews(): Promise<PulseNewsItem[]> {
-  const data = await fetchJson<PulseNewsItem[] | { error?: string }>("/api/news");
+  // Cold /api/news can take 10s+ (RSS aggregation); 12s default fetchJson timeout drops headlines.
+  const data = await fetchJsonWithTimeout<PulseNewsItem[] | { error?: string }>(
+    "/api/news",
+    45_000
+  );
   if (!data || !Array.isArray(data)) return [];
   return data;
 }
 
 export async function fetchPulsePodcasts(): Promise<PulsePodcastEpisode[]> {
-  const data = await fetchJson<PulsePodcastEpisode[] | { error?: string }>("/api/podcasts");
+  const data = await fetchJsonWithTimeout<PulsePodcastEpisode[] | { error?: string }>(
+    "/api/podcasts",
+    45_000
+  );
   if (!data || !Array.isArray(data)) return [];
   return data;
 }
 
 export async function fetchPulseCalendar(): Promise<PulseCalendarEvent[]> {
-  const data = await fetchJson<PulseCalendarEvent[] | { error?: string }>("/api/calendar");
+  const data = await fetchJsonWithTimeout<PulseCalendarEvent[] | { error?: string }>(
+    "/api/calendar",
+    45_000
+  );
   if (!data || !Array.isArray(data)) return [];
   return data;
 }
 
-export async function fetchPulseResearch(): Promise<PulseResearchItem[]> {
-  const data = await fetchJson<PulseResearchItem[] | { error?: string }>("/api/research");
+export async function fetchPulseResearch(limit = 24): Promise<PulseResearchItem[]> {
+  const path =
+    limit > 0 ? `/api/research?limit=${encodeURIComponent(String(limit))}` : "/api/research";
+  const data = await fetchJsonWithTimeout<PulseResearchItem[] | { error?: string }>(path, 45_000);
   if (!data || !Array.isArray(data)) return [];
   return data;
+}
+
+export async function fetchPulseFundingBundle(): Promise<PulseFundingBundle | null> {
+  const data = await fetchJson<PulseFundingBundle & { error?: string }>("/api/funding");
+  if (!data || data.error || !data.stats) return null;
+  return data;
+}
+
+export async function fetchPulseResearchHub(limit = 12): Promise<{
+  papers: PulseResearchHubPaper[];
+  configured: boolean;
+}> {
+  const data = await fetchJson<{
+    papers?: PulseResearchHubPaper[];
+    configured?: boolean;
+    error?: string;
+  }>(`/api/researchhub?limit=${limit}`);
+  if (!data || data.error) return { papers: [], configured: Boolean(data?.configured) };
+  return {
+    papers: Array.isArray(data.papers) ? data.papers : [],
+    configured: Boolean(data.configured),
+  };
 }
 
 export async function fetchPulseLearn(): Promise<PulseLearnModule[]> {
-  const data = await fetchJson<PulseLearnModule[] | { error?: string }>("/api/learn");
+  const data = await fetchJsonWithTimeout<PulseLearnModule[] | { error?: string }>(
+    "/api/learn",
+    45_000
+  );
   if (!data || !Array.isArray(data)) return [];
   return data;
 }
 
 export async function fetchPulseMyco(): Promise<PulseMycoSnapshot | null> {
-  const data = await fetchJson<PulseMycoSnapshot & { error?: string }>("/api/myco");
+  const data = await fetchJsonWithTimeout<PulseMycoSnapshot & { error?: string }>(
+    "/api/myco",
+    45_000
+  );
   if (!data || data.error) return null;
   return data;
 }
@@ -279,9 +391,8 @@ export async function fetchPulseGlobalMarket(
   };
 }
 
-const MYCO_MINT_FOR_POOLS =
-  (import.meta.env.VITE_MYCO_SOLANA_MINT as string | undefined)?.trim() ||
-  "EzYEwn4R5tNkNGw4K2a5a58MJFQESdf1r4UJrV7cpUF3";
+const MYCO_MINT_FOR_POOLS = MYCO_SOLANA_MINT;
+const MYCO_PAIR_PREFERRED = MYCO_DEX_PAIR;
 
 /** Live MYCO pools — DexScreener by mint, then GeckoTerminal; includes pairs with price even if liquidity is thin. */
 export async function fetchLiquidityPoolsFromDex(): Promise<LiquidityPoolRow[]> {
@@ -300,11 +411,21 @@ async function fetchMycoPoolsDexScreener(mint: string): Promise<LiquidityPoolRow
     const pairs = data.pairs;
     if (!Array.isArray(pairs)) return [];
 
-    return pairs
+    const ranked = pairs
       .filter((p: { priceUsd?: string }) => {
         const price = parseFloat(p.priceUsd ?? "");
         return Number.isFinite(price) && price > 0;
       })
+      .sort((a: { pairAddress?: string; liquidity?: { usd?: number } }, b: { pairAddress?: string; liquidity?: { usd?: number } }) => {
+        if (MYCO_PAIR_PREFERRED) {
+          const aPref = a.pairAddress?.toLowerCase() === MYCO_PAIR_PREFERRED.toLowerCase();
+          const bPref = b.pairAddress?.toLowerCase() === MYCO_PAIR_PREFERRED.toLowerCase();
+          if (aPref !== bPref) return aPref ? -1 : 1;
+        }
+        return (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0);
+      });
+
+    return ranked
       .slice(0, 10)
       .map((p: Record<string, unknown>, i: number) => {
         const base = p.baseToken as { symbol?: string };
@@ -418,7 +539,10 @@ export interface PulseWhalesResponse {
 
 /** On-chain whale movements (Whale Alert API) + supplemental large Polymarket trades. */
 export async function fetchWhaleMovements(): Promise<PulseWhalesResponse> {
-  const data = await fetchJson<PulseWhalesResponse & { error?: string }>("/api/whales");
+  const data = await fetchJsonWithTimeout<PulseWhalesResponse & { error?: string }>(
+    "/api/whales",
+    45_000
+  );
   if (!data?.movements) {
     return {
       movements: [],

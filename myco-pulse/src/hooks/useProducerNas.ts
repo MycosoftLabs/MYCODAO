@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import { pulseApiUrl } from "../lib/apiOrigin";
-import { getStoredProducerKey } from "./useNewsProducer";
 
 export interface BlocksMediaAsset {
   id: string;
@@ -101,32 +100,45 @@ export function useProducerNas() {
     void reload();
   }, [reload]);
 
-  const saveSchedule = useCallback(async (next: NewsChannelSchedule) => {
-    const key = getStoredProducerKey();
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
-    if (key) headers["x-news-producer-key"] = key;
+  const saveSchedule = useCallback(
+    async (next: NewsChannelSchedule, accessToken: string) => {
+      const token = accessToken.trim();
+      if (!token) {
+        throw new Error(
+          "Sign in with an authorized producer email to save the schedule",
+        );
+      }
 
-    const res = await fetch(pulseApiUrl("/api/news/producer/schedule"), {
-      method: "PATCH",
-      headers,
-      body: JSON.stringify({ schedule: next }),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(
-        (err as { error?: string }).error ?? `schedule patch ${res.status}`,
-      );
-    }
-    const data = (await res.json()) as {
-      schedule: NewsChannelSchedule;
-      now: Record<string, unknown>;
-    };
-    setSchedule(data.schedule);
-    setProgramNow(data.now ?? null);
-    return data;
-  }, []);
+      const res = await fetch(pulseApiUrl("/api/news/producer/schedule"), {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ schedule: next }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        if (res.status === 401) {
+          throw new Error(
+            (err as { error?: string }).error ??
+              "Not authorized — sign in with an approved producer email",
+          );
+        }
+        throw new Error(
+          (err as { error?: string }).error ?? `schedule patch ${res.status}`,
+        );
+      }
+      const data = (await res.json()) as {
+        schedule: NewsChannelSchedule;
+        now: Record<string, unknown>;
+      };
+      setSchedule(data.schedule);
+      setProgramNow(data.now ?? null);
+      return data;
+    },
+    [],
+  );
 
   return {
     assets,

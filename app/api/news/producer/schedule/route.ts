@@ -5,7 +5,10 @@ import {
   writeNewsChannelSchedule,
   type NewsChannelSchedule,
 } from "@/lib/server/news-channel-program";
-import { verifyProducerApiKey } from "@/lib/server/news-producer";
+import {
+  producerAuthErrorMessage,
+  verifyProducerAuth,
+} from "@/lib/server/producer-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -30,8 +33,13 @@ export async function GET() {
 }
 
 export async function PATCH(req: Request) {
-  if (!verifyProducerApiKey(req)) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const auth = await verifyProducerAuth(req);
+  if (!auth.ok) {
+    const status = auth.reason === "auth_unconfigured" ? 503 : 401;
+    return NextResponse.json(
+      { error: producerAuthErrorMessage(auth) },
+      { status },
+    );
   }
 
   try {

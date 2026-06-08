@@ -3,7 +3,9 @@ import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
   BookOpen,
+  CircleDollarSign,
   Coins,
+  FlaskConical,
   Globe,
   LayoutDashboard,
   Mic2,
@@ -22,6 +24,8 @@ export type PulseTabId =
   | "Trade"
   | "News"
   | "Podcasts"
+  | "Funding"
+  | "Research"
   | "FungIP"
   | "Learn"
   | "MYCO"
@@ -35,10 +39,12 @@ export const PULSE_TABS: {
 }[] = [
   { id: "News", label: "News", shortLabel: "News", icon: Globe },
   { id: "Pulse", label: "Pulse", shortLabel: "Pulse", icon: LayoutDashboard },
+  { id: "Podcasts", label: "Podcasts", shortLabel: "Pod", icon: Mic2 },
   { id: "DAO", label: "Organizations", shortLabel: "Orgs", icon: Users },
+  { id: "Funding", label: "Funding", shortLabel: "Fund", icon: CircleDollarSign },
+  { id: "Research", label: "Research", shortLabel: "Sci", icon: FlaskConical },
   { id: "Markets", label: "Markets", shortLabel: "Mkt", icon: TrendingUp },
   { id: "Trade", label: "Trade", shortLabel: "Trade", icon: BarChart3 },
-  { id: "Podcasts", label: "Podcasts", shortLabel: "Pod", icon: Mic2 },
   { id: "FungIP", label: "FungIP", shortLabel: "FungIP", icon: Terminal },
   { id: "Learn", label: "Learn", shortLabel: "Learn", icon: BookOpen },
   { id: "MYCO", label: "MYCO", shortLabel: "MYCO", icon: Coins },
@@ -66,14 +72,14 @@ export function PulseNavItem({
         onClick={onClick}
         aria-current={active ? "page" : undefined}
         className={cn(
-          "flex flex-col items-center justify-center gap-0.5 w-full aspect-square min-h-[44px] p-1 transition-all touch-manipulation rounded-none border-0",
+          "flex flex-col items-center justify-center gap-0.5 shrink-0 min-w-[4.1rem] sm:min-w-[4.5rem] h-14 px-1 transition-all touch-manipulation rounded-none border-0",
           active
             ? "bg-myco-accent/10 text-myco-accent"
             : "text-dim hover:text-white hover:bg-white/5"
         )}
       >
         <Icon className="size-4 shrink-0" aria-hidden />
-        <span className="text-[7px] sm:text-[8px] font-bold uppercase tracking-wide leading-none max-w-full truncate px-0.5">
+        <span className="text-[7px] sm:text-[8px] font-bold uppercase tracking-wide leading-none max-w-[4rem] truncate">
           {label}
         </span>
       </button>
@@ -110,7 +116,7 @@ export function PulseSidebarNav({
   aiInsight,
 }: PulseShellNavProps) {
   return (
-    <aside className="hidden lg:flex w-56 shrink-0 border-r border-white/5 flex-col z-50 bg-[#050505]">
+    <aside className="hidden lg:flex w-56 shrink-0 border-r border-[var(--myco-border)] flex-col z-50 bg-[var(--myco-bg)]">
       <div className="p-4 border-b border-white/5 flex items-center gap-3">
         <div className="size-10 glass-bento flex items-center justify-center bg-red-600 shadow-[0_0_20px_rgba(220,38,38,0.35)] shrink-0 overflow-hidden">
           <img
@@ -218,10 +224,10 @@ export function PulseBottomNav({
 
   return (
     <nav
-      className="lg:hidden fixed bottom-0 inset-x-0 z-[60] border-t border-white/10 bg-[#050505]/95 backdrop-blur-xl pulse-bottom-nav"
+      className="lg:hidden fixed bottom-0 inset-x-0 z-[60] border-t border-[var(--myco-border)] bg-[var(--myco-bg)]/95 backdrop-blur-xl pulse-bottom-nav"
       aria-label="Blocks sections"
     >
-      <div className="grid w-full grid-cols-5 gap-0 divide-x divide-y divide-white/10">
+      <div className="flex flex-nowrap overflow-x-auto no-scrollbar divide-x divide-white/10">
         {bottomTabs.map((tab) => (
           <PulseNavItem
             key={tab.id}

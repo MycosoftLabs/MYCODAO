@@ -24,9 +24,14 @@ function phantomOAuthRootRedirect(): Plugin {
 }
 
 export default defineConfig(({mode}) => {
-  const env = loadEnv(mode, '.', ['', 'VITE_']);
+  const rootDir = path.resolve(__dirname, '..');
+  const rootEnv = loadEnv(mode, rootDir, '');
+  const localEnv = loadEnv(mode, __dirname, '');
+  const env = {...rootEnv, ...localEnv};
   return {
     base: '/blocks/',
+    envDir: rootDir,
+    envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
     plugins: [react(), tailwindcss(), phantomOAuthRootRedirect()],
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(

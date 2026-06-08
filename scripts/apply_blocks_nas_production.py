@@ -2,9 +2,11 @@
 """Mount BLOCKS NAS on MycoDAO VM 198, sync producer code, rebuild Docker, verify APIs."""
 from __future__ import annotations
 
-import json
 import os
+import subprocess
 import sys
+import tarfile
+import tempfile
 import time
 from pathlib import Path
 
@@ -14,6 +16,14 @@ REMOTE_DIR = os.environ.get("MYCODAO_REMOTE_DIR", "/opt/mycodao")
 
 
 def load_creds() -> None:
+    for env_path in (ROOT / ".env.local", ROOT / ".env.production"):
+        if not env_path.is_file():
+            continue
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            if line.strip() and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                os.environ.setdefault(k.strip(), v.strip())
+
     candidates = [
         ROOT / ".credentials.local",
         ROOT.parent / "MAS" / "mycosoft-mas" / ".credentials.local",
@@ -66,15 +76,16 @@ def upload_tree(sftp, local: Path, remote: str, patterns: list[str]) -> None:
 
 def ensure_env_production(sftp, ssh) -> None:
     env_path = f"{REMOTE_DIR}/.env.production"
-    producer_key = os.environ.get("NEWS_PRODUCER_API_KEY", "")
+    producer_key = os.environ.get("NEWS_PRODUCER_API_KEY", "").strip()
     required = {
         "BLOCKS_NAS_ROOT": "/mnt/nas/mycodao/BLOCKS",
         "BLOCKS_NAS_CIFS_URL": "//192.168.0.105/MYCODAO/BLOCKS",
         "BLOCKS_NAS_SHARE": "//192.168.0.105/MYCODAO",
         "NAS_HOST": "192.168.0.105",
         "NAS_SMB_USER": os.environ.get("NAS_SMB_USER", "mycosoft"),
-        "NEWS_PRODUCER_API_KEY": producer_key,
     }
+    if producer_key:
+        required["NEWS_PRODUCER_API_KEY"] = producer_key
     try:
         with sftp.file(env_path, "r") as f:
             raw = f.read().decode("utf-8", errors="replace")
@@ -100,6 +111,47 @@ def ensure_env_production(sftp, ssh) -> None:
     with sftp.file(env_path, "w") as f:
         f.write(content)
     print("  updated .env.production (BLOCKS NAS + producer key)")
+
+
+def local_build() -> None:
+    """Build on dev machine — VM has only ~3.8GB RAM and OOMs during Vite/Next in Docker."""
+    standalone = ROOT / ".next" / "standalone"
+    if standalone.is_dir() and os.environ.get("MYCODAO_SKIP_LOCAL_BUILD") == "1":
+        print("Skipping local build (MYCODAO_SKIP_LOCAL_BUILD=1, using existing .next)")
+        return
+    print("Building locally (npm run build)...")
+    subprocess.run(
+        ["npm", "run", "build"],
+        cwd=ROOT,
+        check=True,
+        env={**os.environ, "NEXT_TELEMETRY_DISABLED": "1"},
+    )
+    if not standalone.is_dir():
+        raise RuntimeError("Local build did not produce .next/standalone")
+
+
+def pack_prebuilt_artifacts() -> Path:
+    needed = [
+        ROOT / "public",
+        ROOT / ".next" / "standalone",
+        ROOT / ".next" / "static",
+        ROOT / "Dockerfile.prebuilt",
+    ]
+    for path in needed:
+        if not path.exists():
+            raise FileNotFoundError(f"Missing build artifact: {path}")
+    tmp = Path(tempfile.gettempdir()) / "mycodao-prebuilt.tgz"
+    with tarfile.open(tmp, "w:gz") as tar:
+        for path in needed:
+            tar.add(path, arcname=path.relative_to(ROOT).as_posix())
+    print(f"Packed prebuilt artifacts ({tmp.stat().st_size // (1024 * 1024)} MB)")
+    return tmp
+
+
+def upload_prebuilt(sftp, tarball: Path) -> None:
+    remote = f"{REMOTE_DIR}/deploy-prebuilt.tgz"
+    print(f"Uploading {tarball.name} -> {remote}")
+    sftp.put(str(tarball), remote)
 
 
 def run_cmd(ssh, cmd: str, timeout: int = 3600) -> tuple[int, str, str]:
@@ -140,7 +192,11 @@ def main() -> int:
     pkey = paramiko.Ed25519Key.from_private_key_file(str(key_path))
     ssh.connect(VM_HOST, username=user, pkey=pkey, timeout=30)
 
+    local_build()
+    tarball = pack_prebuilt_artifacts()
+
     sftp = ssh.open_sftp()
+    upload_prebuilt(sftp, tarball)
 
     # Git pull first, then overlay local producer/NAS files (covers unpushed commits)
     run_cmd(
@@ -163,6 +219,7 @@ def main() -> int:
             "data/news-channel-schedule.json",
             "myco-pulse/src/**/*.tsx",
             "myco-pulse/src/**/*.ts",
+            "lib/types.ts",
             "lib/adapters/funding.ts",
             "lib/adapters/researchhub.ts",
             "lib/adapters/research.ts",
@@ -178,6 +235,8 @@ def main() -> int:
             "docker-compose.blue-green.yml",
             "deploy/nginx/**",
             "scripts/blue-green-deploy.sh",
+            "Dockerfile.prebuilt",
+            ".dockerignore",
         ],
     )
 
@@ -207,11 +266,11 @@ def main() -> int:
 
     deploy_cmd = (
         f"cd {REMOTE_DIR} && "
-        f"chmod +x scripts/blue-green-deploy.sh && "
-        f"if [[ ! -f /opt/mycodao/state/active-slot ]]; then "
-        f"DEPLOY_DIR={REMOTE_DIR} bash scripts/blue-green-deploy.sh --bootstrap; "
-        f"else DEPLOY_DIR={REMOTE_DIR} bash scripts/blue-green-deploy.sh --cutover; fi && "
-        f"docker compose --env-file .env.production --profile tunnel up -d"
+        f"tar xzf deploy-prebuilt.tgz && "
+        f"docker build -f Dockerfile.prebuilt -t mycodao:latest . && "
+        f"docker compose --env-file .env.production up -d mycodao && "
+        f"docker compose --env-file .env.production --profile tunnel up -d && "
+        f"docker exec -u 0 mycodao-app chown -R nextjs:nodejs /app/data"
     )
     code, _, _ = run_cmd(ssh, deploy_cmd, timeout=7200)
     if code != 0:

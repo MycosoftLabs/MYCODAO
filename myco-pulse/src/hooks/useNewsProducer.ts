@@ -38,26 +38,50 @@ export interface NewsProducerView {
 }
 
 const POLL_MS = 5_000;
-const STORAGE_KEY = "blocks-news-producer-key";
 
-export function getStoredProducerKey(): string {
-  try {
-    return sessionStorage.getItem(STORAGE_KEY)?.trim() ?? "";
-  } catch {
-    return "";
-  }
+function producerAuthHeaders(accessToken: string): Record<string, string> {
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${accessToken.trim()}`,
+  };
 }
 
-export function setStoredProducerKey(key: string): void {
-  try {
-    if (key.trim()) sessionStorage.setItem(STORAGE_KEY, key.trim());
-    else sessionStorage.removeItem(STORAGE_KEY);
-  } catch {
-    /* ignore */
+export async function verifyProducerSession(
+  accessToken: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const token = accessToken.trim();
+  if (!token) {
+    return { ok: false, message: "Sign in with an authorized email first" };
   }
+
+  const res = await fetch(pulseApiUrl("/api/news/producer/verify"), {
+    method: "POST",
+    headers: producerAuthHeaders(token),
+  });
+
+  if (res.ok) return { ok: true };
+  const err = (await res.json().catch(() => ({}))) as { error?: string };
+  if (res.status === 401) {
+    return {
+      ok: false,
+      message:
+        err.error ??
+        "Not authorized — sign in with an approved Mycosoft producer email",
+    };
+  }
+  if (res.status === 503) {
+    return {
+      ok: false,
+      message: err.error ?? "Producer auth unavailable on server",
+    };
+  }
+  return { ok: false, message: err.error ?? `verify ${res.status}` };
 }
 
-export function useNewsProducer(options?: { includePresets?: boolean }) {
+export function useNewsProducer(options?: {
+  includePresets?: boolean;
+  accessToken?: string;
+}) {
   const [view, setView] = useState<NewsProducerView | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -93,24 +117,31 @@ export function useNewsProducer(options?: { includePresets?: boolean }) {
   }, [load]);
 
   const patch = useCallback(
-    async (body: Record<string, unknown>) => {
-      const key = getStoredProducerKey();
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      };
-      if (key) headers["x-news-producer-key"] = key;
+    async (body: Record<string, unknown>, patchOptions?: { accessToken?: string }) => {
+      const token =
+        patchOptions?.accessToken?.trim() || options?.accessToken?.trim() || "";
+      if (!token) {
+        throw new Error(
+          "Sign in with an authorized producer email to change the feed",
+        );
+      }
 
       const res = await fetch(pulseApiUrl("/api/news/producer"), {
         method: "PATCH",
-        headers,
+        headers: producerAuthHeaders(token),
         body: JSON.stringify(body),
       });
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(
-          (err as { error?: string }).error ?? `patch ${res.status}`,
-        );
+        const code = (err as { error?: string }).error ?? `patch ${res.status}`;
+        if (res.status === 401) {
+          throw new Error(
+            code ||
+              "Not authorized — sign in with an approved producer email",
+          );
+        }
+        throw new Error(code);
       }
 
       const data = (await res.json()) as { view?: NewsProducerView };
@@ -118,7 +149,7 @@ export function useNewsProducer(options?: { includePresets?: boolean }) {
       else await load();
       return data;
     },
-    [load],
+    [load, options?.accessToken],
   );
 
   const talent = view?.talent ?? [];

@@ -21,6 +21,8 @@ services:
     environment:
       NODE_ENV: production
     volumes:
+      # Writable producer state + schedule (PATCH /api/news/producer)
+      - ./data:/app/data
       # BLOCKS producer NAS (host CIFS mount — see scripts/setup_blocks_nas_mount.sh)
       - ${BLOCKS_NAS_ROOT:-/mnt/nas/mycodao/BLOCKS}:${BLOCKS_NAS_ROOT:-/mnt/nas/mycodao/BLOCKS}:ro
     restart: unless-stopped

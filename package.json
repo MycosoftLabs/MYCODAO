@@ -17,7 +17,8 @@
     "test:pulse-smoke:prod": "node scripts/pulse-smoke-local.mjs https://blocks.mycodao.com",
     "test:blocks-smoke:prod": "node scripts/pulse-smoke-local.mjs https://blocks.mycodao.com",
     "docs:pdf": "node scripts/generate-report-pdf.js",
-    "figma:export": "node scripts/export-figma-assets.mjs"
+    "figma:export": "node scripts/export-figma-assets.mjs",
+    "mount:nas": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/mount-blocks-nas.ps1"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",

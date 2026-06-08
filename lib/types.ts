@@ -218,6 +218,8 @@ export type MycoSnapshot = {
     governanceUrl?: string;
     buyUrl?: string;
     dexscreenerUrl?: string;
+    solscanUrl?: string;
+    jupiterUrl?: string;
   };
   fdv?: number;
   liquidityUsd?: number;

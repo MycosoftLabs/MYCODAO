@@ -68,6 +68,11 @@ if [ ! -d .git ]; then echo 'Missing git repo at $RemoteDir — clone https://gi
 git fetch origin
 git checkout $Branch
 git reset --hard origin/$Branch
+if [ -f scripts/setup_blocks_nas_mount.sh ]; then
+  export NAS_CIFS_URL='//192.168.0.105/mycosoft.com/MYCODAO/BLOCKS'
+  export NAS_MOUNT_PATH='/mnt/nas/mycodao/BLOCKS'
+  sudo -n -E bash scripts/setup_blocks_nas_mount.sh 2>/dev/null || echo 'NAS mount skipped (run apply_blocks_nas_production.py if needed)'
+fi
 docker compose build mycodao
 docker compose up -d
 docker compose --env-file .env.production --profile tunnel up -d

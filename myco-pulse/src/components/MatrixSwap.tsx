@@ -2,7 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Cpu, Zap, RefreshCw, ArrowDown, Settings2, ShieldCheck, Activity, Target, AlertTriangle, ArrowRightLeft, Clock, History, Fingerprint, Lock, Shield, TrendingUp, TrendingDown, Info, Check, X } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { getJupiterQuote, MATRIX_MINT, SOL_MINT } from '../services/jupiterSwap';
+import {
+  MYCO_DECIMALS,
+  SOL_MINT,
+  MATRIX_MINT,
+  executeJupiterSwap,
+  formatTokenAmount,
+  getJupiterQuote,
+} from '../services/jupiterSwap';
 import { logToSupabase } from '../lib/supabase';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
@@ -12,7 +19,8 @@ type TriggerAction = 'STOP_LOSS' | 'TAKE_PROFIT';
 type Expiry = '1H' | '24H' | '7D' | 'GTC';
 
 export const MatrixSwap = () => {
-  const { publicKey } = useWallet();
+  const wallet = useWallet();
+  const { publicKey } = wallet;
   const { connection } = useConnection();
   const [orderType, setOrderType] = useState<OrderType>('MARKET');
   const [triggerAction, setTriggerAction] = useState<TriggerAction>('STOP_LOSS');
@@ -56,42 +64,54 @@ export const MatrixSwap = () => {
     fetchBalance();
   }, [publicKey, connection]);
 
-  const executeOrder = () => {
+  const executeOrder = async () => {
+    if (orderType !== 'MARKET') {
+      alert('On-chain swaps use Jupiter market orders only. Limit/trigger orders are not supported yet.');
+      return;
+    }
+    if (!publicKey) {
+      alert('Connect Phantom or Solflare to swap.');
+      return;
+    }
+
     setIsMatrixActive(true);
     setHandshakeStep(1);
-    
-    const outputAmount = orderType === 'MARKET' 
-      ? quote ? (parseFloat(quote.outAmount) / 1e9).toFixed(0) : '0'
-      : (parseFloat(amount) / parseFloat(orderType === 'LIMIT' ? limitPrice : triggerPrice)).toFixed(0);
 
-    // Handshake Sequence
-    const steps = [
-      "AUTH_LAYER_NEGOTIATION",
-      "LIQUIDITY_VERIFICATION",
-      "ORACLE_SYNC_COMPLETED",
-      "EXECUTING_MATRIX_ORDER"
-    ];
+    try {
+      setHandshakeStep(2);
+      const { signature, quote: liveQuote } = await executeJupiterSwap(
+        connection,
+        wallet,
+        SOL_MINT,
+        MATRIX_MINT,
+        parseFloat(amount)
+      );
+      setHandshakeStep(4);
+      const outputAmount = formatTokenAmount(liveQuote.outAmount, MYCO_DECIMALS);
 
-    let currentStep = 0;
-    const interval = setInterval(() => {
-      currentStep++;
-      if (currentStep >= steps.length) {
-        clearInterval(interval);
-        setIsMatrixActive(false);
-        const orderName = orderType === 'TRIGGER' ? triggerAction : orderType;
-        
-        // Log to Supabase
-        logToSupabase({
-          type: 'SWAP',
-          message: `Swap ${amount} SOL for ${outputAmount} MYCO`,
-          payload: { orderType, amount, outputAmount, publicKey: publicKey?.toBase58() }
-        });
+      await logToSupabase({
+        type: 'SWAP',
+        message: `Swap ${amount} SOL for ~${outputAmount} MYCO`,
+        payload: {
+          orderType,
+          amount,
+          outputAmount,
+          signature,
+          publicKey: publicKey.toBase58(),
+        },
+      });
 
-        alert(`${orderName} ORDER PLACED SUCCESSFULLY\nAmount: ${amount} SOL\nEstimated Output: ${outputAmount} MYCO\nStatus: PENDING_ON_CHAIN`);
-      } else {
-        setHandshakeStep(currentStep + 1);
-      }
-    }, 1000);
+      alert(
+        `Swap confirmed on Solana\nAmount: ${amount} SOL\nOutput: ~${outputAmount} MYCO\nSignature: ${signature}`
+      );
+      void fetchBalance();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      alert(`Swap failed: ${msg}`);
+    } finally {
+      setIsMatrixActive(false);
+      setHandshakeStep(0);
+    }
   };
 
   const handleInitialClick = () => {
@@ -111,9 +131,14 @@ export const MatrixSwap = () => {
     "FINALIZING PROTOCOL HANDSHAKE"
   ];
 
-  const estimatedOutput = orderType === 'MARKET' 
-    ? quote ? (parseFloat(quote.outAmount) / 1e9).toLocaleString(undefined, { maximumFractionDigits: 0 }) : '---'
-    : (parseFloat(amount) / parseFloat(orderType === 'LIMIT' ? limitPrice : triggerPrice)).toLocaleString(undefined, { maximumFractionDigits: 0 });
+  const estimatedOutput = orderType === 'MARKET'
+    ? quote
+      ? formatTokenAmount(quote.outAmount, MYCO_DECIMALS)
+      : '---'
+    : (parseFloat(amount) / parseFloat(orderType === 'LIMIT' ? limitPrice : triggerPrice)).toLocaleString(
+        undefined,
+        { maximumFractionDigits: 0 }
+      );
 
   return (
     <div className={cn(

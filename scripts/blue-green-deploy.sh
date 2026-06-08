@@ -47,12 +47,12 @@ load_deploy_env
 mkdir -p "$STATE_DIR" "$NGINX_DIR/conf.d" "$(dirname "$LOG_FILE")"
 
 ACTIVE_FILE="$STATE_DIR/active-slot"
-if [[ ! -s "$ACTIVE_FILE" ]]; then
-  log "Bootstrapping active slot → blue"
-  echo "blue" > "$ACTIVE_FILE"
+if [[ -s "$ACTIVE_FILE" ]]; then
+  ACTIVE=$(tr -d '[:space:]' < "$ACTIVE_FILE")
+  [[ "$ACTIVE" == "blue" || "$ACTIVE" == "green" ]] || { err "Invalid active-slot: $ACTIVE"; exit 3; }
+else
+  ACTIVE="blue"
 fi
-ACTIVE=$(tr -d '[:space:]' < "$ACTIVE_FILE")
-[[ "$ACTIVE" == "blue" || "$ACTIVE" == "green" ]] || { err "Invalid active-slot: $ACTIVE"; exit 3; }
 IDLE=$([[ "$ACTIVE" == "blue" ]] && echo "green" || echo "blue")
 
 MODE="cutover"
@@ -134,16 +134,19 @@ stop_slot() {
 
 if [[ "$MODE" == "bootstrap" ]]; then
   log "Bootstrap blue/green stack"
+  export COMPOSE_BAKE=false
+  export DOCKER_BUILDKIT=0
   install_nginx_base_conf
-  render_nginx_conf_for "$ACTIVE"
-  docker stop mycodao-app 2>/dev/null || true
-  docker rm -f mycodao-app 2>/dev/null || true
+  render_nginx_conf_for "blue"
+  docker stop mycodao-app mycodao-green 2>/dev/null || true
+  docker rm -f mycodao-app mycodao-green 2>/dev/null || true
   export MYCODAO_IMAGE_BLUE="mycodao:blue"
   compose build mycodao-blue
   compose up -d mycodao-proxy mycodao-blue
   wait_healthy blue
+  echo "blue" > "$ACTIVE_FILE"
   purge_cloudflare || true
-  ok "Bootstrap complete — proxy on :3004, active=$ACTIVE"
+  ok "Bootstrap complete — proxy on :3004, active=blue"
   exit 0
 fi
 
@@ -173,6 +176,8 @@ log "Cutover active=$ACTIVE idle=$IDLE tag=$TAG"
 
 git pull --ff-only origin main || warn "git pull failed — building current tree"
 
+export COMPOSE_BAKE=false
+export DOCKER_BUILDKIT=0
 install_nginx_base_conf
 
 if [[ "$IDLE" == "green" ]]; then
