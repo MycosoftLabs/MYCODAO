@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { getSupabase } from "../lib/supabase";
+import { ensureSupabase, getSupabase } from "../lib/supabase";
 import { pulseApiUrl } from "../lib/apiOrigin";
 
 export function useProducerAuth() {
@@ -12,26 +12,36 @@ export function useProducerAuth() {
   const [sendingLink, setSendingLink] = useState(false);
 
   useEffect(() => {
-    const client = getSupabase();
-    if (!client) {
-      setLoading(false);
-      setError(
-        "Supabase is not configured (set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY)",
-      );
-      return;
-    }
+    let cancelled = false;
+    let unsubscribe: (() => void) | undefined;
 
-    void client.auth.getSession().then(({ data }) => {
+    void (async () => {
+      const client = await ensureSupabase();
+      if (cancelled) return;
+      if (!client) {
+        setLoading(false);
+        setError(
+          "Supabase is not configured on the server (NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.production)",
+        );
+        return;
+      }
+
+      const { data } = await client.auth.getSession();
+      if (cancelled) return;
       setSession(data.session);
       setLoading(false);
-    });
 
-    const { data: sub } = client.auth.onAuthStateChange((_event, next) => {
-      setSession(next);
-      setLoading(false);
-    });
+      const { data: sub } = client.auth.onAuthStateChange((_event, next) => {
+        setSession(next);
+        setLoading(false);
+      });
+      unsubscribe = () => sub.subscription.unsubscribe();
+    })();
 
-    return () => sub.subscription.unsubscribe();
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
   }, []);
 
   const accessToken = session?.access_token?.trim() ?? "";
@@ -39,7 +49,7 @@ export function useProducerAuth() {
   const isAuthenticated = Boolean(accessToken);
 
   const signInWithMagicLink = useCallback(async () => {
-    const client = getSupabase();
+    const client = getSupabase() ?? (await ensureSupabase());
     const trimmed = email.trim().toLowerCase();
     if (!client) {
       setError("Supabase is not configured");
@@ -75,7 +85,7 @@ export function useProducerAuth() {
   }, [email]);
 
   const signOut = useCallback(async () => {
-    const client = getSupabase();
+    const client = getSupabase() ?? (await ensureSupabase());
     if (client) await client.auth.signOut();
     setSession(null);
     setStatusMessage(null);
