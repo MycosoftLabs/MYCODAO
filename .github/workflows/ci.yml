@@ -1,10 +1,11 @@
-name: MYCODAO CI
+name: MYCODAO CI (develop)
 
 on:
   push:
-    branches: [main, develop]
+    branches: [develop]
   pull_request:
-    branches: [main]
+    branches: [develop]
+  workflow_dispatch:
 
 jobs:
   lint-build:
@@ -18,9 +19,13 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-          cache-dependency-path: package-lock.json
-      - name: Install
+          cache-dependency-path: |
+            package-lock.json
+            myco-pulse/package-lock.json
+      - name: Install root
         run: npm ci
+      - name: Install myco-pulse (Vite build)
+        run: npm ci --prefix myco-pulse
       - name: Lint
         run: npm run lint
       - name: Build

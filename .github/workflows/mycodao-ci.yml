@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   lint-and-build:
@@ -15,8 +16,10 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-      - name: Install
+      - name: Install root
         run: npm ci
+      - name: Install myco-pulse (Vite build)
+        run: npm ci --prefix myco-pulse
       - name: Lint
         run: npm run lint
       - name: Build
