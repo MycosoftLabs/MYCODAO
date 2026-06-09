@@ -108,6 +108,20 @@
     color: var(--myco-text);
   }
 
+  /* YouTube / 16:9 embed — cover main stage without side letterboxing */
+  .news-stage-youtube-embed {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 177.78vh;
+    height: 56.25vw;
+    min-width: 100%;
+    min-height: 100%;
+    transform: translate(-50%, -50%);
+    border: 0;
+    background: #000;
+  }
+
   .pulse-grid-touch .react-grid-item {
     touch-action: pan-y;
   }

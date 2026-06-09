@@ -2,6 +2,35 @@
 
 const EMBED_HOST = "https://www.youtube-nocookie.com";
 
+function isYoutubeHost(host: string): boolean {
+  return (
+    host === "youtube.com" ||
+    host === "m.youtube.com" ||
+    host === "music.youtube.com" ||
+    host === "youtube-nocookie.com"
+  );
+}
+
+function appendPlaylistParams(
+  embedBase: string,
+  listId: string | null,
+  index: string | null,
+): string {
+  if (!listId?.trim()) return embedBase;
+  try {
+    const url = new URL(embedBase);
+    url.searchParams.set("list", listId.trim());
+    if (index?.trim()) url.searchParams.set("index", index.trim());
+    return url.toString();
+  } catch {
+    const sep = embedBase.includes("?") ? "&" : "?";
+    let q = `list=${encodeURIComponent(listId.trim())}`;
+    if (index?.trim()) q += `&index=${encodeURIComponent(index.trim())}`;
+    return `${embedBase}${sep}${q}`;
+  }
+}
+
+/** Parse watch/playlist URLs — preserves `list` so Cut to URL plays full playlists. */
 export function normalizeYoutubeEmbedPath(input: string): string | null {
   const trimmed = input.trim();
   if (!trimmed) return null;
@@ -9,24 +38,60 @@ export function normalizeYoutubeEmbedPath(input: string): string | null {
   try {
     const url = new URL(trimmed);
     const host = url.hostname.replace(/^www\./, "");
+    const listId = url.searchParams.get("list");
+    const index = url.searchParams.get("index");
 
     if (host === "youtu.be") {
       const id = url.pathname.replace(/^\//, "").split("/")[0];
-      if (id) return `${EMBED_HOST}/embed/${id}`;
+      if (id) {
+        return appendPlaylistParams(`${EMBED_HOST}/embed/${id}`, listId, index);
+      }
     }
 
-    if (
-      host === "youtube.com" ||
-      host === "m.youtube.com" ||
-      host === "youtube-nocookie.com"
-    ) {
+    if (isYoutubeHost(host)) {
       if (url.pathname.startsWith("/embed/")) {
-        return `${EMBED_HOST}${url.pathname.split("?")[0]}`;
+        const pathOnly = `${EMBED_HOST}${url.pathname.split("?")[0]}`;
+        const existingList = url.searchParams.get("list") || listId;
+        if (
+          pathOnly.endsWith("/embed/videoseries") ||
+          url.pathname.includes("videoseries")
+        ) {
+          const base = `${EMBED_HOST}/embed/videoseries`;
+          return appendPlaylistParams(base, existingList, index);
+        }
+        return appendPlaylistParams(pathOnly, existingList, index);
       }
+
+      if (url.pathname === "/playlist" || url.pathname.startsWith("/playlist")) {
+        if (listId) {
+          return appendPlaylistParams(
+            `${EMBED_HOST}/embed/videoseries`,
+            listId,
+            index,
+          );
+        }
+      }
+
       const v = url.searchParams.get("v");
-      if (v) return `${EMBED_HOST}/embed/${v}`;
+      if (v) {
+        if (listId) {
+          return appendPlaylistParams(
+            `${EMBED_HOST}/embed/videoseries`,
+            listId,
+            index ?? url.searchParams.get("index"),
+          );
+        }
+        return `${EMBED_HOST}/embed/${v}`;
+      }
+
       const liveMatch = url.pathname.match(/^\/live\/([^/]+)/);
-      if (liveMatch?.[1]) return `${EMBED_HOST}/embed/${liveMatch[1]}`;
+      if (liveMatch?.[1]) {
+        return appendPlaylistParams(
+          `${EMBED_HOST}/embed/${liveMatch[1]}`,
+          listId,
+          index,
+        );
+      }
     }
   } catch {
     /* fall through */
@@ -34,6 +99,10 @@ export function normalizeYoutubeEmbedPath(input: string): string | null {
 
   if (/^[\w-]{6,}$/.test(trimmed) && !trimmed.includes("/")) {
     return `${EMBED_HOST}/embed/${trimmed}`;
+  }
+
+  if (/^PL[\w-]+$/.test(trimmed)) {
+    return `${EMBED_HOST}/embed/videoseries?list=${encodeURIComponent(trimmed)}`;
   }
 
   return trimmed.startsWith("http") ? trimmed : null;
@@ -51,6 +120,12 @@ export function withNewsPlayerParams(embedBase: string): string {
     url.searchParams.set("disablekb", "1");
     url.searchParams.set("playsinline", "1");
     url.searchParams.set("fs", "0");
+    if (
+      url.searchParams.has("list") ||
+      url.pathname.endsWith("/videoseries")
+    ) {
+      url.searchParams.set("listType", "playlist");
+    }
     return url.toString();
   } catch {
     const sep = embedBase.includes("?") ? "&" : "?";
@@ -77,4 +152,16 @@ export function buildYoutubeEmbedFromSource(source: {
     : `${EMBED_HOST}/embed/${source.videoId!.trim()}`;
 
   return path ? withNewsPlayerParams(path) : null;
+}
+
+/** Stable React key for iframe — ignore autoplay param churn across polls. */
+export function youtubeEmbedStableKey(embedUrl: string): string {
+  try {
+    const url = new URL(embedUrl);
+    const list = url.searchParams.get("list");
+    const v = url.pathname.split("/").pop();
+    return list ? `pl-${list}` : `v-${v ?? embedUrl}`;
+  } catch {
+    return embedUrl;
+  }
 }

@@ -1,10 +1,17 @@
 import React, { useRef, useEffect, useCallback } from "react";
 import { cn } from "../lib/utils";
 import { pulseApiUrl } from "../lib/apiOrigin";
+import { youtubeEmbedStableKey } from "../lib/youtubeEmbedKey";
 import { useNewsProgram } from "../hooks/useNewsProgram";
 
+interface NewsLiveStageProps {
+  className?: string;
+  /** Match CNBC main column width so video does not sit under the markets rail. */
+  stageInsetRight?: string;
+}
+
 /** Full-bleed program video — YouTube iframe or NAS MP4 from `/api/news/program`. */
-export function NewsLiveStage({ className }: { className?: string }) {
+export function NewsLiveStage({ className, stageInsetRight }: NewsLiveStageProps) {
   const {
     playbackUrl,
     mediaUrl,
@@ -16,8 +23,13 @@ export function NewsLiveStage({ className }: { className?: string }) {
     loopPlayback,
     autoReturnOnEnd,
     reload,
+    slotId,
   } = useNewsProgram();
   const videoRef = useRef<HTMLVideoElement>(null);
+  const embedKey =
+    playbackUrl && !isNasPlayback
+      ? youtubeEmbedStableKey(playbackUrl)
+      : slotId;
 
   const onNasEnded = useCallback(() => {
     if (autoReturnOnEnd) {
@@ -38,6 +50,10 @@ export function NewsLiveStage({ className }: { className?: string }) {
     });
   }, [mediaUrl]);
 
+  const stageStyle = stageInsetRight
+    ? ({ right: stageInsetRight } as React.CSSProperties)
+    : undefined;
+
   if (showBumper && bumperUrl) {
     return (
       <div
@@ -45,6 +61,7 @@ export function NewsLiveStage({ className }: { className?: string }) {
           "absolute inset-0 z-[1] overflow-hidden bg-black",
           className,
         )}
+        style={stageStyle}
       >
         <img
           src={bumperUrl}
@@ -68,6 +85,7 @@ export function NewsLiveStage({ className }: { className?: string }) {
     return (
       <div
         className={cn("absolute inset-0 z-[1] bg-black", className)}
+        style={stageStyle}
         aria-hidden
       />
     );
@@ -79,6 +97,7 @@ export function NewsLiveStage({ className }: { className?: string }) {
         "absolute inset-0 z-[1] overflow-hidden bg-black",
         className,
       )}
+      style={stageStyle}
     >
       {isNasPlayback && mediaUrl ? (
         <video
@@ -95,10 +114,10 @@ export function NewsLiveStage({ className }: { className?: string }) {
         />
       ) : (
         <iframe
-          key={playbackUrl}
+          key={embedKey}
           title={label}
           src={playbackUrl}
-          className="absolute inset-0 h-full w-full border-0 bg-black pointer-events-none"
+          className="news-stage-youtube-embed pointer-events-none"
           allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
           referrerPolicy="strict-origin-when-cross-origin"
           tabIndex={-1}

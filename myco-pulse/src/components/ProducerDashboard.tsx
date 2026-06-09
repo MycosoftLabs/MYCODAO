@@ -148,7 +148,7 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
     await runPatch({
       programOverride: {
         label: "Custom",
-        type: "commercial",
+        type: "recorded",
         videoUrl: url,
       },
     });

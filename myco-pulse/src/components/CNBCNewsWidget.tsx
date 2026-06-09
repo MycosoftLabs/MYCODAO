@@ -35,6 +35,13 @@ import {
 } from '../lib/marketsNowCategories';
 import { buildFloatingNewsPages } from '../lib/floatingNewsPages';
 import {
+  NEWS_BUMPER_ROW_HEIGHT,
+  NEWS_BUMPER_TOTAL_HEIGHT,
+  NEWS_MARKETS_RAIL_WIDTH,
+  NEWS_TICKER_HEIGHT,
+} from '../lib/newsStudioLayout';
+import { ProducerTalentBar } from './ProducerTalentBar';
+import {
   getMajorMarketSessions,
   MARKET_ZONE_ROTATE_MS,
   type MarketSessionState,
@@ -475,8 +482,8 @@ export const CNBCNewsWidget = ({ overlayMode = false }: CNBCNewsWidgetProps) => 
     return () => clearInterval(t);
   }, []);
 
-  const marketsRailWidth = 'clamp(175px, 22%, 280px)';
-  const bumperHeight = 'calc(68px + 26px)';
+  const marketsRailWidth = NEWS_MARKETS_RAIL_WIDTH;
+  const bumperHeight = NEWS_BUMPER_TOTAL_HEIGHT;
 
   return (
     <div
@@ -582,6 +589,8 @@ export const CNBCNewsWidget = ({ overlayMode = false }: CNBCNewsWidgetProps) => 
               </motion.div>
             </AnimatePresence>
           </div>
+
+          {overlayMode ? <ProducerTalentBar /> : null}
         </div>
 
         {/* MARKETS NOW — scroll list in middle row; Market Zone pinned with opaque footer plate */}
@@ -615,7 +624,10 @@ export const CNBCNewsWidget = ({ overlayMode = false }: CNBCNewsWidgetProps) => 
         className="shrink-0 flex flex-col relative z-50 bg-black border-t border-white/10"
         style={{ minHeight: bumperHeight }}
       >
-        <div className="flex h-[68px] border-t-2 border-white/20">
+        <div
+          className="flex border-t-2 border-white/20"
+          style={{ height: NEWS_BUMPER_ROW_HEIGHT }}
+        >
           <div className="shrink-0 w-[184px] h-full bg-[#0055cc] flex items-center px-2">
             <div className="flex-1 flex items-center justify-center h-full min-w-0">
               <TimezoneVerticalTicker zones={bumperZoneClocks} activeIndex={timezoneIndex} />
@@ -639,7 +651,11 @@ export const CNBCNewsWidget = ({ overlayMode = false }: CNBCNewsWidgetProps) => 
           </div>
         </div>
 
-        <PulseMarqueeTicker segments={tickerSegments} label="LIVE" className="h-[26px] bg-[#0a0a0a]" />
+        <PulseMarqueeTicker
+          segments={tickerSegments}
+          label="LIVE"
+          className="h-[26px] bg-[#0a0a0a]"
+        />
       </div>
     </div>
   );

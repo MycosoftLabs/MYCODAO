@@ -1,6 +1,7 @@
 import React from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useNewsProducer } from "../hooks/useNewsProducer";
+import { NEWS_TALENT_BOTTOM_OFFSET } from "../lib/newsStudioLayout";
 import { cn } from "../lib/utils";
 
 /** Lower-third talent from GET /api/news/producer (producer console). */
@@ -13,9 +14,10 @@ export function ProducerTalentBar({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        "pointer-events-none absolute bottom-[72px] left-4 right-4 z-40 flex flex-col gap-2 max-w-md",
+        "pointer-events-none absolute left-4 right-4 z-40 flex flex-col gap-2 max-w-md",
         className,
       )}
+      style={{ bottom: NEWS_TALENT_BOTTOM_OFFSET }}
       aria-live="polite"
     >
       <AnimatePresence mode="wait">
