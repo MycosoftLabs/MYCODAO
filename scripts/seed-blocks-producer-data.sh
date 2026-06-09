@@ -12,8 +12,14 @@ for f in news-producer-presets.json news-channel-schedule.json news-producer-sta
   dest="$DATA/$f"
   src="$SEED/$f"
   if [[ ! -f "$dest" && -f "$src" ]]; then
-    cp "$src" "$dest"
-    echo "seed: created $dest"
+    if cp "$src" "$dest" 2>/dev/null; then
+      echo "seed: created $dest"
+    elif sudo -n cp "$src" "$dest" 2>/dev/null; then
+      sudo -n chown "$(whoami):$(whoami)" "$dest" 2>/dev/null || true
+      echo "seed: created $dest (sudo)"
+    else
+      echo "seed: skip $dest (permission denied; image uses config/blocks-producer fallback)"
+    fi
   elif [[ -f "$dest" ]]; then
     echo "seed: keep existing $dest"
   else

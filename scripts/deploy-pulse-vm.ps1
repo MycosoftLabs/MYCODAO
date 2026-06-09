@@ -75,7 +75,7 @@ if [ -f scripts/setup_blocks_nas_mount.sh ]; then
 fi
 if [ -f scripts/seed-blocks-producer-data.sh ]; then
   chmod +x scripts/seed-blocks-producer-data.sh
-  MYCODAO_DATA_DIR='$RemoteDir/data' bash scripts/seed-blocks-producer-data.sh '$RemoteDir'
+  MYCODAO_DATA_DIR='$RemoteDir/data' bash scripts/seed-blocks-producer-data.sh '$RemoteDir' || true
 fi
 docker compose build mycodao
 docker compose up -d
