@@ -75,6 +75,14 @@ export async function verifyProducerSession(
       message: err.error ?? "Producer auth unavailable on server",
     };
   }
+  if (res.status === 502) {
+    return {
+      ok: false,
+      message:
+        err.error ??
+        "Could not reach Supabase to verify your session — try again",
+    };
+  }
   return { ok: false, message: err.error ?? `verify ${res.status}` };
 }
 

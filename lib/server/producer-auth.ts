@@ -1,5 +1,3 @@
-import { createClient } from "@supabase/supabase-js";
-
 const DEFAULT_ALLOWED_EMAILS = [
   "morgan@mycosoft.org",
   "morgan@mycodao.com",
@@ -18,15 +16,13 @@ function producerAllowlist(): Set<string> {
   return new Set(emails);
 }
 
-function supabaseAuthAdmin() {
+function supabaseConfig(): { url: string; apiKey: string } | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-  const key =
+  const apiKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
-  if (!url || !key) return null;
-  return createClient(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  if (!url || !apiKey) return null;
+  return { url: url.replace(/\/$/, ""), apiKey };
 }
 
 export function readBearerToken(req: Request): string {
@@ -43,8 +39,81 @@ export type ProducerAuthResult =
         | "missing_token"
         | "invalid_token"
         | "not_allowlisted"
-        | "auth_unconfigured";
+        | "auth_unconfigured"
+        | "auth_upstream_error";
     };
+
+type SupabaseUserPayload = {
+  id?: string;
+  email?: string;
+  user_metadata?: { email?: string };
+  identities?: Array<{ identity_data?: { email?: string } }>;
+};
+
+function resolveUserEmail(user: SupabaseUserPayload): string | null {
+  const direct = user.email?.trim();
+  if (direct && direct.includes("@")) return direct.toLowerCase();
+
+  const meta = user.user_metadata?.email?.trim();
+  if (meta && meta.includes("@")) return meta.toLowerCase();
+
+  for (const identity of user.identities ?? []) {
+    const fromIdentity = identity.identity_data?.email?.trim();
+    if (fromIdentity && fromIdentity.includes("@")) {
+      return fromIdentity.toLowerCase();
+    }
+  }
+
+  return null;
+}
+
+async function fetchSupabaseUser(
+  accessToken: string,
+): Promise<
+  | { ok: true; user: SupabaseUserPayload }
+  | { ok: false; reason: "invalid_token" | "auth_upstream_error" }
+> {
+  const config = supabaseConfig();
+  if (!config) {
+    return { ok: false, reason: "auth_upstream_error" };
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12_000);
+
+  try {
+    const res = await fetch(`${config.url}/auth/v1/user`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        apikey: config.apiKey,
+      },
+      cache: "no-store",
+      signal: controller.signal,
+    });
+
+    if (res.status === 401 || res.status === 403) {
+      return { ok: false, reason: "invalid_token" };
+    }
+
+    if (!res.ok) {
+      console.error("producer-auth: supabase user fetch failed", res.status);
+      return { ok: false, reason: "auth_upstream_error" };
+    }
+
+    const user = (await res.json()) as SupabaseUserPayload;
+    if (!user?.id) {
+      return { ok: false, reason: "invalid_token" };
+    }
+
+    return { ok: true, user };
+  } catch (e) {
+    console.error("producer-auth: supabase user fetch error", e);
+    return { ok: false, reason: "auth_upstream_error" };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 export async function verifyProducerAuth(
   req: Request,
@@ -54,22 +123,28 @@ export async function verifyProducerAuth(
     return { ok: false, reason: "missing_token" };
   }
 
-  const client = supabaseAuthAdmin();
-  if (!client) {
+  if (!supabaseConfig()) {
     return { ok: false, reason: "auth_unconfigured" };
   }
 
-  const { data, error } = await client.auth.getUser(token);
-  if (error || !data.user?.email) {
+  const fetched = await fetchSupabaseUser(token);
+  if (!fetched.ok) {
+    if (fetched.reason === "auth_upstream_error") {
+      return { ok: false, reason: "auth_upstream_error" };
+    }
     return { ok: false, reason: "invalid_token" };
   }
 
-  const email = data.user.email.toLowerCase();
+  const email = resolveUserEmail(fetched.user);
+  if (!email) {
+    return { ok: false, reason: "invalid_token" };
+  }
+
   if (!producerAllowlist().has(email)) {
     return { ok: false, reason: "not_allowlisted" };
   }
 
-  return { ok: true, email, userId: data.user.id };
+  return { ok: true, email, userId: fetched.user.id! };
 }
 
 export function producerAuthErrorMessage(
@@ -84,6 +159,8 @@ export function producerAuthErrorMessage(
       return "This account is not authorized for producer control";
     case "auth_unconfigured":
       return "Producer auth is not configured on the server (Supabase env)";
+    case "auth_upstream_error":
+      return "Could not verify session with Supabase — try again in a moment";
     default:
       return "unauthorized";
   }

@@ -78,7 +78,8 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
     void auth.verifySession().then((result) => {
       if (cancelled) return;
       setAuthOk(result.ok);
-      if (!result.ok) setAuthError(result.message);
+      if (result.ok) setAuthError(null);
+      else setAuthError(result.message);
     });
     return () => {
       cancelled = true;

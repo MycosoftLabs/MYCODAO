@@ -47,7 +47,12 @@ export async function GET() {
 export async function PATCH(req: Request) {
   const auth = await verifyProducerAuth(req);
   if (!auth.ok) {
-    const status = auth.reason === "auth_unconfigured" ? 503 : 401;
+    const status =
+      auth.reason === "auth_unconfigured"
+        ? 503
+        : auth.reason === "auth_upstream_error"
+          ? 502
+          : 401;
     return NextResponse.json(
       { error: producerAuthErrorMessage(auth) },
       { status },

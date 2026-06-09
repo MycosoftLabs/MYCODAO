@@ -161,6 +161,14 @@ export function useProducerAuth() {
         message: body.error ?? "Producer auth unavailable on server",
       };
     }
+    if (res.status === 502) {
+      return {
+        ok: false,
+        message:
+          body.error ??
+          "Could not reach Supabase to verify your session — try again",
+      };
+    }
     return { ok: false, message: body.error ?? `verify ${res.status}` };
   }, [accessToken]);
 

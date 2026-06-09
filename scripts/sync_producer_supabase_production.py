@@ -20,6 +20,7 @@ KEYS = (
     "NEXT_PUBLIC_SUPABASE_ANON_KEY",
     "SUPABASE_URL",
     "SUPABASE_ANON_KEY",
+    "SUPABASE_SERVICE_ROLE_KEY",
     "PRODUCER_OAUTH_REDIRECT_URL",
 )
 
@@ -66,13 +67,17 @@ def resolve_supabase() -> dict[str, str]:
         or merged.get("NEXT_PUBLIC_PRODUCER_OAUTH_REDIRECT")
         or "https://blocks.mycodao.com/blocks/?producer=1"
     ).strip()
-    return {
+    out = {
         "NEXT_PUBLIC_SUPABASE_URL": url,
         "NEXT_PUBLIC_SUPABASE_ANON_KEY": anon,
         "SUPABASE_URL": url,
         "SUPABASE_ANON_KEY": anon,
         "PRODUCER_OAUTH_REDIRECT_URL": producer_redirect,
     }
+    service_role = merged.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    if service_role:
+        out["SUPABASE_SERVICE_ROLE_KEY"] = service_role
+    return out
 
 
 def patch_env_text(text: str, values: dict[str, str]) -> str:
