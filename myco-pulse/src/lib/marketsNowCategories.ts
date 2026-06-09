@@ -110,7 +110,126 @@ export const MARKETS_NOW_CATEGORIES: MarketsNowCategory[] = [
   { id: "indices", label: "INDEXES" },
   { id: "commodities", label: "COMMODITIES" },
   { id: "bonds", label: "BONDS" },
+  { id: "movers", label: "BIGGEST MOVERS" },
 ];
+
+/** Section divider rows inside the Biggest Movers tab (not producer-pickable). */
+export function isMarketsNowSectionRow(row: StudioMarketIndex): boolean {
+  return row.id.startsWith("section-");
+}
+
+/** Indices, ETFs, and non-stock symbols excluded from equities movers. */
+const MOVERS_EXCLUDED_SYMBOLS = new Set(
+  [
+    "DOW",
+    "DJI",
+    "SPX",
+    "GSPC",
+    "NDX",
+    "IXIC",
+    "RUT",
+    "RUA",
+    "VIX",
+    "N225",
+    "FTSE",
+    "DAX",
+    "STOXX50",
+    "CAC",
+    "HSI",
+    "SSEC",
+    "ASX",
+    "AXJO",
+    "TSX",
+    "GSPTSE",
+    "KOSPI",
+    "KS11",
+    "DXY",
+    "SPY",
+    "QQQ",
+    "IWM",
+    "DIA",
+    "FXI",
+    "TLT",
+    "IEF",
+    "SHY",
+    "HYG",
+    "LQD",
+    "AGG",
+    "BND",
+    "TIP",
+    "MUB",
+    "EMB",
+    "VCIT",
+    "GLD",
+    "SLV",
+    "USO",
+    "UNG",
+    "BNO",
+    "CPER",
+    "PLTM",
+    "PALL",
+    "GOLD",
+    "SILVER",
+    "OIL",
+    "BRENT",
+    "NATGAS",
+    "COPPER",
+    "HG",
+    "MYCO",
+  ].map((s) => s.toUpperCase()),
+);
+
+function isUsEquityStock(t: PulseTicker): boolean {
+  if (t.assetClass !== "equity") return false;
+  const sym = t.symbol.toUpperCase();
+  if (MOVERS_EXCLUDED_SYMBOLS.has(sym)) return false;
+  if (!/^[A-Z]{1,5}(\.[A-Z])?$/.test(sym)) return false;
+  if (t.price <= 0) return false;
+  if (/etf|index|treasury|composite|volatility|crude|natural gas|bond/i.test(t.name)) {
+    return false;
+  }
+  return true;
+}
+
+function moversSectionRow(id: string, label: string): StudioMarketIndex {
+  return { id, name: label, price: "", change: "", up: true };
+}
+
+function buildBiggestMovers(bySym: Record<string, PulseTicker>): StudioMarketIndex[] {
+  const stocks = Object.values(bySym).filter(isUsEquityStock);
+  if (!stocks.length) {
+    return [moversSectionRow("section-movers-empty", "EQUITIES DATA PENDING")];
+  }
+
+  const gainers = [...stocks]
+    .filter((t) => (t.changePct ?? 0) > 0)
+    .sort((a, b) => (b.changePct ?? 0) - (a.changePct ?? 0))
+    .slice(0, 5);
+  const losers = [...stocks]
+    .filter((t) => (t.changePct ?? 0) < 0)
+    .sort((a, b) => (a.changePct ?? 0) - (b.changePct ?? 0))
+    .slice(0, 5);
+
+  const items: StudioMarketIndex[] = [];
+  if (gainers.length) {
+    items.push(moversSectionRow("section-gainers", "TOP GAINERS"));
+    for (const t of gainers) {
+      items.push(tickerToIndex(t.symbol, t, t.name?.toUpperCase() ?? t.symbol));
+    }
+  }
+  if (losers.length) {
+    items.push(moversSectionRow("section-losers", "TOP LOSERS"));
+    for (const t of losers) {
+      items.push(tickerToIndex(t.symbol, t, t.name?.toUpperCase() ?? t.symbol));
+    }
+  }
+
+  if (!items.length) {
+    return [moversSectionRow("section-movers-flat", "NO MOVERS — FLAT SESSION")];
+  }
+
+  return items;
+}
 
 const YIELD_SYMBOLS = new Set(["US10Y", "TNX", "US2Y", "US30Y", "US5Y"]);
 
@@ -299,6 +418,7 @@ const BUILDERS: Record<
   crypto: (_byId, bySym) => buildCrypto(bySym),
   commodities: (byId, bySym) => buildFromCanonical(COMMODITY_CANONICAL, byId, bySym),
   bonds: (byId, bySym) => buildFromCanonical(BOND_CANONICAL, byId, bySym),
+  movers: (_byId, bySym) => buildBiggestMovers(bySym),
 };
 
 /** @deprecated Height-based row cap removed — full category scrolls on one tab. */

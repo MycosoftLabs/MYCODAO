@@ -103,23 +103,100 @@
     touch-action: manipulation;
   }
 
+  .news-volume-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    background: rgba(255, 255, 255, 0.25);
+    border-radius: 9999px;
+  }
+
+  .news-volume-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 9999px;
+    background: #fff;
+    border: none;
+    cursor: pointer;
+  }
+
+  .news-volume-slider::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 9999px;
+    background: #fff;
+    border: none;
+    cursor: pointer;
+  }
+
   .pulse-view-surface {
     background-color: var(--myco-bg);
     color: var(--myco-text);
   }
 
-  /* YouTube / 16:9 embed — cover main stage without side letterboxing */
+  /* YouTube — full 16:9 frame contained and centered (letterbox if needed) */
+  .news-stage-video-slot {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    background: #000;
+    container-type: size;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
   .news-stage-youtube-embed {
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 177.78vh;
-    height: 56.25vw;
-    min-width: 100%;
-    min-height: 100%;
+    width: min(100cqw, calc(100cqh * 16 / 9));
+    height: min(100cqh, calc(100cqw * 9 / 16));
+    max-width: 100%;
+    max-height: 100%;
     transform: translate(-50%, -50%);
     border: 0;
     background: #000;
+  }
+
+  /* Playlist cut-ins: thin bottom bar only — hide prev/next without cropping the frame */
+  .news-stage-youtube-chrome-mask {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  .news-stage-youtube-chrome-mask::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 0;
+    background: transparent;
+  }
+
+  .news-stage-youtube-chrome-mask--playlist::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 52px;
+    background: linear-gradient(to top, #000 55%, transparent);
+  }
+
+  .news-stage-youtube-chrome-mask--playlist::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 36px;
+    background: #000;
+    opacity: 0.92;
   }
 
   .pulse-grid-touch .react-grid-item {

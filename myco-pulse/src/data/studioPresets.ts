@@ -38,6 +38,9 @@ export interface BroadcastNewsLine {
   label: string;
   headline: string;
   isDao: boolean;
+  /** Live wire summary (first 2–3 sentences shown in glass panel). */
+  summary?: string;
+  source?: string;
 }
 
 export const STUDIO_BROADCAST_NEWS: BroadcastNewsLine[] = [
@@ -368,6 +371,69 @@ export const STUDIO_CHART_DATA = Array.from({ length: 48 }, (_, i) => synthChart
 export const STUDIO_ORACLE_INSIGHT =
   "STUDIO BROADCAST MODE — UI presets active. Live feeds merge when MYCODAO /api/* keys are configured. Codex handoff: wire news, Streamlabs, whale index, and MAS intel.";
 
+function stripHtml(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeHeadlineKey(title: string): string {
+  return title.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+/** Pull article body text from RSS/API fields (never mock). */
+export function resolveArticleSummary(item: PulseNewsItem): string {
+  const raw = item.summary?.trim() ?? "";
+  if (!raw) return "";
+  const plain = raw.includes("<") ? stripHtml(raw) : raw;
+  return plain.length >= 20 ? plain : "";
+}
+
+/** True when cached lines lack wire summaries — force a live news refetch. */
+export function broadcastLinesMissingSummaries(lines: BroadcastNewsLine[]): boolean {
+  if (!lines.length) return false;
+  const withSummary = lines.filter((l) => l.summary?.trim()).length;
+  return withSummary < Math.min(4, Math.ceil(lines.length * 0.25));
+}
+
+/** Merge summaries from live PulseNewsItem[] into broadcast lines (by id/title). */
+export function enrichBroadcastLinesWithSummaries(
+  lines: BroadcastNewsLine[],
+  items: PulseNewsItem[],
+): BroadcastNewsLine[] {
+  if (!lines.length || !items.length) return lines;
+  const byId = new Map(items.map((i) => [i.id, i]));
+  const byTitle = new Map(items.map((i) => [normalizeHeadlineKey(i.title), i]));
+
+  return lines.map((line) => {
+    if (line.summary?.trim()) return line;
+    let item = byId.get(line.id);
+    if (!item) {
+      item = byTitle.get(normalizeHeadlineKey(`${line.label}: ${line.headline}`));
+    }
+    if (!item) {
+      item = byTitle.get(normalizeHeadlineKey(line.headline));
+    }
+    if (!item) return line;
+    const summary = resolveArticleSummary(item);
+    if (!summary) return line;
+    return {
+      ...line,
+      summary,
+      source: line.source?.trim() || item.source?.trim() || undefined,
+    };
+  });
+}
+
 export function pulseNewsToBroadcastLines(items: PulseNewsItem[]): BroadcastNewsLine[] {
   if (!items.length) return [];
   return items.slice(0, 32).map((item) => {
@@ -392,6 +458,8 @@ export function pulseNewsToBroadcastLines(items: PulseNewsItem[]): BroadcastNews
           label,
           headline: item.title.slice(label.length).replace(/^:\s*/, "").trim(),
           isDao: label === "DAO ALERT" || item.tags?.includes("dao") === true,
+          summary: resolveArticleSummary(item) || undefined,
+          source: item.source?.trim() || undefined,
         };
       }
     }
@@ -401,6 +469,8 @@ export function pulseNewsToBroadcastLines(items: PulseNewsItem[]): BroadcastNews
       label,
       headline: item.title,
       isDao: label === "DAO ALERT" || item.tags?.includes("dao") === true,
+      summary: resolveArticleSummary(item) || undefined,
+      source: item.source?.trim() || undefined,
     };
   });
 }

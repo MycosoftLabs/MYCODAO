@@ -41,6 +41,8 @@ export interface ProgramSlot extends ProgramSource {
   end?: string;
   /** Higher wins when multiple slots overlap */
   priority?: number;
+  /** Title bar preset id synced when this slot is on air */
+  titlePresetId?: string;
 }
 
 export interface NewsChannelSchedule {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { pulseApiUrl } from "../lib/apiOrigin";
 import {
   getValidProducerAccessToken,
@@ -14,6 +14,7 @@ export interface BroadcastTalentLine {
 export interface ProducerPresetOption {
   id: string;
   label: string;
+  logoNasPath?: string | null;
 }
 
 export interface ProducerProgramOption extends ProducerPresetOption {
@@ -26,6 +27,10 @@ export interface NewsProducerView {
   talent: BroadcastTalentLine[];
   talentPresetId: string | null;
   talentPresetLabel: string | null;
+  titleBarText: string | null;
+  titleBarLogoUrl: string | null;
+  titlePresetId: string | null;
+  titlePresetLabel: string | null;
   programMode: string;
   programLabel: string | null;
   programEmbedUrl: string | null;
@@ -35,9 +40,14 @@ export interface NewsProducerView {
   programSourceType: string;
   activeProgramPresetId: string | null;
   activeGraphicNasPath: string | null;
+  liveStreamDataAssetIds: string[];
+  liveStreamDataMarketingNasPath: string | null;
+  liveStreamDataMarketingImageUrl: string | null;
+  titleBarLogoNasPath: string | null;
   presets?: {
     talent: ProducerPresetOption[];
     program: ProducerProgramOption[];
+    title: ProducerPresetOption[];
   };
 }
 
@@ -76,6 +86,15 @@ export function useNewsProducer(options?: {
   const [view, setView] = useState<NewsProducerView | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const presetsCache = useRef<NewsProducerView["presets"]>();
+
+  const applyProducerPayload = useCallback((data: NewsProducerView) => {
+    if (data.presets) presetsCache.current = data.presets;
+    setView({
+      ...data,
+      presets: data.presets ?? presetsCache.current,
+    });
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -84,14 +103,14 @@ export function useNewsProducer(options?: {
       });
       if (!res.ok) throw new Error(`producer ${res.status}`);
       const data = (await res.json()) as NewsProducerView;
-      setView(data);
+      applyProducerPayload(data);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "producer fetch failed");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [applyProducerPayload]);
 
   useEffect(() => {
     let cancelled = false;
@@ -131,19 +150,42 @@ export function useNewsProducer(options?: {
       }
 
       const data = (await res.json()) as { view?: NewsProducerView };
-      if (data.view) setView(data.view);
+      if (data.view) applyProducerPayload(data.view);
       else await load();
       return data;
     },
-    [load, options?.accessToken],
+    [applyProducerPayload, load, options?.accessToken],
   );
 
   const talent = view?.talent ?? [];
   const presets = options?.includePresets ? view?.presets : undefined;
+  const titleBar = {
+    text: view?.titleBarText ?? null,
+    logoUrl: view?.titleBarLogoUrl ?? null,
+    presetId: view?.titlePresetId ?? null,
+    presetLabel: view?.titlePresetLabel ?? null,
+    syncKey:
+      view?.titlePresetId ??
+      view?.titleBarText ??
+      view?.programLabel ??
+      view?.updatedAt ??
+      "title",
+  };
+
+  const liveStreamAssetIds = view?.liveStreamDataAssetIds ?? [];
+  const liveStreamData = {
+    assetIds: liveStreamAssetIds,
+    /** Stable string for effects — avoids re-running on every producer poll array identity */
+    assetKey: liveStreamAssetIds.join(","),
+    marketingImageUrl: view?.liveStreamDataMarketingImageUrl ?? null,
+    syncKey: `${liveStreamAssetIds.join(",")}|${view?.liveStreamDataMarketingImageUrl ?? ""}`,
+  };
 
   return {
     view,
     talent,
+    titleBar,
+    liveStreamData,
     presets,
     loading,
     error,

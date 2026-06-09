@@ -34,6 +34,7 @@ export interface ScheduleSlot {
   start?: string;
   end?: string;
   priority?: number;
+  titlePresetId?: string;
 }
 
 export interface NewsChannelSchedule {

@@ -253,10 +253,11 @@ export async function fetchPulseTickers(forceRefresh = false): Promise<PulseTick
   return data as PulseTicker[];
 }
 
-export async function fetchPulseNews(): Promise<PulseNewsItem[]> {
+export async function fetchPulseNews(forceRefresh = false): Promise<PulseNewsItem[]> {
   // Cold /api/news can take 10s+ (RSS aggregation); 12s default fetchJson timeout drops headlines.
+  const path = forceRefresh ? "/api/news?refresh=1" : "/api/news";
   const data = await fetchJsonWithTimeout<PulseNewsItem[] | { error?: string }>(
-    "/api/news",
+    path,
     45_000
   );
   if (!data || !Array.isArray(data)) return [];

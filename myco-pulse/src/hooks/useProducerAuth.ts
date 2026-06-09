@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { resolveProducerOAuthRedirect } from "../lib/producerOAuthRedirect";
+import {
+  resetProducerOAuthRedirectCache,
+  resolveProducerOAuthRedirect,
+} from "../lib/producerOAuthRedirect";
 import {
   getValidProducerAccessToken,
   parseProducerApiError,
@@ -95,6 +98,7 @@ export function useProducerAuth() {
     setSigningIn(true);
     setError(null);
     setStatusMessage(null);
+    resetProducerOAuthRedirectCache();
     try {
       const redirectTo = await resolveProducerOAuthRedirect();
       if (
@@ -130,6 +134,7 @@ export function useProducerAuth() {
     setError(null);
     if (typeof window !== "undefined") {
       sessionStorage.removeItem(PRODUCER_RETURN_KEY);
+      resetProducerOAuthRedirectCache();
     }
   }, []);
 

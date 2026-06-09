@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  Activity,
   ArrowLeft,
   Calendar,
   FolderOpen,
   HardDrive,
+  Heading,
   Image,
   Loader2,
   LogOut,
@@ -24,12 +26,25 @@ import {
   type ScheduleSlot,
 } from "../hooks/useProducerNas";
 import { pulseApiUrl } from "../lib/apiOrigin";
+import { listMarketsNowAssetOptions } from "../lib/liveStreamData";
+import { prefetchPulseNewsBundle } from "../lib/pulseNewsPrefetch";
+import { loadMarketsSnapshot } from "../lib/pulseMarketsStore";
+import type { PulseTicker } from "../lib/pulseApi";
+import type { StudioMarketIndex } from "../data/studioPresets";
+import { NasGraphicsPicker } from "./NasGraphicsPicker";
 
 interface ProducerDashboardProps {
   onExit: () => void;
 }
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const CORE_TITLE_PRESET_IDS = new Set([
+  "blocks-live",
+  "mycodao-morning",
+  "markets-now",
+  "fungi-desk",
+  "partner-segment",
+]);
 const CATEGORIES = [
   "commercials",
   "shows",
@@ -55,10 +70,19 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
   const [authOk, setAuthOk] = useState(false);
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState<
-    "overview" | "nas" | "schedule" | "talent" | "program"
+    | "overview"
+    | "nas"
+    | "schedule"
+    | "title"
+    | "talent"
+    | "program"
+    | "liveData"
   >("overview");
+  const [catalogTickers, setCatalogTickers] = useState<PulseTicker[]>([]);
+  const [catalogIndices, setCatalogIndices] = useState<StudioMarketIndex[]>([]);
   const [customName, setCustomName] = useState("");
   const [customRoles, setCustomRoles] = useState("");
+  const [customTitleText, setCustomTitleText] = useState("");
   const [customVideoUrl, setCustomVideoUrl] = useState("");
   const [nasFilter, setNasFilter] = useState<string>("all");
   const [scheduleDraft, setScheduleDraft] = useState<NewsChannelSchedule | null>(
@@ -68,6 +92,19 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
   useEffect(() => {
     if (nas.schedule) setScheduleDraft(nas.schedule);
   }, [nas.schedule]);
+
+  useEffect(() => {
+    const snap = loadMarketsSnapshot();
+    if (snap) {
+      setCatalogTickers(snap.tickers ?? []);
+      setCatalogIndices(snap.marketIndices ?? []);
+    }
+    void prefetchPulseNewsBundle().then((bundle) => {
+      if (!bundle) return;
+      setCatalogTickers(bundle.tickers);
+      setCatalogIndices(bundle.marketIndices);
+    });
+  }, []);
 
   useEffect(() => {
     if (!auth.isAuthenticated) {
@@ -90,6 +127,43 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
     if (nasFilter === "all") return nas.assets;
     return nas.assets.filter((a) => a.category === nasFilter);
   }, [nas.assets, nasFilter]);
+
+  const assetCatalog = useMemo(
+    () => listMarketsNowAssetOptions(catalogIndices, catalogTickers),
+    [catalogIndices, catalogTickers],
+  );
+
+  const assetCatalogByCategory = useMemo(() => {
+    const groups = new Map<string, typeof assetCatalog>();
+    for (const item of assetCatalog) {
+      const list = groups.get(item.categoryId) ?? [];
+      list.push(item);
+      groups.set(item.categoryId, list);
+    }
+    return groups;
+  }, [assetCatalog]);
+
+  const selectedLiveDataAssetIds = view?.liveStreamDataAssetIds ?? [];
+
+  const liveDataGraphics = useMemo(
+    () =>
+      nas.assets.filter(
+        (a) => a.kind === "graphic" || a.category === "graphics",
+      ),
+    [nas.assets],
+  );
+
+  const coreTitlePresets = useMemo(
+    () =>
+      (presets?.title ?? []).filter((t) => CORE_TITLE_PRESET_IDS.has(t.id)),
+    [presets?.title],
+  );
+
+  const showTitlePresets = useMemo(
+    () =>
+      (presets?.title ?? []).filter((t) => !CORE_TITLE_PRESET_IDS.has(t.id)),
+    [presets?.title],
+  );
 
   const controlsLocked = !auth.isAuthenticated || !authOk;
 
@@ -115,6 +189,30 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
 
   async function setTalentPreset(id: string) {
     await runPatch({ activeTalentPresetId: id, customTalent: null });
+  }
+
+  async function setTitlePreset(id: string) {
+    await runPatch({
+      activeTitlePresetId: id,
+      customTitleText: null,
+    });
+  }
+
+  async function applyCustomTitle() {
+    const text = customTitleText.trim();
+    if (!text) return;
+    await runPatch({
+      customTitleText: text,
+      activeTitlePresetId: null,
+    });
+  }
+
+  async function setTitleLogo(relPath: string) {
+    await runPatch({ customTitleLogoNasPath: relPath });
+  }
+
+  async function clearTitleLogo() {
+    await runPatch({ clearTitleBarLogo: true });
   }
 
   async function applyCustomTalent() {
@@ -176,6 +274,29 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
 
   async function clearGraphic() {
     await runPatch({ clearGraphic: true });
+  }
+
+  async function toggleLiveDataAsset(id: string) {
+    const current = new Set(selectedLiveDataAssetIds);
+    if (current.has(id)) {
+      current.delete(id);
+    } else {
+      if (current.size >= 3) return;
+      current.add(id);
+    }
+    await runPatch({ liveStreamDataAssetIds: Array.from(current) });
+  }
+
+  async function clearLiveDataAssets() {
+    await runPatch({ liveStreamDataAssetIds: [] });
+  }
+
+  async function setLiveDataMarketing(relPath: string) {
+    await runPatch({ liveStreamDataMarketingNasPath: relPath });
+  }
+
+  async function clearLiveDataMarketing() {
+    await runPatch({ clearLiveStreamDataMarketing: true });
   }
 
   function updateSlot(index: number, patchSlot: Partial<ScheduleSlot>) {
@@ -284,10 +405,12 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
         {(
           [
             ["overview", "Overview", Radio],
-            ["nas", "NAS Library", HardDrive],
-            ["schedule", "Scheduler", Calendar],
             ["talent", "Talent", User],
+            ["liveData", "Live Data", Activity],
+            ["title", "Title", Heading],
             ["program", "Program", Tv],
+            ["schedule", "Scheduler", Calendar],
+            ["nas", "NAS Library", HardDrive],
           ] as const
         ).map(([id, label, Icon]) => (
           <button
@@ -414,6 +537,17 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
                   </div>
                   <div>
                     <p className="text-[9px] font-bold uppercase text-white/50 mb-2">
+                      Title bar
+                    </p>
+                    <p className="font-black uppercase">
+                      {view?.titlePresetLabel ?? "—"}
+                    </p>
+                    <p className="text-[11px] text-white/70 mt-1">
+                      {view?.titleBarText ?? "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-bold uppercase text-white/50 mb-2">
                       Program
                     </p>
                     <p className="font-black uppercase">
@@ -439,6 +573,27 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
                         {new Date(
                           String(nas.programNow.nextChangeAt),
                         ).toLocaleTimeString()}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-bold uppercase text-white/50 mb-2">
+                      Live stream data
+                    </p>
+                    <p className="font-black uppercase text-[11px]">
+                      {selectedLiveDataAssetIds.length
+                        ? selectedLiveDataAssetIds
+                            .map(
+                              (id) =>
+                                assetCatalog.find((a) => a.id === id)?.label ??
+                                id,
+                            )
+                            .join(" · ")
+                        : "Auto (news + BTC/ETH/SOL)"}
+                    </p>
+                    {view?.liveStreamDataMarketingImageUrl ? (
+                      <p className="text-[10px] text-amber-300 mt-1">
+                        Marketing logo on air
                       </p>
                     ) : null}
                   </div>
@@ -766,6 +921,23 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
                     placeholder="Days 0-6 comma-separated"
                     className="h-12 px-4 text-base bg-black border border-white/20"
                   />
+                  <select
+                    value={slot.titlePresetId ?? ""}
+                    onChange={(e) =>
+                      updateSlot(index, {
+                        titlePresetId: e.target.value || undefined,
+                      })
+                    }
+                    className="h-12 px-4 text-base bg-black border border-white/20 sm:col-span-2"
+                  >
+                    <option value="">Title preset (auto from label)</option>
+                    {(presets?.title ?? []).map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.label}
+                        {t.logoNasPath ? ` · ${t.logoNasPath}` : ""}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <p className="text-[9px] text-white/35">
                   Days: {DAY_LABELS.map((d, i) => `${i}=${d}`).join(", ")}
@@ -793,6 +965,101 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
           </section>
         ) : null}
 
+        {tab === "title" ? (
+          <section className="space-y-3">
+            <h2 className="text-[10px] font-black uppercase tracking-[0.25em] text-white/70 flex items-center gap-2">
+              <Heading className="size-4" />
+              Title bar — show / segment / stream
+            </h2>
+            <p className="text-xs text-white/50">
+              Top bar above the video (logo left, title right). Periodic shows
+              sync title + logo from NAS{" "}
+              <code className="text-[10px]">graphics/shows/</code> when fired
+              from Program, NAS Library, or Schedule.
+            </p>
+            <p className="text-[9px] font-bold uppercase tracking-widest text-white/45">
+              Core segments
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {coreTitlePresets.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  disabled={busy || controlsLocked}
+                  onClick={() => void setTitlePreset(t.id)}
+                  className={cn(
+                    "min-h-[52px] px-4 py-3 text-left border touch-manipulation transition-colors disabled:opacity-50",
+                    view?.titlePresetId === t.id
+                      ? "border-[#0055cc] bg-[#0055cc]/25 text-white"
+                      : "border-white/15 hover:bg-white/5 text-white/90",
+                  )}
+                >
+                  <p className="text-[11px] font-black uppercase">{t.label}</p>
+                </button>
+              ))}
+            </div>
+            {showTitlePresets.length ? (
+              <>
+                <p className="text-[9px] font-bold uppercase tracking-widest text-[#5eb3ff] pt-2">
+                  Periodic shows (title + NAS logo)
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {showTitlePresets.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      disabled={busy || controlsLocked}
+                      onClick={() => void setTitlePreset(t.id)}
+                      className={cn(
+                        "min-h-[56px] px-4 py-3 text-left border touch-manipulation transition-colors disabled:opacity-50",
+                        view?.titlePresetId === t.id
+                          ? "border-[#0055cc] bg-[#0055cc]/25 text-white"
+                          : "border-white/15 hover:bg-white/5 text-white/90",
+                      )}
+                    >
+                      <p className="text-[11px] font-black uppercase">
+                        {t.label}
+                      </p>
+                      {t.logoNasPath ? (
+                        <p className="text-[9px] text-white/40 font-mono truncate mt-0.5">
+                          {t.logoNasPath}
+                        </p>
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : null}
+            <div className="border border-white/10 p-4 space-y-3 bg-black/40">
+              <input
+                value={customTitleText}
+                onChange={(e) => setCustomTitleText(e.target.value)}
+                placeholder="Custom title (segment, program, or stream)"
+                className="w-full h-12 px-4 text-base bg-black border border-white/20"
+              />
+              <button
+                type="button"
+                disabled={busy || controlsLocked || !customTitleText.trim()}
+                onClick={() => void applyCustomTitle()}
+                className="w-full min-h-[48px] bg-[#0055cc] text-white text-[10px] font-black uppercase touch-manipulation disabled:opacity-50"
+              >
+                Push custom title
+              </button>
+            </div>
+            <NasGraphicsPicker
+              title="Title bar logo (optional)"
+              description="Pick from NAS graphics/ (same folder as Live Stream Data). Works with presets or custom titles; square or wide logos scale to fit."
+              graphics={liveDataGraphics}
+              selectedRelPath={view?.titleBarLogoNasPath ?? null}
+              previewImageUrl={view?.titleBarLogoUrl ?? null}
+              busy={busy}
+              disabled={controlsLocked}
+              onSelect={(relPath) => void setTitleLogo(relPath)}
+              onClear={() => void clearTitleLogo()}
+            />
+          </section>
+        ) : null}
+
         {tab === "talent" ? (
           <section className="space-y-3">
             <h2 className="text-[10px] font-black uppercase tracking-[0.25em] text-white/70 flex items-center gap-2">
@@ -809,7 +1076,9 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
                   className={cn(
                     "min-h-[52px] px-3 py-3 text-left text-[11px] font-black uppercase tracking-wide border touch-manipulation transition-colors disabled:opacity-50",
                     view?.talentPresetId === t.id
-                      ? "border-[#0055cc] bg-[#0055cc]/25 text-white"
+                      ? t.id === "none"
+                        ? "border-white/40 bg-white/10 text-white/80"
+                        : "border-[#0055cc] bg-[#0055cc]/25 text-white"
                       : "border-white/15 hover:bg-white/5 text-white/90",
                   )}
                 >
@@ -839,6 +1108,94 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
                 Push custom tag
               </button>
             </div>
+          </section>
+        ) : null}
+
+        {tab === "liveData" ? (
+          <section className="space-y-4">
+            <h2 className="text-[10px] font-black uppercase tracking-[0.25em] text-white/70 flex items-center gap-2">
+              <Activity className="size-4" />
+              Live stream data — on-air widget
+            </h2>
+            <p className="text-xs text-white/50">
+              Pick up to three Markets Now instruments to cycle in the LIVE
+              STREAM DATA widget (desktop, top-left). Leave empty for automatic
+              rotation from headlines and BTC/ETH/SOL. Changes apply on air
+              within seconds.
+            </p>
+
+            <div className="border border-white/10 p-4 bg-black/40 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[10px] font-bold uppercase text-white/50">
+                  Selected ({selectedLiveDataAssetIds.length}/3)
+                </p>
+                <button
+                  type="button"
+                  disabled={busy || controlsLocked || !selectedLiveDataAssetIds.length}
+                  onClick={() => void clearLiveDataAssets()}
+                  className="min-h-[44px] px-3 text-[9px] font-black uppercase border border-white/20 touch-manipulation disabled:opacity-40"
+                >
+                  Clear · use auto
+                </button>
+              </div>
+              {selectedLiveDataAssetIds.length ? (
+                <div className="flex flex-wrap gap-2">
+                  {selectedLiveDataAssetIds.map((id) => (
+                    <span
+                      key={id}
+                      className="px-3 py-2 text-[10px] font-black uppercase bg-[#0055cc]/30 border border-[#5eb3ff]/50"
+                    >
+                      {assetCatalog.find((a) => a.id === id)?.label ?? id}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-white/40">No producer override — auto mode.</p>
+              )}
+            </div>
+
+            {Array.from(assetCatalogByCategory.entries()).map(([catId, items]) => (
+              <div key={catId} className="space-y-2">
+                <p className="text-[9px] font-black uppercase tracking-widest text-[#5eb3ff]">
+                  {items[0]?.categoryLabel ?? catId}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {items.map((item) => {
+                    const selected = selectedLiveDataAssetIds.includes(item.id);
+                    const atMax =
+                      !selected && selectedLiveDataAssetIds.length >= 3;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        disabled={busy || controlsLocked || atMax}
+                        onClick={() => void toggleLiveDataAsset(item.id)}
+                        className={cn(
+                          "min-h-[44px] px-3 py-2 text-left text-[10px] font-black uppercase border touch-manipulation transition-colors disabled:opacity-40",
+                          selected
+                            ? "border-[#0055cc] bg-[#0055cc]/25 text-white"
+                            : "border-white/15 hover:bg-white/5 text-white/85",
+                        )}
+                      >
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+
+            <NasGraphicsPicker
+              title="Marketing logo (optional)"
+              description="PNG/SVG/WebP from NAS graphics/. Any aspect ratio scales to fit the Live Stream Data widget automatically."
+              graphics={liveDataGraphics}
+              selectedRelPath={view?.liveStreamDataMarketingNasPath ?? null}
+              previewImageUrl={view?.liveStreamDataMarketingImageUrl ?? null}
+              busy={busy}
+              disabled={controlsLocked}
+              onSelect={(relPath) => void setLiveDataMarketing(relPath)}
+              onClear={() => void clearLiveDataMarketing()}
+            />
           </section>
         ) : null}
 

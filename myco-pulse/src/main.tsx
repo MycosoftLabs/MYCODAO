@@ -27,3 +27,5 @@ createRoot(document.getElementById('root')!).render(
     </PulseErrorBoundary>
   </StrictMode>,
 );
+
+document.getElementById('blocks-boot')?.remove();

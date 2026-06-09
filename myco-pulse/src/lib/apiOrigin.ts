@@ -9,10 +9,11 @@ export function pulseApiOrigin(): string {
   if (envOrigin?.trim()) return envOrigin.trim().replace(/\/$/, "");
 
   if (typeof window !== "undefined") {
-    const { protocol, hostname, port } = window.location;
-    // Vite pulse dev server — Next API runs on 3004 by default
+    const { port } = window.location;
+    // Vite dev (:3000) — use same-origin /api (proxied to Next :3004).
+    // Cross-port fetches break talent/program on LAN phones (CORS + firewall).
     if (port === "3000") {
-      return `${protocol}//${hostname}:3004`;
+      return "";
     }
   }
 

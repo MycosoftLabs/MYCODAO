@@ -3,8 +3,13 @@
   "updatedBy": "seed",
   "activeTalentPresetId": "morgan-rockwell",
   "customTalent": null,
+  "activeTitlePresetId": "blocks-live",
+  "customTitleText": null,
+  "customTitleLogoNasPath": null,
   "programMode": "schedule",
   "activeProgramPresetId": null,
   "programOverride": null,
-  "activeGraphicNasPath": null
+  "activeGraphicNasPath": null,
+  "liveStreamDataAssetIds": [],
+  "liveStreamDataMarketingNasPath": null
 }

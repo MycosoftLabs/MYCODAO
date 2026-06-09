@@ -5,6 +5,7 @@ import { cn } from '../lib/utils';
 import { mycodaoWhiteLogo } from '../lib/brandLogos';
 import { type PulseTicker } from '../lib/pulseApi';
 import {
+  broadcastLinesMissingSummaries,
   type BroadcastNewsLine,
   type StudioMarketIndex,
 } from '../data/studioPresets';
@@ -25,10 +26,13 @@ import {
   pickNextAcquisitionIndex,
   type AcquisitionQuote,
 } from '../lib/liveStreamAcquisition';
+import { buildLiveStreamDataQuotes } from '../lib/liveStreamData';
+import { useNewsProducer } from '../hooks/useNewsProducer';
+import { pulseApiUrl } from '../lib/apiOrigin';
 import {
   MARKETS_CATEGORY_ROTATE_MS,
-  MARKETS_NOW_CATEGORIES,
   buildMarketsNowCategorySets,
+  isMarketsNowSectionRow,
   pickNextCategoryIndex,
   seedMarketsNowCategorySets,
   type MarketsNowCategorySet,
@@ -38,9 +42,14 @@ import {
   NEWS_BUMPER_ROW_HEIGHT,
   NEWS_BUMPER_TOTAL_HEIGHT,
   NEWS_MARKETS_RAIL_WIDTH,
+  NEWS_MOBILE_BUMPER_SEPARATOR_HEIGHT,
   NEWS_TICKER_HEIGHT,
 } from '../lib/newsStudioLayout';
+import { MarketsNowMobileRail } from './MarketsNowMobileRail';
+import { FloatingNewsRail } from './FloatingNewsRail';
 import { ProducerTalentBar } from './ProducerTalentBar';
+import { ProducerTitleBar } from './ProducerTitleBar';
+import { LiveStreamMarketingLogo } from './LiveStreamMarketingLogo';
 import {
   getMajorMarketSessions,
   MARKET_ZONE_ROTATE_MS,
@@ -130,13 +139,27 @@ function MarketZonePanel({ session }: { session: MarketSessionState | null }) {
   );
 }
 
-function LiveStreamAcquisitionPanel({ quote }: { quote: AcquisitionQuote }) {
+function LiveStreamAcquisitionPanel({
+  quote,
+  marketingImageUrl,
+}: {
+  quote: AcquisitionQuote;
+  marketingImageUrl?: string | null;
+}) {
+  const marketingSrc = marketingImageUrl
+    ? marketingImageUrl.startsWith('http')
+      ? marketingImageUrl
+      : pulseApiUrl(marketingImageUrl)
+    : null;
+
   return (
-    <div className="bg-black/80 border border-white/10 px-3 py-2 min-w-[200px] overflow-hidden">
-      <div className="flex justify-between text-[7px] font-bold text-white/45 uppercase tracking-widest mb-1">
-        <span>Source</span>
-        <span className="text-[#5eb3ff]">PULSE_ORACLE_01</span>
-      </div>
+    <div className="bg-black/80 border border-white/10 w-[200px] shrink-0 overflow-hidden flex flex-col">
+      {marketingSrc ? (
+        <div className="w-full shrink-0 border-b border-white/10 bg-black/60">
+          <LiveStreamMarketingLogo src={marketingSrc} variant="air" />
+        </div>
+      ) : null}
+      <div className="px-3 py-2 shrink-0">
       <div className="relative h-7 overflow-hidden">
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
@@ -162,20 +185,22 @@ function LiveStreamAcquisitionPanel({ quote }: { quote: AcquisitionQuote }) {
       <p className="text-[7px] font-bold text-white/35 uppercase tracking-widest mt-1">
         {quote.symbol} · {quote.change}
       </p>
+      </div>
     </div>
   );
 }
 
-function stackLineOpacity(index: number, activeIndex: number): number {
-  const dist = Math.abs(index - activeIndex);
-  if (dist === 0) return 1;
-  if (dist === 1) return 0.78;
-  if (dist === 2) return 0.65;
-  if (dist === 3) return 0.52;
-  return 0.42;
-}
-
 function MarketsNowRow({ row }: { row: StudioMarketIndex }) {
+  if (isMarketsNowSectionRow(row)) {
+    return (
+      <div className="py-2 border-b border-white/10 last:border-0 min-h-[28px]">
+        <p className="text-[8px] font-black text-[#5eb3ff] uppercase tracking-[0.22em]">
+          {row.name}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="py-1.5 border-b border-white/5 last:border-0 min-h-[34px]">
       <span className="text-[7px] font-bold text-white/45 uppercase tracking-widest block mb-0.5 truncate">
@@ -292,13 +317,13 @@ function HeadlineVerticalTicker({ lines, activeIndex }: { lines: BroadcastNewsLi
       <AnimatePresence mode="popLayout" initial={false}>
         <motion.p
           key={`${line.id}-${activeIndex}`}
-          className="absolute inset-0 flex items-center px-5 text-[16px] sm:text-[17px] font-black text-[#0055cc] uppercase tracking-wide leading-tight"
+          className="absolute inset-0 flex items-center px-2 sm:px-4 md:px-5 text-[9px] sm:text-[11px] md:text-[16px] font-black text-[#0055cc] uppercase tracking-wide leading-[1.15] md:leading-tight"
           initial={{ y: '100%', opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: '-100%', opacity: 0 }}
           transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
         >
-          <span className="line-clamp-2">{line.headline}</span>
+          <span className="line-clamp-3 md:line-clamp-2">{line.headline}</span>
         </motion.p>
       </AnimatePresence>
     </div>
@@ -328,9 +353,14 @@ function hydrateFromBundle(bundle: ReturnType<typeof getCachedPulseNewsBundle>) 
 interface CNBCNewsWidgetProps {
   /** When true, main stage is transparent so NewsLiveStage video shows through. */
   overlayMode?: boolean;
+  /** Phone: video band on top; glass reel fills space above bottom bumper. */
+  mobileStacked?: boolean;
 }
 
-export const CNBCNewsWidget = ({ overlayMode = false }: CNBCNewsWidgetProps) => {
+export const CNBCNewsWidget = ({
+  overlayMode = false,
+  mobileStacked = false,
+}: CNBCNewsWidgetProps) => {
   const initial = hydrateFromBundle(getCachedPulseNewsBundle());
   const [newsLines, setNewsLines] = useState<BroadcastNewsLine[]>(initial.newsLines);
   const [marketIndices, setMarketIndices] = useState<StudioMarketIndex[]>(initial.marketIndices);
@@ -342,6 +372,7 @@ export const CNBCNewsWidget = ({ overlayMode = false }: CNBCNewsWidgetProps) => 
   const [timezoneIndex, setTimezoneIndex] = useState(0);
   const [acquisitionIndex, setAcquisitionIndex] = useState(0);
   const [marketsCategoryIndex, setMarketsCategoryIndex] = useState(0);
+  const { liveStreamData } = useNewsProducer();
 
   const bumperZoneClocks = useMemo(() => buildBumperZoneClocks(), [clockTick]);
 
@@ -351,7 +382,17 @@ export const CNBCNewsWidget = ({ overlayMode = false }: CNBCNewsWidgetProps) => 
   useEffect(() => {
     const applyBundle = (bundle: ReturnType<typeof getCachedPulseNewsBundle>) => {
       if (!bundle) return;
-      setNewsLines((prev) => (bundle.newsLines.length ? bundle.newsLines : prev));
+      setNewsLines((prev) => {
+        if (!bundle.newsLines.length) return prev;
+        if (
+          broadcastLinesMissingSummaries(bundle.newsLines) &&
+          prev.length &&
+          !broadcastLinesMissingSummaries(prev)
+        ) {
+          return prev;
+        }
+        return bundle.newsLines;
+      });
       setTickers((prev) => (bundle.tickers.length ? bundle.tickers : prev));
       setMarketIndices((prev) => (bundle.marketIndices.length ? bundle.marketIndices : prev));
     };
@@ -404,24 +445,60 @@ export const CNBCNewsWidget = ({ overlayMode = false }: CNBCNewsWidgetProps) => 
     [floatingNewsPages, newsPageIndex]
   );
 
-  const acquisitionPool = useMemo(
+  const autoAcquisitionPool = useMemo(
     () => buildAcquisitionPool(tickers, currentPageLines, activeTabIndex),
     [tickers, currentPageLines, activeTabIndex]
   );
 
-  const acquisitionQuote = acquisitionPool[acquisitionIndex] ?? acquisitionPool[0] ?? null;
+  const producerQuotes = useMemo(
+    () =>
+      buildLiveStreamDataQuotes(
+        liveStreamData.assetIds,
+        tickers,
+        marketIndices,
+      ),
+    [liveStreamData.assetKey, tickers, marketIndices],
+  );
 
+  const producerMode = producerQuotes.length > 0;
+  const producerPoolLength = producerQuotes.length;
+  const activeAcquisitionPool = producerMode ? producerQuotes : autoAcquisitionPool;
+
+  const acquisitionQuote =
+    activeAcquisitionPool[acquisitionIndex] ?? activeAcquisitionPool[0] ?? null;
+
+  // Producer picks: reset only when selection changes — not on news reel tab advances
   useEffect(() => {
+    if (!producerMode) return;
     setAcquisitionIndex(0);
-  }, [acquisitionPool.length, activeTabIndex]);
+  }, [producerMode, liveStreamData.assetKey, producerPoolLength]);
 
+  // Auto mode: reset when headline pool or active headline changes
   useEffect(() => {
-    if (acquisitionPool.length <= 1) return;
+    if (producerMode) return;
+    setAcquisitionIndex(0);
+  }, [producerMode, autoAcquisitionPool.length, activeTabIndex]);
+
+  // Producer: steady sequential cycle through all selected assets (5s each)
+  useEffect(() => {
+    if (!producerMode || producerPoolLength <= 1) return;
+    const len = producerPoolLength;
     const t = setInterval(() => {
-      setAcquisitionIndex((prev) => pickNextAcquisitionIndex(acquisitionPool, prev));
+      setAcquisitionIndex((prev) => (prev + 1) % len);
     }, ACQUISITION_ROTATE_MS);
     return () => clearInterval(t);
-  }, [acquisitionPool]);
+  }, [producerMode, liveStreamData.assetKey, producerPoolLength]);
+
+  // Auto: headline-driven pool with random next pick
+  useEffect(() => {
+    if (producerMode || autoAcquisitionPool.length <= 1) return;
+    const t = setInterval(() => {
+      setAcquisitionIndex((prev) =>
+        pickNextAcquisitionIndex(autoAcquisitionPool, prev),
+      );
+    }, ACQUISITION_ROTATE_MS);
+    return () => clearInterval(t);
+  }, [producerMode, autoAcquisitionPool]);
 
   useEffect(() => {
     setActiveTabIndex(0);
@@ -471,7 +548,7 @@ export const CNBCNewsWidget = ({ overlayMode = false }: CNBCNewsWidgetProps) => 
   marketsCategoryRef.current = marketsCategoryIndex;
 
   useEffect(() => {
-    const tabCount = MARKETS_NOW_CATEGORIES.length;
+    const tabCount = marketsCategorySets.length;
     if (tabCount <= 1) return;
 
     const t = setInterval(() => {
@@ -480,7 +557,7 @@ export const CNBCNewsWidget = ({ overlayMode = false }: CNBCNewsWidgetProps) => 
     }, MARKETS_CATEGORY_ROTATE_MS);
 
     return () => clearInterval(t);
-  }, []);
+  }, [marketsCategorySets.length]);
 
   const marketsRailWidth = NEWS_MARKETS_RAIL_WIDTH;
   const bumperHeight = NEWS_BUMPER_TOTAL_HEIGHT;
@@ -493,15 +570,31 @@ export const CNBCNewsWidget = ({ overlayMode = false }: CNBCNewsWidgetProps) => 
       )}
     >
       <div
-        className="relative flex-1 min-h-0 overflow-hidden grid z-10"
-        style={{ gridTemplateColumns: `1fr ${marketsRailWidth}` }}
+        className={cn(
+          "relative flex-1 min-h-0 overflow-hidden z-10",
+          mobileStacked
+            ? "flex flex-row"
+            : "grid grid-cols-1 md:[grid-template-columns:1fr_var(--news-markets-rail-width)]",
+        )}
+        style={{ ["--news-markets-rail-width" as string]: marketsRailWidth }}
       >
         <div
           className={cn(
-            "relative min-w-0 overflow-hidden",
-            overlayMode ? "bg-transparent" : "bg-black",
+            "relative min-w-0 min-h-0",
+            mobileStacked
+              ? "flex flex-1 flex-col overflow-hidden bg-[#0a0a0a]"
+              : "flex flex-col overflow-hidden",
+            !mobileStacked && (overlayMode ? "bg-transparent" : "bg-black"),
           )}
         >
+          {!mobileStacked && overlayMode ? <ProducerTitleBar /> : null}
+
+          <div
+            className={cn(
+              "relative min-w-0 min-h-0 overflow-hidden",
+              mobileStacked ? "flex flex-1 flex-col" : "flex-1",
+            )}
+          >
           {!overlayMode ? (
             <>
               <div
@@ -514,18 +607,18 @@ export const CNBCNewsWidget = ({ overlayMode = false }: CNBCNewsWidgetProps) => 
               />
               <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,#000_70%)] pointer-events-none" />
             </>
-          ) : (
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_40%,#000_85%)] pointer-events-none opacity-80" />
-          )}
+          ) : !mobileStacked ? (
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_55%,#000_90%)] pointer-events-none opacity-25 md:opacity-35" />
+          ) : null}
 
           <motion.div
-            className="absolute top-5 left-5 z-20 flex flex-col gap-0"
+            className="absolute top-[calc(1.25rem+10px)] left-5 z-20 hidden md:flex flex-col gap-0 pointer-events-auto"
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.45 }}
           >
             <div className="bg-[#0055cc] px-3 py-0.5 text-[9px] font-black text-white uppercase tracking-[0.2em]">
-              LIVE STREAM ACQUISITION
+              LIVE STREAM DATA
             </div>
             <LiveStreamAcquisitionPanel
               quote={
@@ -537,65 +630,31 @@ export const CNBCNewsWidget = ({ overlayMode = false }: CNBCNewsWidgetProps) => 
                   up: true,
                 }
               }
+              marketingImageUrl={liveStreamData.marketingImageUrl}
             />
           </motion.div>
 
-          {/* Floating news — vertical stack; advances page only after every headline on page is highlighted */}
-          <div className="absolute inset-y-0 top-0 right-0 z-30 flex flex-col justify-start pt-12 pr-7 pb-20 pl-2 w-[min(320px,38%)] pointer-events-none">
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.div
-                key={newsPageIndex}
-                className="flex flex-col justify-start gap-3.5 min-h-0"
-                initial={{ opacity: 0, x: 12 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -12 }}
-                transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-              >
-              {currentPageLines.map((line, i) => {
-                const isActive = i === activeTabIndex;
-                const opacity = stackLineOpacity(i, activeTabIndex);
+          <FloatingNewsRail
+            lines={currentPageLines}
+            activeIndex={activeTabIndex}
+            pageKey={newsPageIndex}
+          />
 
-                return (
-                  <div key={line.id} className="flex items-start shrink-0">
-                    {isActive ? (
-                      <motion.div
-                        layout
-                        initial={false}
-                        className="w-full bg-white border-l-[5px] border-l-[#0055cc] pl-4 pr-4 py-3.5 shadow-[0_10px_32px_rgba(0,0,0,0.65)]"
-                        transition={{ duration: 0.35 }}
-                      >
-                        <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#0055cc] mb-2">
-                          {line.label}
-                        </p>
-                        <p className="text-[13px] sm:text-sm font-black uppercase leading-[1.4] text-black line-clamp-3">
-                          {line.headline}
-                        </p>
-                      </motion.div>
-                    ) : (
-                      <motion.p
-                        layout
-                        className="w-full text-[10px] sm:text-[11px] font-bold uppercase tracking-wide leading-[1.55] [text-shadow:0_1px_3px_rgba(0,0,0,0.95)] line-clamp-2 py-0.5"
-                        style={{ opacity }}
-                        animate={{ opacity }}
-                        transition={{ duration: 0.35 }}
-                      >
-                        <span className="text-[#6eb5ff]/85">{line.label}:</span>{' '}
-                        <span className="text-white/50">{line.headline}</span>
-                      </motion.p>
-                    )}
-                  </div>
-                );
-              })}
-              </motion.div>
-            </AnimatePresence>
+          {overlayMode && !mobileStacked ? <ProducerTalentBar /> : null}
           </div>
-
-          {overlayMode ? <ProducerTalentBar /> : null}
         </div>
 
-        {/* MARKETS NOW — scroll list in middle row; Market Zone pinned with opaque footer plate */}
+        {mobileStacked ? (
+          <MarketsNowMobileRail
+            sets={marketsCategorySets}
+            activeIndex={marketsCategoryIndex}
+            marketZoneSession={marketZoneSession}
+          />
+        ) : null}
+
+        {/* MARKETS NOW — desktop rail only; hidden on phone */}
         <div
-          className="h-full min-h-0 min-w-0 border-l border-white/10 relative z-30 grid overflow-hidden bg-[#0a1128]"
+          className="hidden md:grid h-full min-h-0 min-w-0 border-l border-white/10 relative z-30 overflow-hidden bg-[#0a1128]"
           style={{ gridTemplateRows: 'auto minmax(0, 1fr) auto' }}
         >
           <div className="px-4 pt-4 pb-3 border-b border-white/10 bg-[#0a1128]">
@@ -619,16 +678,28 @@ export const CNBCNewsWidget = ({ overlayMode = false }: CNBCNewsWidgetProps) => 
         </div>
       </div>
 
+      {mobileStacked ? (
+        <div
+          className="shrink-0 w-full bg-white/40"
+          style={{ height: NEWS_MOBILE_BUMPER_SEPARATOR_HEIGHT }}
+          role="separator"
+          aria-label="News reel divider"
+        />
+      ) : null}
+
       {/* Bottom bumper + structured crawl ticker — fixed footprint, never overlays Markets Now */}
       <div
-        className="shrink-0 flex flex-col relative z-50 bg-black border-t border-white/10"
+        className={cn(
+          "shrink-0 flex flex-col relative z-50 bg-black",
+          mobileStacked ? "border-t-0" : "border-t border-white/10",
+        )}
         style={{ minHeight: bumperHeight }}
       >
         <div
           className="flex border-t-2 border-white/20"
           style={{ height: NEWS_BUMPER_ROW_HEIGHT }}
         >
-          <div className="shrink-0 w-[184px] h-full bg-[#0055cc] flex items-center px-2">
+          <div className="shrink-0 w-[7.5rem] sm:w-[184px] h-full bg-[#0055cc] flex items-center px-1.5 sm:px-2">
             <div className="flex-1 flex items-center justify-center h-full min-w-0">
               <TimezoneVerticalTicker zones={bumperZoneClocks} activeIndex={timezoneIndex} />
             </div>
@@ -654,7 +725,7 @@ export const CNBCNewsWidget = ({ overlayMode = false }: CNBCNewsWidgetProps) => 
         <PulseMarqueeTicker
           segments={tickerSegments}
           label="LIVE"
-          className="h-[26px] bg-[#0a0a0a]"
+          className="h-[26px] bg-[#0a0a0a] [&_.pulse-ticker-crawl]:text-[7px] sm:[&_.pulse-ticker-crawl]:text-[9px]"
         />
       </div>
     </div>

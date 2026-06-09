@@ -8,6 +8,8 @@ const basePath =
     : "";
 
 const nextConfig = {
+  /** Avoid 308 /blocks/ → /blocks on mobile browsers (Chrome Android). */
+  skipTrailingSlashRedirect: true,
   reactStrictMode: true,
   /** Empty for `https://blocks.mycodao.com/` at root. Set NEXT_PUBLIC_BASE_PATH only if serving under a subpath. */
   basePath,

@@ -117,9 +117,13 @@ export function withNewsPlayerParams(embedBase: string): string {
     url.searchParams.set("modestbranding", "1");
     url.searchParams.set("rel", "0");
     url.searchParams.set("iv_load_policy", "3");
+    url.searchParams.set("cc_load_policy", "0");
     url.searchParams.set("disablekb", "1");
     url.searchParams.set("playsinline", "1");
     url.searchParams.set("fs", "0");
+    url.searchParams.set("enablejsapi", "0");
+    url.searchParams.set("showinfo", "0");
+    url.searchParams.set("autohide", "1");
     if (
       url.searchParams.has("list") ||
       url.pathname.endsWith("/videoseries")
@@ -129,7 +133,7 @@ export function withNewsPlayerParams(embedBase: string): string {
     return url.toString();
   } catch {
     const sep = embedBase.includes("?") ? "&" : "?";
-    return `${embedBase}${sep}autoplay=1&mute=0&controls=0&modestbranding=1&rel=0&iv_load_policy=3&disablekb=1&playsinline=1&fs=0`;
+    return `${embedBase}${sep}autoplay=1&mute=0&controls=0&modestbranding=1&rel=0&iv_load_policy=3&cc_load_policy=0&disablekb=1&playsinline=1&fs=0&enablejsapi=0`;
   }
 }
 

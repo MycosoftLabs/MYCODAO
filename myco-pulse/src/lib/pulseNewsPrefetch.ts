@@ -10,6 +10,10 @@
 
 import {
 
+  broadcastLinesMissingSummaries,
+
+  enrichBroadcastLinesWithSummaries,
+
   mergeNewsWithStudio,
 
   pulseNewsToBroadcastLines,
@@ -117,7 +121,9 @@ function bundleFromSnapshot(): PulseNewsBundle | null {
     tickers: snap.tickers,
     marketIndices: snap.marketIndices,
     tickersReady: true,
-    bundleReady: (snap.newsLines?.length ?? 0) > 0,
+    bundleReady:
+      (snap.newsLines?.length ?? 0) > 0 &&
+      !broadcastLinesMissingSummaries(snap.newsLines ?? []),
     fetchedAt: snap.savedAt,
   };
 }
@@ -314,12 +320,19 @@ async function loadBundle(): Promise<PulseNewsBundle> {
     .then((raw) => ensureTickers(raw, base.tickers))
     .catch(() => ensureTickers([], base.tickers));
 
-  const newsPromise = fetchPulseNews();
+  const needsSummaryRefresh = broadcastLinesMissingSummaries(
+    base.newsLines.length ? base.newsLines : cache?.newsLines ?? [],
+  );
+  const newsPromise = fetchPulseNews(needsSummaryRefresh);
 
   const cnbcPromise = fetchPulseCnbcMarkets();
 
   void newsPromise.then((newsRows) => {
-    const lines = pulseNewsToBroadcastLines(mergeNewsWithStudio(newsRows));
+    const merged = mergeNewsWithStudio(newsRows);
+    const lines = enrichBroadcastLinesWithSummaries(
+      pulseNewsToBroadcastLines(merged),
+      merged,
+    );
     if (!lines.length) return;
     const partial: PulseNewsBundle = {
       ...(cache ?? base),
@@ -359,7 +372,10 @@ async function loadBundle(): Promise<PulseNewsBundle> {
 
     ...mergeBundleMarkets(withTickers, tickers, cnbcRows),
 
-    newsLines: pulseNewsToBroadcastLines(merged),
+    newsLines: enrichBroadcastLinesWithSummaries(
+      pulseNewsToBroadcastLines(merged),
+      merged,
+    ),
 
     bundleReady: true,
 
@@ -386,8 +402,10 @@ export function prefetchPulseNewsBundle(): Promise<PulseNewsBundle> {
 
 
   const newsFresh =
-
-    cache?.bundleReady && cache && Date.now() - cache.fetchedAt < NEWS_TTL_MS;
+    cache?.bundleReady &&
+    cache &&
+    Date.now() - cache.fetchedAt < NEWS_TTL_MS &&
+    !broadcastLinesMissingSummaries(cache.newsLines);
 
   if (newsFresh && cache) return Promise.resolve(cache);
 
@@ -451,7 +469,9 @@ export function prefetchPulseNewsBundle(): Promise<PulseNewsBundle> {
 
 export async function refreshPulseNewsBundle(): Promise<PulseNewsBundle> {
   initPulseMarketsFromStorage();
-  const stickyNews = cache?.newsLines ?? bundleFromSnapshot()?.newsLines ?? [];
+  const stickyNews = (cache?.newsLines ?? bundleFromSnapshot()?.newsLines ?? []).filter(
+    (line) => line.summary?.trim(),
+  );
   invalidatePulseNewsBundle();
   if (stickyNews.length) {
     const base =

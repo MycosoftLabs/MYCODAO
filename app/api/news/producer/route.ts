@@ -3,7 +3,9 @@ import {
   applyProducerPatch,
   buildProducerPublicView,
   readProducerPresets,
+  type ProducerTitleContext,
 } from "@/lib/server/news-producer";
+import { resolveNewsProgramNow } from "@/lib/server/news-channel-program";
 import {
   producerAuthErrorMessage,
   verifyProducerAuth,
@@ -11,30 +13,54 @@ import {
 
 export const dynamic = "force-dynamic";
 
+function producerTitleContext(): ProducerTitleContext {
+  try {
+    const now = resolveNewsProgramNow();
+    return {
+      programSlotId: now.slotId || null,
+      programLabel: now.label || null,
+    };
+  } catch {
+    return {};
+  }
+}
+
+/** Full producer payload — GET and PATCH must return the same shape (includes presets). */
+function buildProducerApiPayload(ctx?: ProducerTitleContext) {
+  const view = buildProducerPublicView(ctx ?? producerTitleContext());
+  const presets = readProducerPresets();
+  return {
+    ...view,
+    presets: {
+      talent: presets.talent.map((t) => ({
+        id: t.id,
+        label: t.label,
+      })),
+      program: presets.program.map((p) => ({
+        id: p.id,
+        label: p.label,
+        type: p.type,
+        hasSource: Boolean(
+          p.videoUrl?.trim() ||
+            p.videoId?.trim() ||
+            p.channelId?.trim() ||
+            p.nasPath?.trim(),
+        ),
+      })),
+      title: presets.title.map((t) => ({
+        id: t.id,
+        label: t.label,
+        logoNasPath: t.logoNasPath?.trim() || null,
+      })),
+    },
+  };
+}
+
 export async function GET() {
   try {
-    const view = buildProducerPublicView();
-    const presets = readProducerPresets();
-    return NextResponse.json(
-      {
-        ...view,
-        presets: {
-          talent: presets.talent.map((t) => ({
-            id: t.id,
-            label: t.label,
-          })),
-          program: presets.program.map((p) => ({
-            id: p.id,
-            label: p.label,
-            type: p.type,
-            hasSource: Boolean(p.videoUrl?.trim() || p.videoId?.trim() || p.channelId?.trim()),
-          })),
-        },
-      },
-      {
-        headers: { "Cache-Control": "no-store, max-age=0" },
-      },
-    );
+    return NextResponse.json(buildProducerApiPayload(), {
+      headers: { "Cache-Control": "no-store, max-age=0" },
+    });
   } catch (e) {
     console.error("news/producer GET:", e);
     return NextResponse.json(
@@ -77,6 +103,24 @@ export async function PATCH(req: Request) {
                 roles: string[];
                 creditLine?: string;
               }[])
+            : undefined,
+      activeTitlePresetId:
+        body.activeTitlePresetId === null
+          ? null
+          : typeof body.activeTitlePresetId === "string"
+            ? body.activeTitlePresetId
+            : undefined,
+      customTitleText:
+        body.customTitleText === null
+          ? null
+          : typeof body.customTitleText === "string"
+            ? body.customTitleText
+            : undefined,
+      customTitleLogoNasPath:
+        body.customTitleLogoNasPath === null
+          ? null
+          : typeof body.customTitleLogoNasPath === "string"
+            ? body.customTitleLogoNasPath
             : undefined,
       programMode:
         typeof body.programMode === "string"
@@ -127,12 +171,25 @@ export async function PATCH(req: Request) {
             ? body.activeGraphicNasPath
             : undefined,
       clearGraphic: body.clearGraphic === true,
+      liveStreamDataAssetIds: Array.isArray(body.liveStreamDataAssetIds)
+        ? (body.liveStreamDataAssetIds as string[])
+        : body.liveStreamDataAssetIds === null
+          ? []
+          : undefined,
+      liveStreamDataMarketingNasPath:
+        body.liveStreamDataMarketingNasPath === null
+          ? null
+          : typeof body.liveStreamDataMarketingNasPath === "string"
+            ? body.liveStreamDataMarketingNasPath
+            : undefined,
+      clearLiveStreamDataMarketing: body.clearLiveStreamDataMarketing === true,
+      clearTitleBarLogo: body.clearTitleBarLogo === true,
       returnToLive: body.returnToLive === true,
       updatedBy:
         typeof body.updatedBy === "string" ? body.updatedBy : auth.email,
     });
 
-    const view = buildProducerPublicView();
+    const view = buildProducerApiPayload();
     return NextResponse.json({ ok: true, state, view });
   } catch (e) {
     console.error("news/producer PATCH:", e);

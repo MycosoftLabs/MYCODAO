@@ -1,6 +1,11 @@
 {
   "talent": [
     {
+      "id": "none",
+      "label": "None",
+      "lines": []
+    },
+    {
       "id": "morgan-rockwell",
       "label": "Morgan Rockwell",
       "lines": [
@@ -50,6 +55,81 @@
       ]
     }
   ],
+  "title": [
+    {
+      "id": "blocks-live",
+      "label": "BLOCKS Live",
+      "title": "BLOCKS NEWS · LIVE"
+    },
+    {
+      "id": "mycodao-morning",
+      "label": "MycoDAO Morning",
+      "title": "MYCODAO MORNING BRIEF"
+    },
+    {
+      "id": "markets-now",
+      "label": "Markets Now",
+      "title": "MARKETS NOW · BLOCKS"
+    },
+    {
+      "id": "fungi-desk",
+      "label": "Fungi Desk",
+      "title": "FUNGI DESK · MYCOSOFT"
+    },
+    {
+      "id": "partner-segment",
+      "label": "Partner Segment",
+      "title": "PARTNER SPOTLIGHT"
+    },
+    {
+      "id": "mycosoft-garage",
+      "label": "Mycosoft Garage",
+      "title": "MYCOSOFT GARAGE",
+      "logoNasPath": "graphics/shows/mycosoft-garage.png"
+    },
+    {
+      "id": "decentralized",
+      "label": "Decentralized",
+      "title": "DECENTRALIZED",
+      "logoNasPath": "graphics/shows/decentralized.png"
+    },
+    {
+      "id": "crypto-corner",
+      "label": "The Crypto Corner",
+      "title": "THE CRYPTO CORNER",
+      "logoNasPath": "graphics/shows/crypto-corner.png"
+    },
+    {
+      "id": "mad-bitcoins",
+      "label": "Mad Bitcoins",
+      "title": "MAD BITCOINS",
+      "logoNasPath": "graphics/shows/mad-bitcoins.png"
+    },
+    {
+      "id": "world-crypto-network",
+      "label": "World Crypto Network",
+      "title": "WORLD CRYPTO NETWORK",
+      "logoNasPath": "graphics/shows/world-crypto-network.png"
+    },
+    {
+      "id": "blockchain-wars",
+      "label": "Blockchain Wars",
+      "title": "BLOCKCHAIN WARS",
+      "logoNasPath": "graphics/shows/blockchain-wars.png"
+    },
+    {
+      "id": "bitcoin-developers-show",
+      "label": "The Bitcoin Developers Show",
+      "title": "THE BITCOIN DEVELOPERS SHOW",
+      "logoNasPath": "graphics/shows/bitcoin-developers-show.png"
+    },
+    {
+      "id": "inscribing",
+      "label": "Inscribing",
+      "title": "INSCRIBING",
+      "logoNasPath": "graphics/shows/inscribing.png"
+    }
+  ],
   "program": [
     {
       "id": "return-live",
@@ -70,6 +150,62 @@
       "type": "bumper",
       "videoId": "",
       "videoUrl": ""
+    },
+    {
+      "id": "show-mycosoft-garage",
+      "label": "Mycosoft Garage",
+      "type": "recorded",
+      "nasPath": "shows/mycosoft-garage.mp4",
+      "titlePresetId": "mycosoft-garage"
+    },
+    {
+      "id": "show-decentralized",
+      "label": "Decentralized",
+      "type": "recorded",
+      "nasPath": "shows/decentralized.mp4",
+      "titlePresetId": "decentralized"
+    },
+    {
+      "id": "show-crypto-corner",
+      "label": "The Crypto Corner",
+      "type": "recorded",
+      "nasPath": "shows/crypto-corner.mp4",
+      "titlePresetId": "crypto-corner"
+    },
+    {
+      "id": "show-mad-bitcoins",
+      "label": "Mad Bitcoins",
+      "type": "recorded",
+      "nasPath": "shows/mad-bitcoins.mp4",
+      "titlePresetId": "mad-bitcoins"
+    },
+    {
+      "id": "show-world-crypto-network",
+      "label": "World Crypto Network",
+      "type": "recorded",
+      "nasPath": "shows/world-crypto-network.mp4",
+      "titlePresetId": "world-crypto-network"
+    },
+    {
+      "id": "show-blockchain-wars",
+      "label": "Blockchain Wars",
+      "type": "recorded",
+      "nasPath": "shows/blockchain-wars.mp4",
+      "titlePresetId": "blockchain-wars"
+    },
+    {
+      "id": "show-bitcoin-developers-show",
+      "label": "The Bitcoin Developers Show",
+      "type": "recorded",
+      "nasPath": "shows/bitcoin-developers-show.mp4",
+      "titlePresetId": "bitcoin-developers-show"
+    },
+    {
+      "id": "show-inscribing",
+      "label": "Inscribing",
+      "type": "recorded",
+      "nasPath": "shows/inscribing.mp4",
+      "titlePresetId": "inscribing"
     }
   ]
 }

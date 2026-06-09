@@ -1,6 +1,6 @@
 # BLOCKS Producer Live Go-Live — Jun 09, 2026
 
-**Status:** Complete (code) — deploy to VM 198 after push  
+**Status:** Complete — deployed VM 198 @ `c12da9e` (Jun 09, 2026)  
 **Site:** https://blocks.mycodao.com
 
 ## What shipped
@@ -22,6 +22,7 @@
 - Episodes: `GET https://blocks.mycodao.com/api/podcasts` (JSON from RSS.com `https://media.rss.com/mycopod/feed.xml`)
 - Podcast tab in Blocks UI plays enclosure URLs directly
 - No blocks-hosted `feed.xml` yet — RSS.com remains canonical
+- **Jun 09 prod check:** API returns `[]` until RSS.com feed has at least one `<item>` with enclosure (feed channel metadata is live; zero episodes published yet)
 
 ## NAS setup (before bumper/commercial slots play)
 
@@ -52,14 +53,23 @@ cd D:\Users\admin2\Desktop\MYCOSOFT\CODE\MYCODAO
 
 On VM (blue/green): `DEPLOY_DIR=/opt/mycodao bash scripts/blue-green-deploy.sh --cutover`
 
-## Verify
+## Verify (post-deploy Jun 09)
+
+| Check | Result |
+|-------|--------|
+| `GET /api/health` | `ok: true` |
+| `GET /api/news/producer` | Presets populated (talent + program) |
+| `GET /api/news/program` | YouTube live channel slot active |
+| `GET /api/news/producer/media` | NAS mounted, `totalAssets: 0` until upload |
+| `GET /api/podcasts` | `[]` until first RSS.com episode |
 
 ```powershell
-curl https://blocks.mycodao.com/api/news/producer
-curl https://blocks.mycodao.com/api/podcasts
-curl https://blocks.mycodao.com/api/news/program
-npm run test:blocks-smoke:prod
+curl.exe -s https://blocks.mycodao.com/api/news/producer
+curl.exe -s https://blocks.mycodao.com/api/podcasts
+curl.exe -s https://blocks.mycodao.com/api/news/program
 ```
+
+Hard-refresh Blocks after deploy (or purge Cloudflare) so `/blocks/` loads new `NewsBroadcastView` bundle.
 
 ## Next phase (not in this release)
 

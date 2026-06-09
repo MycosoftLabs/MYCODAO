@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3004",
+    "dev": "next dev -p 3004 -H 0.0.0.0",
+    "dev:mobile": "npm run build:pulse && next dev -p 3004 -H 0.0.0.0",
     "dev:fresh": "npm run clean && next dev -p 3004",
     "dev:pulse": "npm run build:pulse && next dev -p 3004",
     "build:pulse": "cd myco-pulse && npm run build",
