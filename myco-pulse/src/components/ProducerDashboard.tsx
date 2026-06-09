@@ -94,14 +94,15 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
   const controlsLocked = !auth.isAuthenticated || !authOk;
 
   async function runPatch(body: Record<string, unknown>) {
-    if (!auth.accessToken) {
+    const token = (await auth.getAccessToken()) ?? auth.accessToken;
+    if (!token) {
       setAuthError("Sign in with Google (authorized producer account) first");
       return;
     }
     setBusy(true);
     setAuthError(null);
     try {
-      await patch(body, { accessToken: auth.accessToken });
+      await patch(body, { accessToken: token });
       setAuthOk(true);
       await nas.reload();
     } catch (e) {

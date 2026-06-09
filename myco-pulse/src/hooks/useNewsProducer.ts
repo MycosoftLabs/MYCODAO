@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { pulseApiUrl } from "../lib/apiOrigin";
+import {
+  getValidProducerAccessToken,
+  parseProducerApiError,
+} from "../lib/producerSession";
 
 export interface BroadcastTalentLine {
   name: string;
@@ -54,36 +58,15 @@ export async function verifyProducerSession(
     return { ok: false, message: "Sign in with an authorized email first" };
   }
 
+  const fresh =
+    (await getValidProducerAccessToken())?.trim() || token.trim();
   const res = await fetch(pulseApiUrl("/api/news/producer/verify"), {
     method: "POST",
-    headers: producerAuthHeaders(token),
+    headers: producerAuthHeaders(fresh),
   });
 
   if (res.ok) return { ok: true };
-  const err = (await res.json().catch(() => ({}))) as { error?: string };
-  if (res.status === 401) {
-    return {
-      ok: false,
-      message:
-        err.error ??
-        "Not authorized — sign in with an approved Mycosoft producer email",
-    };
-  }
-  if (res.status === 503) {
-    return {
-      ok: false,
-      message: err.error ?? "Producer auth unavailable on server",
-    };
-  }
-  if (res.status === 502) {
-    return {
-      ok: false,
-      message:
-        err.error ??
-        "Could not reach Supabase to verify your session — try again",
-    };
-  }
-  return { ok: false, message: err.error ?? `verify ${res.status}` };
+  return { ok: false, message: await parseProducerApiError(res, "verify") };
 }
 
 export function useNewsProducer(options?: {
@@ -127,7 +110,10 @@ export function useNewsProducer(options?: {
   const patch = useCallback(
     async (body: Record<string, unknown>, patchOptions?: { accessToken?: string }) => {
       const token =
-        patchOptions?.accessToken?.trim() || options?.accessToken?.trim() || "";
+        patchOptions?.accessToken?.trim() ||
+        options?.accessToken?.trim() ||
+        (await getValidProducerAccessToken()) ||
+        "";
       if (!token) {
         throw new Error(
           "Sign in with an authorized producer email to change the feed",
@@ -141,15 +127,7 @@ export function useNewsProducer(options?: {
       });
 
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        const code = (err as { error?: string }).error ?? `patch ${res.status}`;
-        if (res.status === 401) {
-          throw new Error(
-            code ||
-              "Not authorized — sign in with an approved producer email",
-          );
-        }
-        throw new Error(code);
+        throw new Error(await parseProducerApiError(res, "patch"));
       }
 
       const data = (await res.json()) as { view?: NewsProducerView };

@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { resolveProducerOAuthRedirect } from "../lib/producerOAuthRedirect";
+import {
+  getValidProducerAccessToken,
+  parseProducerApiError,
+} from "../lib/producerSession";
 import { ensureSupabase, getSupabase } from "../lib/supabase";
 import { pulseApiUrl } from "../lib/apiOrigin";
 
@@ -132,7 +136,8 @@ export function useProducerAuth() {
   const verifySession = useCallback(async (): Promise<
     { ok: true } | { ok: false; message: string }
   > => {
-    if (!accessToken) {
+    const token = await getValidProducerAccessToken(setSession);
+    if (!token) {
       return {
         ok: false,
         message: "Sign in with an authorized Google account first",
@@ -141,36 +146,18 @@ export function useProducerAuth() {
 
     const res = await fetch(pulseApiUrl("/api/news/producer/verify"), {
       method: "POST",
-      headers: { Authorization: `Bearer ${accessToken}` },
+      headers: { Authorization: `Bearer ${token}` },
     });
 
     if (res.ok) return { ok: true };
 
-    const body = (await res.json().catch(() => ({}))) as { error?: string };
-    if (res.status === 401) {
-      return {
-        ok: false,
-        message:
-          body.error ??
-          "Not authorized — sign in with an approved producer Google account",
-      };
-    }
-    if (res.status === 503) {
-      return {
-        ok: false,
-        message: body.error ?? "Producer auth unavailable on server",
-      };
-    }
-    if (res.status === 502) {
-      return {
-        ok: false,
-        message:
-          body.error ??
-          "Could not reach Supabase to verify your session — try again",
-      };
-    }
-    return { ok: false, message: body.error ?? `verify ${res.status}` };
-  }, [accessToken]);
+    const message = await parseProducerApiError(res, "verify");
+    return { ok: false, message };
+  }, []);
+
+  const getAccessToken = useCallback(async () => {
+    return getValidProducerAccessToken(setSession);
+  }, []);
 
   return {
     session,
@@ -184,5 +171,6 @@ export function useProducerAuth() {
     signInWithGoogle,
     signOut,
     verifySession,
+    getAccessToken,
   };
 }

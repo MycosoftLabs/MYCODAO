@@ -89,6 +89,9 @@ const DEFAULT_PRESETS_PATH = path.join(
   "data",
   "news-producer-presets.json",
 );
+const SEED_DIR = path.join(process.cwd(), "config", "blocks-producer");
+const SEED_PRESETS_PATH = path.join(SEED_DIR, "news-producer-presets.json");
+const SEED_STATE_PATH = path.join(SEED_DIR, "news-producer-state.json");
 
 function statePath(): string {
   return (
@@ -119,7 +122,8 @@ function writeJsonFile(filePath: string, data: unknown): void {
 
 export function readProducerPresets(): NewsProducerPresets {
   const presets =
-    readJsonFile<NewsProducerPresets>(presetsPath()) ?? {
+    readJsonFile<NewsProducerPresets>(presetsPath()) ??
+    readJsonFile<NewsProducerPresets>(SEED_PRESETS_PATH) ?? {
       talent: [],
       program: [],
     };
@@ -139,7 +143,10 @@ export function readProducerState(): NewsProducerState {
     programOverride: null,
     activeGraphicNasPath: null,
   };
-  const raw = readJsonFile<NewsProducerState>(statePath()) ?? fallback;
+  const raw =
+    readJsonFile<NewsProducerState>(statePath()) ??
+    readJsonFile<NewsProducerState>(SEED_STATE_PATH) ??
+    fallback;
   return {
     ...fallback,
     ...raw,

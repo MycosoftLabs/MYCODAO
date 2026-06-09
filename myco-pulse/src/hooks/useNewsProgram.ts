@@ -15,6 +15,8 @@ export interface NewsProgramNow {
   scheduleVersion: string;
   playbackActive?: boolean;
   bumperUrl?: string | null;
+  loopPlayback?: boolean;
+  autoReturnOnEnd?: boolean;
 }
 
 const POLL_MS = 5_000;
@@ -22,6 +24,9 @@ const POLL_MS = 5_000;
 export function useNewsProgram() {
   const [program, setProgram] = useState<NewsProgramNow | null>(null);
   const [loading, setLoading] = useState(true);
+  const [reloadToken, setReloadToken] = useState(0);
+
+  const reload = () => setReloadToken((n) => n + 1);
 
   useEffect(() => {
     let cancelled = false;
@@ -47,7 +52,16 @@ export function useNewsProgram() {
       cancelled = true;
       window.clearInterval(t);
     };
-  }, []);
+  }, [reloadToken]);
+
+  useEffect(() => {
+    const next = program?.nextChangeAt;
+    if (!next) return;
+    const ms = new Date(next).getTime() - Date.now();
+    if (ms <= 0 || ms > 24 * 60 * 60_000) return;
+    const t = window.setTimeout(() => reload(), ms + 250);
+    return () => window.clearTimeout(t);
+  }, [program?.nextChangeAt]);
 
   const apiLoaded = program !== null;
 
@@ -73,6 +87,9 @@ export function useNewsProgram() {
   const label = program?.label ?? "MycoDAO News";
   const playbackUrl = mediaUrl ?? embedUrl ?? null;
 
+  const loopPlayback = Boolean(program?.loopPlayback);
+  const autoReturnOnEnd = Boolean(program?.autoReturnOnEnd);
+
   return {
     embedUrl,
     mediaUrl,
@@ -87,6 +104,9 @@ export function useNewsProgram() {
     timezone: program?.timezone ?? "America/Los_Angeles",
     loading,
     playbackActive,
+    loopPlayback,
+    autoReturnOnEnd,
+    reload,
     isConfigured: Boolean(playbackUrl || bumperUrl),
     isNasPlayback: Boolean(mediaUrl),
     showBumper: !playbackUrl && Boolean(bumperUrl),

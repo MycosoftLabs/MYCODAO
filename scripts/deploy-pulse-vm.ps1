@@ -73,6 +73,10 @@ if [ -f scripts/setup_blocks_nas_mount.sh ]; then
   export NAS_MOUNT_PATH='/mnt/nas/mycodao/BLOCKS'
   sudo -n -E bash scripts/setup_blocks_nas_mount.sh 2>/dev/null || echo 'NAS mount skipped (run apply_blocks_nas_production.py if needed)'
 fi
+if [ -f scripts/seed-blocks-producer-data.sh ]; then
+  chmod +x scripts/seed-blocks-producer-data.sh
+  MYCODAO_DATA_DIR='$RemoteDir/data' bash scripts/seed-blocks-producer-data.sh '$RemoteDir'
+fi
 docker compose build mycodao
 docker compose up -d
 docker compose --env-file .env.production --profile tunnel up -d

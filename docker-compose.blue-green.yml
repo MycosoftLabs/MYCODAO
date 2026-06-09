@@ -54,6 +54,7 @@ services:
       NODE_ENV: production
       DEPLOY_SLOT: blue
     volumes:
+      - ${MYCODAO_DATA_DIR:-/opt/mycodao/data}:/app/data
       - ${BLOCKS_NAS_ROOT:-/mnt/nas/mycodao/BLOCKS}:${BLOCKS_NAS_ROOT:-/mnt/nas/mycodao/BLOCKS}:ro
     restart: unless-stopped
     healthcheck:
@@ -85,6 +86,7 @@ services:
       NODE_ENV: production
       DEPLOY_SLOT: green
     volumes:
+      - ${MYCODAO_DATA_DIR:-/opt/mycodao/data}:/app/data
       - ${BLOCKS_NAS_ROOT:-/mnt/nas/mycodao/BLOCKS}:${BLOCKS_NAS_ROOT:-/mnt/nas/mycodao/BLOCKS}:ro
     profiles: ["green"]
     restart: unless-stopped

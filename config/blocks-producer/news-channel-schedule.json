@@ -1,0 +1,47 @@
+{
+  "channel": "MycoDAO News",
+  "timezone": "America/Los_Angeles",
+  "defaultSource": {
+    "type": "default",
+    "label": "Off air",
+    "videoUrl": "",
+    "videoId": "",
+    "channelId": "",
+    "nasPath": ""
+  },
+  "slots": [
+    {
+      "id": "obs-live-test",
+      "type": "youtube_live_channel",
+      "label": "MycoDAO Live",
+      "channelId": "UCxolKooMEXN8bg5hCtCB7Eg",
+      "days": [0, 1, 2, 3, 4, 5, 6],
+      "start": "00:00",
+      "end": "23:59",
+      "priority": 0,
+      "_comment": "YouTube live when OBS/Streamlabs is streaming to this channel."
+    },
+    {
+      "id": "bumper-loop",
+      "type": "bumper",
+      "label": "BLOCKS Bumper",
+      "nasPath": "bumpers/blocks-bumper.mp4",
+      "days": [0, 1, 2, 3, 4, 5, 6],
+      "start": "00:00",
+      "end": "23:59",
+      "priority": 5,
+      "_comment": "Loops when no higher-priority slot; upload bumpers/blocks-bumper.mp4 to NAS."
+    },
+    {
+      "id": "commercial-mycodao-15s",
+      "type": "commercial",
+      "label": "MycoDAO",
+      "nasPath": "commercials/mycodao-15s.mp4",
+      "days": [1, 2, 3, 4, 5],
+      "start": "12:00",
+      "end": "12:05",
+      "priority": 50,
+      "_comment": "Five-minute commercial block; upload commercials/mycodao-15s.mp4 to NAS."
+    }
+  ]
+}

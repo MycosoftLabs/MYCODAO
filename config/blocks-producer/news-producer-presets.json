@@ -1,0 +1,75 @@
+{
+  "talent": [
+    {
+      "id": "morgan-rockwell",
+      "label": "Morgan Rockwell",
+      "lines": [
+        {
+          "name": "Morgan Rockwell",
+          "roles": ["Founder & CEO", "News Anchor"],
+          "creditLine": "Morgan Rockwell · Founder & CEO · News Anchor"
+        }
+      ]
+    },
+    {
+      "id": "abelardo-rodriguez",
+      "label": "Abelardo Rodriguez",
+      "lines": [
+        {
+          "name": "Abelardo Rodriguez",
+          "roles": ["Broadcast Media Producer", "News Anchor"],
+          "creditLine": "Abelardo Rodriguez · Broadcast Media Producer · News Anchor"
+        }
+      ]
+    },
+    {
+      "id": "rj-cfo",
+      "label": "RJ",
+      "lines": [
+        {
+          "name": "RJ",
+          "roles": ["Co-Founder", "CFO", "Board Member"],
+          "creditLine": "RJ · Co-Founder · CFO"
+        }
+      ]
+    },
+    {
+      "id": "dual-morgan-abelardo",
+      "label": "Morgan + Abelardo",
+      "lines": [
+        {
+          "name": "Morgan Rockwell",
+          "roles": ["Founder & CEO", "News Anchor"],
+          "creditLine": "Morgan Rockwell · Founder & CEO · News Anchor"
+        },
+        {
+          "name": "Abelardo Rodriguez",
+          "roles": ["Broadcast Media Producer"],
+          "creditLine": "Abelardo Rodriguez · Broadcast Media Producer"
+        }
+      ]
+    }
+  ],
+  "program": [
+    {
+      "id": "return-live",
+      "label": "Return to Live",
+      "type": "live",
+      "videoUrl": ""
+    },
+    {
+      "id": "commercial-mycodao",
+      "label": "MycoDAO Commercial",
+      "type": "commercial",
+      "videoId": "",
+      "videoUrl": ""
+    },
+    {
+      "id": "bumper-blocks",
+      "label": "BLOCKS Bumper",
+      "type": "bumper",
+      "videoId": "",
+      "videoUrl": ""
+    }
+  ]
+}

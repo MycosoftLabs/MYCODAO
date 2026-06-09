@@ -66,22 +66,38 @@ export interface NewsProgramNow {
   playbackActive: boolean;
   /** Static full-bleed frame shown when playbackActive is false. */
   bumperUrl: string;
+  /** Loop NAS MP4 (bumpers / idle loops). */
+  loopPlayback?: boolean;
+  /** When NAS clip ends, return producer console to scheduled live. */
+  autoReturnOnEnd?: boolean;
 }
 
-const DEFAULT_SCHEDULE_PATH = path.join(process.cwd(), "data", "news-channel-schedule.json");
+const DEFAULT_SCHEDULE_PATH = path.join(
+  process.cwd(),
+  "data",
+  "news-channel-schedule.json",
+);
+const SEED_SCHEDULE_PATH = path.join(
+  process.cwd(),
+  "config",
+  "blocks-producer",
+  "news-channel-schedule.json",
+);
 
 export function scheduleFilePath(): string {
   return process.env.NEWS_CHANNEL_SCHEDULE_PATH?.trim() || DEFAULT_SCHEDULE_PATH;
 }
 
 export function readNewsChannelSchedule(): NewsChannelSchedule | null {
-  const filePath = scheduleFilePath();
-  try {
-    const raw = fs.readFileSync(filePath, "utf8");
-    return JSON.parse(raw) as NewsChannelSchedule;
-  } catch {
-    return null;
+  for (const filePath of [scheduleFilePath(), SEED_SCHEDULE_PATH]) {
+    try {
+      const raw = fs.readFileSync(filePath, "utf8");
+      return JSON.parse(raw) as NewsChannelSchedule;
+    } catch {
+      /* try next */
+    }
   }
+  return null;
 }
 
 export function writeNewsChannelSchedule(
@@ -180,15 +196,44 @@ function computeNextChangeAt(
   return new Date(now.getTime() + deltaMs).toISOString();
 }
 
+function mediaPlaybackFlags(
+  sourceType: ProgramSourceType | string,
+  opts: { producerOverride?: boolean },
+): Pick<NewsProgramNow, "loopPlayback" | "autoReturnOnEnd"> {
+  const t = String(sourceType);
+  if (t === "bumper") {
+    return { loopPlayback: true, autoReturnOnEnd: false };
+  }
+  if (t === "commercial" || t === "recorded") {
+    return {
+      loopPlayback: !opts.producerOverride,
+      autoReturnOnEnd: Boolean(opts.producerOverride),
+    };
+  }
+  return { loopPlayback: false, autoReturnOnEnd: false };
+}
+
 function withPlaybackFlags(
   program: Omit<NewsProgramNow, "playbackActive" | "bumperUrl"> &
-    Partial<Pick<NewsProgramNow, "playbackActive" | "bumperUrl">>,
+    Partial<
+      Pick<
+        NewsProgramNow,
+        "playbackActive" | "bumperUrl" | "loopPlayback" | "autoReturnOnEnd"
+      >
+    >,
 ): NewsProgramNow {
   const active =
     program.playbackActive ??
     Boolean(program.embedUrl?.trim() || program.mediaUrl?.trim());
+  const flags =
+    program.mediaUrl?.trim() && program.loopPlayback === undefined
+      ? mediaPlaybackFlags(program.sourceType, {
+          producerOverride: program.slotId?.startsWith("producer") ?? false,
+        })
+      : {};
   return {
     ...program,
+    ...flags,
     playbackActive: active,
     bumperUrl: program.bumperUrl ?? (active ? newsIdleBumperUrl() : ""),
   };
@@ -290,13 +335,17 @@ export function resolveNewsProgramNow(now = new Date()): NewsProgramNow {
     : null;
 
   if (producerProgram?.embedUrl || producerProgram?.mediaUrl) {
+    const producerType =
+      producerProgram.sourceType === "producer"
+        ? "live_override"
+        : producerProgram.sourceType;
+    const nasFlags = producerProgram.mediaUrl
+      ? mediaPlaybackFlags(producerType, { producerOverride: true })
+      : {};
     return withPlaybackFlags({
       channel: "MycoDAO News",
       label: producerProgram.label,
-      sourceType:
-        producerProgram.sourceType === "producer"
-          ? "live_override"
-          : producerProgram.sourceType,
+      sourceType: producerType,
       slotId: producerState.activeProgramPresetId ?? "producer-override",
       embedUrl: producerProgram.embedUrl,
       mediaUrl: producerProgram.mediaUrl,
@@ -305,6 +354,7 @@ export function resolveNewsProgramNow(now = new Date()): NewsProgramNow {
       timezone: "America/Los_Angeles",
       nextChangeAt: null,
       scheduleVersion: `producer-${producerState.updatedAt}`,
+      ...nasFlags,
     });
   }
 

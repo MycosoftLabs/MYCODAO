@@ -81,6 +81,7 @@ import * as RGL from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import { CNBCNewsWidget } from './components/CNBCNewsWidget';
+import { NewsBroadcastView } from './components/NewsBroadcastView';
 import { ProducerDashboard } from './components/ProducerDashboard';
 import { PodcastMediaPlayer } from './components/PodcastMediaPlayer';
 import { PulseMarqueeTicker, newsToTickerSegments } from './components/PulseMarqueeTicker';
@@ -1373,11 +1374,7 @@ const PodcastView = ({
 };
 
 
-const NewsView = () => (
-  <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-    <CNBCNewsWidget />
-  </div>
-);
+const NewsView = () => <NewsBroadcastView />;
 const FungIPView = () => {
   const [activeTool, setActiveTool] = useState('INSCRIPTION');
   const [searchQuery, setSearchQuery] = useState('');

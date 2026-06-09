@@ -1,5 +1,6 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useCallback } from "react";
 import { cn } from "../lib/utils";
+import { pulseApiUrl } from "../lib/apiOrigin";
 import { useNewsProgram } from "../hooks/useNewsProgram";
 
 /** Full-bleed program video — YouTube iframe or NAS MP4 from `/api/news/program`. */
@@ -12,8 +13,21 @@ export function NewsLiveStage({ className }: { className?: string }) {
     label,
     isNasPlayback,
     showBumper,
+    loopPlayback,
+    autoReturnOnEnd,
+    reload,
   } = useNewsProgram();
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  const onNasEnded = useCallback(() => {
+    if (autoReturnOnEnd) {
+      void fetch(pulseApiUrl("/api/news/program/nas-complete"), {
+        method: "POST",
+      }).finally(() => reload());
+      return;
+    }
+    reload();
+  }, [autoReturnOnEnd, reload]);
 
   useEffect(() => {
     const el = videoRef.current;
@@ -75,7 +89,8 @@ export function NewsLiveStage({ className }: { className?: string }) {
           autoPlay
           muted
           playsInline
-          loop={false}
+          loop={loopPlayback}
+          onEnded={onNasEnded}
           aria-label={label}
         />
       ) : (

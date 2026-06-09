@@ -318,7 +318,12 @@ function hydrateFromBundle(bundle: ReturnType<typeof getCachedPulseNewsBundle>) 
   };
 }
 
-export const CNBCNewsWidget = () => {
+interface CNBCNewsWidgetProps {
+  /** When true, main stage is transparent so NewsLiveStage video shows through. */
+  overlayMode?: boolean;
+}
+
+export const CNBCNewsWidget = ({ overlayMode = false }: CNBCNewsWidgetProps) => {
   const initial = hydrateFromBundle(getCachedPulseNewsBundle());
   const [newsLines, setNewsLines] = useState<BroadcastNewsLine[]>(initial.newsLines);
   const [marketIndices, setMarketIndices] = useState<StudioMarketIndex[]>(initial.marketIndices);
@@ -474,20 +479,37 @@ export const CNBCNewsWidget = () => {
   const bumperHeight = 'calc(68px + 26px)';
 
   return (
-    <div className="relative w-full flex-1 min-h-0 bg-[#050505] overflow-hidden flex flex-col font-sans select-none isolate">
+    <div
+      className={cn(
+        "relative w-full flex-1 min-h-0 overflow-hidden flex flex-col font-sans select-none isolate",
+        overlayMode ? "bg-transparent" : "bg-[#050505]",
+      )}
+    >
       <div
         className="relative flex-1 min-h-0 overflow-hidden grid z-10"
         style={{ gridTemplateColumns: `1fr ${marketsRailWidth}` }}
       >
-        <div className="relative min-w-0 bg-black overflow-hidden">
-          <div
-            className="absolute inset-0 opacity-[0.14] pointer-events-none"
-            style={{
-              backgroundImage: 'radial-gradient(circle at 2px 2px, #3b82f6 1px, transparent 0)',
-              backgroundSize: '26px 26px',
-            }}
-          />
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,#000_70%)] pointer-events-none" />
+        <div
+          className={cn(
+            "relative min-w-0 overflow-hidden",
+            overlayMode ? "bg-transparent" : "bg-black",
+          )}
+        >
+          {!overlayMode ? (
+            <>
+              <div
+                className="absolute inset-0 opacity-[0.14] pointer-events-none"
+                style={{
+                  backgroundImage:
+                    "radial-gradient(circle at 2px 2px, #3b82f6 1px, transparent 0)",
+                  backgroundSize: "26px 26px",
+                }}
+              />
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,#000_70%)] pointer-events-none" />
+            </>
+          ) : (
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_40%,#000_85%)] pointer-events-none opacity-80" />
+          )}
 
           <motion.div
             className="absolute top-5 left-5 z-20 flex flex-col gap-0"
