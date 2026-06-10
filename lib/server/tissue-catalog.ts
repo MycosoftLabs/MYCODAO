@@ -1,5 +1,8 @@
 import { buildServeUrl } from "@/lib/server/blocks-nas-media";
-import { getSupabaseServiceRole } from "@/lib/supabase/server";
+import {
+  getSupabaseAnon,
+  getSupabaseServiceRole,
+} from "@/lib/supabase/server";
 
 export type TissueCategory = "mushroom" | "mold" | "mildew" | "yeast";
 export type TissueVisibility = "public" | "internal" | "hidden";
@@ -78,7 +81,15 @@ export interface TissueSamplePublic {
   media: TissueMediaPublic[];
 }
 
-function supabaseReady() {
+function supabaseForPublic() {
+  const client = getSupabaseServiceRole() ?? getSupabaseAnon();
+  if (!client) {
+    throw new Error("supabase_unconfigured");
+  }
+  return client;
+}
+
+function supabaseForAdmin() {
   const client = getSupabaseServiceRole();
   if (!client) {
     throw new Error("supabase_unconfigured");
@@ -161,11 +172,12 @@ function toSamplePublic(
 
 async function loadMediaForSamples(
   sampleIds: string[],
+  mode: "public" | "admin" = "admin",
 ): Promise<Map<string, TissueMediaRow[]>> {
   const map = new Map<string, TissueMediaRow[]>();
   if (!sampleIds.length) return map;
 
-  const sb = supabaseReady();
+  const sb = mode === "public" ? supabaseForPublic() : supabaseForAdmin();
   const { data, error } = await sb
     .from("tissue_media")
     .select("*")
@@ -186,7 +198,7 @@ export async function listPublicTissueSamples(opts?: {
   category?: TissueCategory;
   search?: string;
 }): Promise<TissueSamplePublic[]> {
-  const sb = supabaseReady();
+  const sb = supabaseForPublic();
   let query = sb
     .from("tissue_samples")
     .select("*")
@@ -207,7 +219,10 @@ export async function listPublicTissueSamples(opts?: {
   if (error) throw new Error(error.message);
 
   const samples = (data ?? []) as TissueSampleRow[];
-  const mediaMap = await loadMediaForSamples(samples.map((s) => s.id));
+  const mediaMap = await loadMediaForSamples(
+    samples.map((s) => s.id),
+    "public",
+  );
 
   return samples.map((s) =>
     toSamplePublic(s, mediaMap.get(s.id) ?? [], true),
@@ -217,7 +232,7 @@ export async function listPublicTissueSamples(opts?: {
 export async function getPublicTissueSample(
   idOrSampleId: string,
 ): Promise<TissueSamplePublic | null> {
-  const sb = supabaseReady();
+  const sb = supabaseForPublic();
   const isUuid =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
       idOrSampleId,
@@ -233,7 +248,7 @@ export async function getPublicTissueSample(
   if (!data) return null;
 
   const sample = data as TissueSampleRow;
-  const mediaMap = await loadMediaForSamples([sample.id]);
+  const mediaMap = await loadMediaForSamples([sample.id], "public");
   return toSamplePublic(sample, mediaMap.get(sample.id) ?? [], true);
 }
 
@@ -241,7 +256,7 @@ export async function listAllTissueSamples(opts?: {
   category?: TissueCategory;
   search?: string;
 }): Promise<TissueSamplePublic[]> {
-  const sb = supabaseReady();
+  const sb = supabaseForAdmin();
   let query = sb
     .from("tissue_samples")
     .select("*")
@@ -266,7 +281,7 @@ export async function listAllTissueSamples(opts?: {
 export async function getTissueSampleAdmin(
   id: string,
 ): Promise<TissueSamplePublic | null> {
-  const sb = supabaseReady();
+  const sb = supabaseForAdmin();
   const { data, error } = await sb
     .from("tissue_samples")
     .select("*")
@@ -298,7 +313,7 @@ export interface CreateTissueSampleInput {
 export async function createTissueSample(
   input: CreateTissueSampleInput,
 ): Promise<TissueSamplePublic> {
-  const sb = supabaseReady();
+  const sb = supabaseForAdmin();
   const now = new Date().toISOString();
   const row = {
     sample_id: input.sampleId.trim(),
@@ -345,7 +360,7 @@ export async function updateTissueSample(
   id: string,
   input: UpdateTissueSampleInput,
 ): Promise<TissueSamplePublic | null> {
-  const sb = supabaseReady();
+  const sb = supabaseForAdmin();
   const patch: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
   };
@@ -392,7 +407,7 @@ export async function attachTissueMedia(
   sampleUuid: string,
   input: AttachTissueMediaInput,
 ): Promise<TissueMediaPublic> {
-  const sb = supabaseReady();
+  const sb = supabaseForAdmin();
   const row = {
     sample_id: sampleUuid,
     nas_path: input.nasPath.replace(/\\/g, "/").replace(/^\/+/, ""),
@@ -443,7 +458,7 @@ export async function updateTissueMedia(
     liveStreamUrl: string | null;
   }>,
 ): Promise<TissueMediaPublic | null> {
-  const sb = supabaseReady();
+  const sb = supabaseForAdmin();
   const row: Record<string, unknown> = {};
   if (patch.visibility !== undefined) row.visibility = patch.visibility;
   if (patch.isCover !== undefined) row.is_cover = patch.isCover;
@@ -476,7 +491,7 @@ export async function updateTissueMedia(
 }
 
 export async function deleteTissueMedia(mediaId: string): Promise<boolean> {
-  const sb = supabaseReady();
+  const sb = supabaseForAdmin();
   const { error } = await sb.from("tissue_media").delete().eq("id", mediaId);
   if (error) throw new Error(error.message);
   return true;
