@@ -42,6 +42,8 @@ interface NewsLiveStageProps {
   videoRef?: React.RefObject<HTMLVideoElement | null>;
   iframeRef?: React.RefObject<HTMLIFrameElement | null>;
   onMediaSnapshotChange?: (snapshot: NewsLiveStageMediaSnapshot) => void;
+  /** Tablet/desktop persistent portal — kick playback after Cut to URL reloads iframe. */
+  onYoutubeIframeLoad?: () => void;
 }
 
 function buildStageInsetStyle(
@@ -65,6 +67,7 @@ export function NewsLiveStage({
   videoRef: videoRefProp,
   iframeRef: iframeRefProp,
   onMediaSnapshotChange,
+  onYoutubeIframeLoad,
 }: NewsLiveStageProps) {
   const isStacked = layoutMode === "stacked";
   const {
@@ -352,7 +355,13 @@ export function NewsLiveStage({
             referrerPolicy="strict-origin-when-cross-origin"
             loading="eager"
             tabIndex={-1}
-            onLoad={isStacked ? handleStackedIframeLoad : undefined}
+            onLoad={
+              isStacked
+                ? handleStackedIframeLoad
+                : onYoutubeIframeLoad
+                  ? () => onYoutubeIframeLoad()
+                  : undefined
+            }
           />
           <div
             className={cn(

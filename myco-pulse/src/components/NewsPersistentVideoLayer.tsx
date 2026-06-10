@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 
 
 
@@ -38,13 +38,18 @@ import { useMediaMinMd } from "../hooks/useMediaMinMd";
 
 import {
 
+  applyYoutubeAudienceLevels,
+
   playYoutubeEmbed,
 
   setYoutubeEmbedMuted,
 
   setYoutubeEmbedVolume,
 
+  subscribeYoutubeEmbedEvents,
+
 } from "../lib/youtubeEmbedCommands";
+import { youtubeEmbedStableKey } from "../lib/youtubeEmbedKey";
 
 import type { PulseTabId } from "./PulseShellNav";
 
@@ -170,7 +175,18 @@ export function NewsPersistentVideoLayer({
 
 
 
-  const { playbackUrl, showBumper, bumperUrl } = useNewsProgram();
+  const {
+    playbackUrl,
+    showBumper,
+    bumperUrl,
+    isNasPlayback,
+    slotId,
+  } = useNewsProgram();
+
+  const youtubePlaybackKey = useMemo(() => {
+    if (!playbackUrl || isNasPlayback) return slotId;
+    return youtubeEmbedStableKey(playbackUrl);
+  }, [playbackUrl, isNasPlayback, slotId]);
 
 
 
@@ -309,54 +325,32 @@ export function NewsPersistentVideoLayer({
 
 
 
-  useEffect(() => {
-
-    if (!showVisiblePortal) return;
-
+  const syncProgramPlayback = useCallback(() => {
     const iframe = iframeRef.current;
-
     if (iframe) {
-
-      setYoutubeEmbedMuted(iframe, audienceMuted);
-
-      if (!audienceMuted) {
-
-        setYoutubeEmbedVolume(iframe, audienceVolume);
-
-      }
-
+      subscribeYoutubeEmbedEvents(iframe);
+      applyYoutubeAudienceLevels(iframe, audienceMuted, audienceVolume);
       playYoutubeEmbed(iframe);
-
     }
 
     const video = videoRef.current;
-
     if (video) {
-
       video.muted = audienceMuted;
-
       video.volume = Math.max(0, Math.min(1, audienceVolume / 100));
-
       void video.play().catch(() => {
-
         /* autoplay policy */
-
       });
-
     }
+  }, [iframeRef, videoRef, audienceMuted, audienceVolume]);
 
+  useEffect(() => {
+    if (!showVisiblePortal) return;
+    syncProgramPlayback();
   }, [
-
     showVisiblePortal,
-
-    iframeRef,
-
-    videoRef,
-
-    audienceMuted,
-
-    audienceVolume,
-
+    syncProgramPlayback,
+    youtubePlaybackKey,
+    playbackUrl,
   ]);
 
 
@@ -485,29 +479,12 @@ export function NewsPersistentVideoLayer({
 
 
       <NewsLiveStage
-
-
-
-        layoutMode="stacked"
-
-
-
+        layoutMode="overlay"
         className="absolute inset-0"
-
-
-
         videoRef={videoRef}
-
-
-
         iframeRef={iframeRef}
-
-
-
         onMediaSnapshotChange={onMediaSnapshotChange}
-
-
-
+        onYoutubeIframeLoad={syncProgramPlayback}
       />
 
 
