@@ -1,5 +1,6 @@
 import React from "react";
 import { cn } from "../lib/utils";
+import { useNewsPersistentPlayer } from "../lib/newsPersistentPlayerContext";
 import { useNewsStageMedia } from "../lib/newsStageMediaContext";
 import {
   NEWS_BUMPER_TOTAL_HEIGHT,
@@ -20,6 +21,14 @@ export function NewsVideoVolumeOverlay({
   className,
 }: NewsVideoVolumeOverlayProps) {
   const media = useNewsStageMedia();
+  const {
+    audienceMuted,
+    audienceVolume,
+    setAudienceMuted,
+    setAudienceVolume,
+  } = useNewsPersistentPlayer();
+
+  const isDesktopOverlay = layout === "overlay";
 
   if (!media?.hasPlayback || !media.mode) return null;
 
@@ -60,7 +69,16 @@ export function NewsVideoVolumeOverlay({
           mode={media.mode}
           videoRef={media.videoRef}
           iframeRef={media.iframeRef}
-          initialMuted={media.initialMuted}
+          initialMuted={isDesktopOverlay ? audienceMuted : media.initialMuted}
+          initialVolume={isDesktopOverlay ? audienceVolume : undefined}
+          onLevelsChange={
+            isDesktopOverlay
+              ? (nextVolume, nextMuted) => {
+                  setAudienceVolume(nextVolume);
+                  setAudienceMuted(nextMuted);
+                }
+              : undefined
+          }
           syncKey={media.syncKey}
         />
       </div>

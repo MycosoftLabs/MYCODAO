@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { mycodaoBlackLogo } from "../lib/brandLogos";
+import { handleMobileNewsPointerDown } from "../lib/mobileNewsGestureUnlock";
 
 export type PulseTabId =
   | "Pulse"
@@ -55,6 +56,7 @@ interface NavItemProps {
   label: string;
   active: boolean;
   onClick: () => void;
+  onPointerDown?: () => void;
   variant?: "sidebar" | "bottom";
 }
 
@@ -63,12 +65,14 @@ export function PulseNavItem({
   label,
   active,
   onClick,
+  onPointerDown,
   variant = "sidebar",
 }: NavItemProps) {
   if (variant === "bottom") {
     return (
       <button
         type="button"
+        onPointerDown={onPointerDown}
         onClick={onClick}
         aria-current={active ? "page" : undefined}
         className={cn(
@@ -89,6 +93,7 @@ export function PulseNavItem({
   return (
     <button
       type="button"
+      onPointerDown={onPointerDown}
       onClick={onClick}
       aria-current={active ? "page" : undefined}
       className={cn(
@@ -108,6 +113,10 @@ interface PulseShellNavProps {
   activeTab: PulseTabId;
   setActiveTab: (tab: PulseTabId) => void;
   aiInsight?: string;
+}
+
+function newsTabPointerDown(tabId: PulseTabId): (() => void) | undefined {
+  return tabId === "News" ? handleMobileNewsPointerDown : undefined;
 }
 
 export function PulseSidebarNav({
@@ -135,6 +144,7 @@ export function PulseSidebarNav({
               icon={tab.icon}
               label={tab.label}
               active={activeTab === tab.id}
+              onPointerDown={newsTabPointerDown(tab.id)}
               onClick={() => setActiveTab(tab.id)}
             />
           ))}
@@ -144,6 +154,7 @@ export function PulseSidebarNav({
             icon={Settings}
             label="Settings"
             active={activeTab === "Settings"}
+            onPointerDown={newsTabPointerDown("Settings")}
             onClick={() => setActiveTab("Settings")}
           />
         </div>
@@ -177,6 +188,7 @@ export function PulseMobileBrandPair({
     >
       <button
         type="button"
+        onPointerDown={handleMobileNewsPointerDown}
         onClick={() => setActiveTab("News")}
         aria-label="BLOCKS — News"
         aria-current={activeTab === "News" ? "page" : undefined}
@@ -234,6 +246,7 @@ export function PulseBottomNav({
             icon={tab.icon}
             label={"shortLabel" in tab && tab.shortLabel ? tab.shortLabel : tab.label}
             active={activeTab === tab.id}
+            onPointerDown={newsTabPointerDown(tab.id)}
             onClick={() => setActiveTab(tab.id)}
             variant="bottom"
           />

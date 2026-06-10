@@ -144,6 +144,10 @@ if [[ "$MODE" == "bootstrap" ]]; then
   docker rm -f mycodao-app mycodao-green 2>/dev/null || true
   export MYCODAO_IMAGE_BLUE="mycodao:blue"
   compose build mycodao-blue
+  if [[ -f scripts/seed-blocks-producer-data.sh ]]; then
+    chmod +x scripts/seed-blocks-producer-data.sh
+    MYCODAO_DATA_DIR="${MYCODAO_DATA_DIR:-/opt/mycodao/data}" bash scripts/seed-blocks-producer-data.sh "$DEPLOY_DIR" || true
+  fi
   compose up -d mycodao-proxy mycodao-blue
   wait_healthy blue
   echo "blue" > "$ACTIVE_FILE"
@@ -177,6 +181,12 @@ TAG="mycodao:${IDLE}-$(date +%Y%m%d%H%M%S)"
 log "Cutover active=$ACTIVE idle=$IDLE tag=$TAG"
 
 git pull --ff-only origin main || warn "git pull failed — building current tree"
+
+if [[ -f scripts/seed-blocks-producer-data.sh ]]; then
+  chmod +x scripts/seed-blocks-producer-data.sh
+  MYCODAO_DATA_DIR="${MYCODAO_DATA_DIR:-/opt/mycodao/data}" bash scripts/seed-blocks-producer-data.sh "$DEPLOY_DIR" \
+    || warn "producer preset sync failed — check /opt/mycodao/data permissions"
+fi
 
 export COMPOSE_BAKE=false
 export DOCKER_BUILDKIT=0

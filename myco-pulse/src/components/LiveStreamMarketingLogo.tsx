@@ -10,9 +10,8 @@ const VARIANT_BOX: Record<LiveStreamMarketingLogoVariant, string> = {
   preview: "h-14 w-[7.5rem] shrink-0",
   /** NAS picker thumbnail */
   thumb: "h-10 w-full",
-  /** Title bar blue slot — explicit box (h-full collapses on mobile flex) */
-  titleBar:
-    "shrink-0 h-[20px] w-[44px] sm:h-[22px] sm:w-[52px] md:h-[52px] md:w-[90px]",
+  /** Title bar blue slot — fixed band height; logo keeps aspect ratio */
+  titleBar: "h-full w-full max-h-full max-w-full",
 };
 
 interface LiveStreamMarketingLogoProps {
@@ -35,7 +34,11 @@ export function LiveStreamMarketingLogo({
   return (
     <div
       className={cn(
-        isAir ? "w-full overflow-hidden" : "flex items-center justify-center overflow-hidden",
+        isAir
+          ? "w-full overflow-hidden"
+          : isTitleBar
+            ? "flex h-full w-full max-h-full max-w-full items-center justify-center overflow-hidden"
+            : "flex items-center justify-center overflow-hidden",
         VARIANT_BOX[variant],
         className,
       )}
@@ -47,11 +50,12 @@ export function LiveStreamMarketingLogo({
           isAir
             ? "block w-full h-auto object-contain object-center"
             : isTitleBar
-              ? "block h-full w-full object-contain object-center"
+              ? "block max-h-full max-w-full h-auto w-auto object-contain object-center"
               : "max-h-full max-w-full h-auto w-auto object-contain object-center",
         )}
         loading={isTitleBar ? "eager" : "lazy"}
-        decoding="async"
+        decoding={isTitleBar ? "sync" : "async"}
+        fetchPriority={isTitleBar ? "high" : undefined}
         onError={onError}
       />
     </div>

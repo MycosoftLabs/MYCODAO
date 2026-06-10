@@ -136,6 +136,82 @@
   }
 
   /* YouTube — full 16:9 frame contained and centered (letterbox if needed) */
+  .news-video-portal-root {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* News tab: let body-portaled video show through transparent main + anchor */
+  .news-video-portal-root .news-persistent-video-layer[data-news-persistent-video-mode="news"] {
+    z-index: 0;
+  }
+
+  .news-persistent-video-layer {
+    container-type: size;
+    isolation: isolate;
+    clip-path: inset(0 round 0);
+  }
+
+  .news-persistent-video-layer[data-news-persistent-video-mode="pip"] {
+    border-radius: 0 0 4px 4px;
+  }
+
+  .news-floating-player--pip {
+    box-shadow:
+      0 12px 40px rgba(0, 0, 0, 0.55),
+      0 0 0 1px rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+    overflow: visible;
+    pointer-events: auto;
+  }
+
+  .news-floating-player-chrome {
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
+  }
+
+  .news-floating-player-chrome:active {
+    cursor: grabbing;
+  }
+
+  .news-floating-player-resize-handle {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    z-index: 5;
+    width: 28px;
+    height: 28px;
+    min-width: 44px;
+    min-height: 44px;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: nwse-resize;
+    touch-action: none;
+  }
+
+  .news-floating-player-resize-handle::after {
+    content: "";
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    width: 12px;
+    height: 12px;
+    border-right: 2px solid rgba(255, 255, 255, 0.55);
+    border-bottom: 2px solid rgba(255, 255, 255, 0.55);
+    border-radius: 0 0 2px 0;
+    pointer-events: none;
+  }
+
+  .news-floating-player-resize-handle:hover::after,
+  .news-floating-player-resize-handle:focus-visible::after {
+    border-color: var(--color-myco-accent, #22c55e);
+  }
+
   .news-stage-video-slot {
     position: absolute;
     inset: 0;
@@ -160,6 +236,12 @@
     background: #000;
   }
 
+  /* Phone band: overscan crops center play button if autoplay is still spinning up */
+  .news-stage-video-slot--stacked .news-stage-youtube-embed {
+    width: min(128cqw, calc(100cqh * 16 / 9 * 1.28));
+    height: min(128cqh, calc(100cqw * 9 / 16 * 1.28));
+  }
+
   /* Playlist cut-ins: thin bottom bar only — hide prev/next without cropping the frame */
   .news-stage-youtube-chrome-mask {
     position: absolute;
@@ -168,14 +250,16 @@
     z-index: 2;
   }
 
+  /* Hide burned-in / auto captions and residual YT chrome (all embeds). */
   .news-stage-youtube-chrome-mask::after {
     content: "";
     position: absolute;
     left: 0;
     right: 0;
     bottom: 0;
-    height: 0;
-    background: transparent;
+    height: clamp(44px, 14cqh, 80px);
+    background: linear-gradient(to top, #000 72%, transparent);
+    pointer-events: none;
   }
 
   .news-stage-youtube-chrome-mask--playlist::before {

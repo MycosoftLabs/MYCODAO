@@ -3,6 +3,7 @@ import { Mic, MicOff } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { cn } from "../lib/utils";
 import {
+  playYoutubeEmbed,
   setYoutubeEmbedMuted,
   setYoutubeEmbedVolume,
 } from "../lib/youtubeEmbedCommands";
@@ -15,6 +16,10 @@ interface VideoVolumeControlsProps {
   iframeRef?: React.RefObject<HTMLIFrameElement | null>;
   /** Initial mute state when playback starts (default: unmuted). */
   initialMuted?: boolean;
+  /** Initial volume 0–100 (default 85). Desktop passes persisted audience level. */
+  initialVolume?: number;
+  /** Persist user volume/mute (desktop audience state). */
+  onLevelsChange?: (volume: number, muted: boolean) => void;
   /** Re-apply when program / embed changes. */
   syncKey?: string;
   className?: string;
@@ -49,11 +54,13 @@ export function VideoVolumeControls({
   videoRef,
   iframeRef,
   initialMuted = false,
+  initialVolume,
+  onLevelsChange,
   syncKey,
   className,
 }: VideoVolumeControlsProps) {
   const rootRef = useRef<HTMLDivElement>(null);
-  const [volume, setVolume] = useState(85);
+  const [volume, setVolume] = useState(initialVolume ?? 85);
   const [muted, setMuted] = useState(initialMuted);
   const [expanded, setExpanded] = useState(false);
 
@@ -70,7 +77,10 @@ export function VideoVolumeControls({
 
   useEffect(() => {
     setMuted(initialMuted);
-  }, [initialMuted, syncKey]);
+    if (initialVolume !== undefined) {
+      setVolume(initialVolume);
+    }
+  }, [initialMuted, initialVolume, syncKey]);
 
   useEffect(() => {
     apply(volume, muted);
@@ -78,9 +88,14 @@ export function VideoVolumeControls({
 
   useEffect(() => {
     if (mode !== "youtube") return;
-    const timer = window.setTimeout(() => apply(volume, muted), 600);
+    const timer = window.setTimeout(() => {
+      apply(volume, muted);
+      if (!muted) {
+        playYoutubeEmbed(iframeRef?.current);
+      }
+    }, 600);
     return () => window.clearTimeout(timer);
-  }, [mode, syncKey, apply, volume, muted]);
+  }, [mode, syncKey, apply, volume, muted, iframeRef]);
 
   useEffect(() => {
     if (!expanded) return;
@@ -99,11 +114,17 @@ export function VideoVolumeControls({
     const nextMuted = !muted;
     setMuted(nextMuted);
     apply(volume, nextMuted);
+    onLevelsChange?.(volume, nextMuted);
 
-    if (mode === "html-video" && videoRef?.current && !nextMuted) {
-      void videoRef.current.play().catch(() => {
-        /* gesture may still be required on some browsers */
-      });
+    if (!nextMuted) {
+      if (mode === "html-video" && videoRef?.current) {
+        void videoRef.current.play().catch(() => {
+          /* gesture may still be required on some browsers */
+        });
+      }
+      if (mode === "youtube") {
+        playYoutubeEmbed(iframeRef?.current);
+      }
     }
   }
 
@@ -113,6 +134,7 @@ export function VideoVolumeControls({
     const nextMuted = nextVolume === 0;
     setMuted(nextMuted);
     apply(nextVolume, nextMuted);
+    onLevelsChange?.(nextVolume, nextMuted);
   }
 
   function handleIconClick() {

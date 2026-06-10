@@ -2,7 +2,10 @@ import { useEffect, useState } from "react";
 
 const MD_QUERY = "(min-width: 768px)";
 
-/** True when viewport is md breakpoint (768px+) — matches Tailwind `md:`. */
+/**
+ * True at Tailwind `md` (768px+): tablet landscape/portrait and desktop.
+ * Phones stay false — no PiP, inline News video instead of body portal.
+ */
 export function useMediaMinMd(): boolean {
   const [matches, setMatches] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia(MD_QUERY).matches : false,

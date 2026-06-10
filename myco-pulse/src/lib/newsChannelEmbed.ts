@@ -7,6 +7,8 @@ export function withNewsPlayerParams(
   const preferMuted = options?.preferMutedAutoplay ?? false;
   try {
     const url = new URL(embedBase);
+    url.searchParams.delete("cc_load_policy");
+    url.searchParams.delete("cc_lang_pref");
     url.searchParams.set("autoplay", "1");
     url.searchParams.set("mute", preferMuted ? "1" : "0");
     url.searchParams.set("controls", "0");

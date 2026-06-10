@@ -81,7 +81,8 @@ import * as RGL from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import { CNBCNewsWidget } from './components/CNBCNewsWidget';
-import { NewsBroadcastView } from './components/NewsBroadcastView';
+import { PulseTabViewport } from './components/PulseTabViewport';
+import { NewsPersistentPlayerShell } from './components/NewsPersistentPlayerShell';
 import { ProducerDashboard } from './components/ProducerDashboard';
 import { PodcastMediaPlayer } from './components/PodcastMediaPlayer';
 import { PulseMarqueeTicker, newsToTickerSegments } from './components/PulseMarqueeTicker';
@@ -114,6 +115,7 @@ import { buildOracleSyncInsight } from './lib/oracleSyncInsight';
 import { formatGlobalMarketSessionSummary } from './lib/marketSessions';
 import { mergeTickerGroupsWithStudio } from './data/studioPresets';
 import { PulseBottomNav, PulseSidebarNav, PulseMobileBrandPair, type PulseTabId } from './components/PulseShellNav';
+import { handleMobileNewsPointerDown } from './lib/mobileNewsGestureUnlock';
 import { FundingView } from './components/FundingView';
 import { ResearchView } from './components/ResearchView';
 import { useMediaQuery } from './hooks/useMediaQuery';
@@ -1374,7 +1376,6 @@ const PodcastView = ({
 };
 
 
-const NewsView = () => <NewsBroadcastView />;
 const FungIPView = () => {
   const [activeTool, setActiveTool] = useState('INSCRIPTION');
   const [searchQuery, setSearchQuery] = useState('');
@@ -2178,7 +2179,7 @@ export default function App() {
       case 'DAO': return <DAOView />;
       case 'Markets': return <MarketView assets={assetTickers} />;
       case 'Trade': return <TradeView prices={assetTickers} chartData={history.length > 0 ? history : EMPTY_CHART_DATA} whales={whales} />;
-      case 'News': return <NewsView />;
+      case 'News': return null;
       case 'Podcasts': return <PodcastView episodes={episodes} />;
       case 'Funding': return (
         <FundingView
@@ -2205,7 +2206,13 @@ export default function App() {
   };
 
   return (
-    <div className="flex min-h-dvh h-dvh overflow-hidden pulse-view-surface relative selection:bg-myco-accent/30 selection:text-white">
+    <NewsPersistentPlayerShell activeTab={activeTab} setActiveTab={setActiveTab}>
+    <div
+      className={cn(
+        "flex min-h-dvh h-dvh overflow-hidden relative selection:bg-myco-accent/30 selection:text-white",
+        activeTab === "News" ? "bg-transparent" : "pulse-view-surface",
+      )}
+    >
       <PulseSidebarNav
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -2213,13 +2220,19 @@ export default function App() {
       />
 
       {/* Main Matrix Container */}
-      <main className="flex-1 flex flex-col relative overflow-hidden pulse-view-surface min-w-0 pulse-content-pad">
+      <main
+        className={cn(
+          "flex-1 flex flex-col relative overflow-hidden min-w-0 pulse-content-pad",
+          activeTab === "News" ? "bg-transparent" : "pulse-view-surface",
+        )}
+      >
         {/* Top Header Rail */}
         <header className="shrink-0 border-b border-[var(--myco-border)] flex flex-wrap items-center justify-between gap-2 px-3 sm:px-4 lg:px-6 py-2 min-h-14 bg-[var(--myco-bg)]/90 backdrop-blur-xl z-40">
            <div className="flex items-center gap-2 sm:gap-6 min-w-0 flex-1">
               <PulseMobileBrandPair activeTab={activeTab} setActiveTab={setActiveTab} />
               <button
                 type="button"
+                onPointerDown={handleMobileNewsPointerDown}
                 onClick={() => setActiveTab('News')}
                 className={cn(
                   "hidden md:flex items-center gap-2 sm:gap-3 text-left transition-opacity hover:opacity-100 focus:outline-none focus-visible:ring-1 focus-visible:ring-myco-accent/60 rounded-sm min-h-[44px] shrink-0",
@@ -2322,9 +2335,9 @@ export default function App() {
         </header>
 
         {/* View Port */}
-        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+        <PulseTabViewport activeTab={activeTab}>
           {renderContent()}
-        </div>
+        </PulseTabViewport>
 
         {/* Global Feedback Elements */}
         <div className="scanline pointer-events-none" />
@@ -2332,5 +2345,6 @@ export default function App() {
 
       <PulseBottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
     </div>
+    </NewsPersistentPlayerShell>
   );
 }

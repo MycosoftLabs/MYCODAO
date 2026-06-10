@@ -1,32 +1,46 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { pulseApiUrl } from "../lib/apiOrigin";
+import {
+  reconcileNewsProgramPoll,
+  type NewsProgramNow,
+} from "../lib/newsProgramPlayback";
 
-export interface NewsProgramNow {
-  channel: string;
-  label: string;
-  sourceType: string;
-  slotId: string;
-  embedUrl: string | null;
-  mediaUrl: string | null;
-  graphicUrl: string | null;
-  nasPath: string | null;
-  timezone: string;
-  nextChangeAt: string | null;
-  scheduleVersion: string;
-  playbackActive?: boolean;
-  bumperUrl?: string | null;
-  loopPlayback?: boolean;
-  autoReturnOnEnd?: boolean;
-}
+export type { NewsProgramNow };
 
 const POLL_MS = 5_000;
 
-export function useNewsProgram() {
+export function useNewsProgramState() {
   const [program, setProgram] = useState<NewsProgramNow | null>(null);
   const [loading, setLoading] = useState(true);
   const [reloadToken, setReloadToken] = useState(0);
 
   const reload = () => setReloadToken((n) => n + 1);
+
+  useLayoutEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const res = await fetch(pulseApiUrl("/api/news/program"), {
+          cache: "no-store",
+        });
+        if (!res.ok) throw new Error(`program ${res.status}`);
+        const data = (await res.json()) as NewsProgramNow;
+        if (!cancelled) {
+          setProgram((prev) => reconcileNewsProgramPoll(prev, data));
+        }
+      } catch {
+        if (!cancelled) setProgram(null);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadToken]);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,15 +52,14 @@ export function useNewsProgram() {
         });
         if (!res.ok) throw new Error(`program ${res.status}`);
         const data = (await res.json()) as NewsProgramNow;
-        if (!cancelled) setProgram(data);
+        if (!cancelled) {
+          setProgram((prev) => reconcileNewsProgramPoll(prev, data));
+        }
       } catch {
         if (!cancelled) setProgram(null);
-      } finally {
-        if (!cancelled) setLoading(false);
       }
     }
 
-    void load();
     const t = window.setInterval(() => void load(), POLL_MS);
     return () => {
       cancelled = true;

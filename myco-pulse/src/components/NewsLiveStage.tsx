@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback, useMemo } from "react";
+import React, { useRef, useEffect, useCallback, useMemo, useState } from "react";
 import { cn } from "../lib/utils";
 import { pulseApiUrl } from "../lib/apiOrigin";
 import { youtubeEmbedStableKey } from "../lib/youtubeEmbedKey";
@@ -6,7 +6,22 @@ import {
   isYoutubeEmbedUrl,
   withNewsPlayerParams,
 } from "../lib/newsChannelEmbed";
-import { useNewsProgram } from "../hooks/useNewsProgram";
+import {
+  kickMobileNewsYoutube,
+  scheduleMobileNewsYoutubeKicks,
+} from "../lib/mobileNewsYoutubeKick";
+import {
+  clearMobileNewsStackedPlayer,
+  hasRecentMobileNewsGesture,
+  registerMobileNewsStackedPlayer,
+  subscribeMobileNewsGestureUnlock,
+} from "../lib/mobileNewsGestureUnlock";
+import {
+  parseYoutubeEmbedMessage,
+  readYoutubePlayerState,
+  YOUTUBE_PLAYER_STATE,
+} from "../lib/youtubeEmbedCommands";
+import { useNewsProgram } from "../lib/newsProgramContext";
 import type { VideoVolumeMode } from "./VideoVolumeControls";
 
 export interface NewsLiveStageMediaSnapshot {
@@ -64,7 +79,12 @@ export function NewsLiveStage({
     autoReturnOnEnd,
     reload,
     slotId,
+    loading: programLoading,
   } = useNewsProgram();
+  const [stackedIframeReady, setStackedIframeReady] = useState(!isStacked);
+  const [mobileEmbedUnlocked, setMobileEmbedUnlocked] = useState(
+    () => !isStacked || hasRecentMobileNewsGesture(),
+  );
   const internalVideoRef = useRef<HTMLVideoElement>(null);
   const internalIframeRef = useRef<HTMLIFrameElement>(null);
   const videoRef = videoRefProp ?? internalVideoRef;
@@ -143,6 +163,107 @@ export function NewsLiveStage({
     embedKey,
   ]);
 
+  useEffect(() => {
+    if (!isStacked) return;
+    return subscribeMobileNewsGestureUnlock(() => setMobileEmbedUnlocked(true));
+  }, [isStacked]);
+
+  /** Android phone: defer YouTube iframe one frame after program URL (cold refresh). */
+  useEffect(() => {
+    if (!isStacked || isNasPlayback) {
+      setStackedIframeReady(true);
+      return;
+    }
+    if (!playbackUrl || programLoading) {
+      setStackedIframeReady(false);
+      return;
+    }
+
+    setStackedIframeReady(false);
+    let cancelled = false;
+    const raf = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!cancelled) setStackedIframeReady(true);
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+    };
+  }, [embedKey, isNasPlayback, isStacked, playbackUrl, programLoading]);
+
+  const handleStackedIframeLoad = useCallback(
+    (event: React.SyntheticEvent<HTMLIFrameElement>) => {
+      if (!isStacked || isNasPlayback) return;
+      kickMobileNewsYoutube(event.currentTarget);
+      scheduleMobileNewsYoutubeKicks(event.currentTarget);
+    },
+    [isNasPlayback, isStacked],
+  );
+
+  useEffect(() => {
+    if (!isStacked || !stackedIframeReady || isNasPlayback || !playbackUrl) {
+      clearMobileNewsStackedPlayer();
+      return;
+    }
+    if (!isYoutubeEmbedUrl(playbackUrl)) {
+      clearMobileNewsStackedPlayer();
+      return;
+    }
+
+    const src = iframeSrc ?? playbackUrl;
+    registerMobileNewsStackedPlayer(iframeRef.current, src);
+    return () => clearMobileNewsStackedPlayer();
+  }, [
+    embedKey,
+    iframeRef,
+    iframeSrc,
+    isNasPlayback,
+    isStacked,
+    playbackUrl,
+    stackedIframeReady,
+  ]);
+
+  useEffect(() => {
+    if (!isStacked || !stackedIframeReady || isNasPlayback || !playbackUrl) {
+      return;
+    }
+    if (!isYoutubeEmbedUrl(playbackUrl)) return;
+
+    return scheduleMobileNewsYoutubeKicks(iframeRef.current);
+  }, [
+    embedKey,
+    iframeRef,
+    isNasPlayback,
+    isStacked,
+    playbackUrl,
+    stackedIframeReady,
+  ]);
+
+  useEffect(() => {
+    if (!isStacked || isNasPlayback) return;
+
+    function onMessage(event: MessageEvent) {
+      if (event.source !== iframeRef.current?.contentWindow) return;
+      const parsed = parseYoutubeEmbedMessage(event.data);
+      if (!parsed) return;
+      if (parsed.event !== "onStateChange" && parsed.event !== "infoDelivery") {
+        return;
+      }
+      const state = readYoutubePlayerState(parsed.info);
+      if (
+        state === YOUTUBE_PLAYER_STATE.PAUSED ||
+        state === YOUTUBE_PLAYER_STATE.CUED
+      ) {
+        kickMobileNewsYoutube(iframeRef.current);
+      }
+    }
+
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [embedKey, iframeRef, isNasPlayback, isStacked, stackedIframeReady]);
+
   const stageStyle = isStacked
     ? undefined
     : buildStageInsetStyle(stageInsetRight, stageInsetBottom);
@@ -153,10 +274,7 @@ export function NewsLiveStage({
 
   if (showBumper && bumperUrl) {
     return (
-      <div
-        className={stageRootClass}
-        style={stageStyle}
-      >
+      <div className={stageRootClass} style={stageStyle} data-news-media-root>
         <img
           src={bumperUrl}
           alt=""
@@ -175,18 +293,28 @@ export function NewsLiveStage({
     );
   }
 
-  if (!playbackUrl) {
+  const stackedYoutubeLiveSrc = iframeSrc ?? playbackUrl ?? "";
+  const stackedYoutubeIframeSrc =
+    isStacked && !mobileEmbedUnlocked
+      ? "about:blank"
+      : stackedYoutubeLiveSrc;
+
+  const showYoutubeIframe =
+    Boolean(playbackUrl) && (!isStacked || stackedIframeReady);
+
+  if (!playbackUrl || (isStacked && !stackedIframeReady)) {
     return (
       <div
         className={cn(stageRootClass, !isStacked && "bg-black")}
         style={stageStyle}
+        data-news-media-root
         aria-hidden
       />
     );
   }
 
   return (
-    <div className={stageRootClass} style={stageStyle}>
+    <div className={stageRootClass} style={stageStyle} data-news-media-root>
       {isNasPlayback && mediaUrl ? (
         <video
           ref={videoRef}
@@ -199,22 +327,32 @@ export function NewsLiveStage({
           onEnded={onNasEnded}
           aria-label={label}
         />
-      ) : (
+      ) : showYoutubeIframe ? (
         <div
           className={cn(
             "news-stage-video-slot",
+            isStacked && "news-stage-video-slot--stacked",
             isPlaylistEmbed && "news-stage-video-slot--playlist",
           )}
         >
           <iframe
-            ref={iframeRef}
+            ref={(node) => {
+              (
+                iframeRef as React.MutableRefObject<HTMLIFrameElement | null>
+              ).current = node;
+              if (isStacked && node && iframeSrc) {
+                registerMobileNewsStackedPlayer(node, iframeSrc);
+              }
+            }}
             key={embedKey}
             title={label}
-            src={iframeSrc ?? playbackUrl}
+            src={stackedYoutubeIframeSrc}
             className="news-stage-youtube-embed pointer-events-none"
-            allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
             referrerPolicy="strict-origin-when-cross-origin"
+            loading="eager"
             tabIndex={-1}
+            onLoad={isStacked ? handleStackedIframeLoad : undefined}
           />
           <div
             className={cn(
@@ -224,7 +362,7 @@ export function NewsLiveStage({
             aria-hidden
           />
         </div>
-      )}
+      ) : null}
 
       {graphicUrl ? (
         <img
@@ -239,7 +377,6 @@ export function NewsLiveStage({
         className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_center,transparent_72%,#000_100%)] opacity-20 md:opacity-25 z-[3]"
         aria-hidden
       />
-
     </div>
   );
 }
