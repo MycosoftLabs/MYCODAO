@@ -20,6 +20,69 @@ export interface ProducerPresetOption {
 export interface ProducerProgramOption extends ProducerPresetOption {
   type: string;
   hasSource: boolean;
+  nasPath?: string | null;
+  videoUrl?: string | null;
+  videoId?: string | null;
+  channelId?: string | null;
+}
+
+export interface ProgramCommercialSlot {
+  id: string;
+  enabled: boolean;
+  nasPath?: string;
+  trigger: "manual" | "offsetAfterStart";
+  offsetMinutes?: number;
+  playMode: "fullDuration" | "maxSeconds";
+  maxDurationSeconds?: number;
+  autoReturnOnEnd: boolean;
+}
+
+export interface ProgramShowConfig {
+  programPresetId: string;
+  titlePresetId?: string | null;
+  titleLogoNasPath?: string | null;
+  talentPresetIds: string[];
+  customTalent?: BroadcastTalentLine[];
+  liveData: {
+    enabled: boolean;
+    assetIds: string[];
+    marketingNasPath?: string | null;
+  };
+  commercials: ProgramCommercialSlot[];
+  graphicsZones: Array<{
+    zone: "liveData" | "newsReel" | "bottomBar" | "fullscreen";
+    nasPath?: string;
+    timing: "static" | "cycle" | "showStartOffset";
+    cycleSeconds?: number;
+    offsetSeconds?: number;
+  }>;
+  newsReel: {
+    mode: "news" | "customText" | "graphic" | "hidden";
+    customCrawlText?: string;
+    graphicNasPath?: string;
+  };
+  bottomBar: {
+    mode: "newsTicker" | "customText" | "graphic" | "hidden";
+    customText?: string;
+    graphicNasPath?: string;
+  };
+  showVideoNasPath?: string | null;
+  showVideoUrl?: string | null;
+}
+
+export interface ShowOverlayPublic {
+  activeShowProgramId: string | null;
+  liveDataEnabled: boolean;
+  liveDataGraphicUrl: string | null;
+  newsReelMode: ProgramShowConfig["newsReel"]["mode"];
+  newsReelCustomText: string | null;
+  newsReelGraphicUrl: string | null;
+  bottomBarMode: ProgramShowConfig["bottomBar"]["mode"];
+  bottomBarCustomText: string | null;
+  bottomBarGraphicUrl: string | null;
+  fullscreenGraphicUrl: string | null;
+  activeCommercialLabel: string | null;
+  maxPlaybackSeconds: number | null;
 }
 
 export interface NewsProducerView {
@@ -44,6 +107,11 @@ export interface NewsProducerView {
   liveStreamDataMarketingNasPath: string | null;
   liveStreamDataMarketingImageUrl: string | null;
   titleBarLogoNasPath: string | null;
+  selectedProgramPresetId: string | null;
+  activeShowProgramId: string | null;
+  showStartedAt: string | null;
+  showOverlay: ShowOverlayPublic | null;
+  showConfigs?: Record<string, ProgramShowConfig>;
   presets?: {
     talent: ProducerPresetOption[];
     program: ProducerProgramOption[];
@@ -82,6 +150,8 @@ export async function verifyProducerSession(
 export function useNewsProducer(options?: {
   includePresets?: boolean;
   accessToken?: string;
+  /** When true, stops the 5s background poll (use while editing show config). */
+  pausePoll?: boolean;
 }) {
   const [view, setView] = useState<NewsProducerView | null>(null);
   const [loading, setLoading] = useState(true);
@@ -119,12 +189,17 @@ export function useNewsProducer(options?: {
       if (cancelled) return;
     };
     void run();
+    if (options?.pausePoll) {
+      return () => {
+        cancelled = true;
+      };
+    }
     const t = window.setInterval(() => void load(), POLL_MS);
     return () => {
       cancelled = true;
       window.clearInterval(t);
     };
-  }, [load]);
+  }, [load, options?.pausePoll]);
 
   const patch = useCallback(
     async (body: Record<string, unknown>, patchOptions?: { accessToken?: string }) => {

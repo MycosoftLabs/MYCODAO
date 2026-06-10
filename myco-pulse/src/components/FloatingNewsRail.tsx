@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { cn } from "../lib/utils";
 import type { BroadcastNewsLine } from "../data/studioPresets";
+import { ProgramZoneGraphic } from "./ProgramZoneGraphic";
 import { useMediaMinMd } from "../hooks/useMediaMinMd";
 import { NEWS_MOBILE_DOCK_ACTIVE_BLOCK_PX } from "../lib/newsStudioLayout";
 
@@ -110,13 +111,63 @@ interface FloatingNewsRailProps {
   lines: BroadcastNewsLine[];
   activeIndex: number;
   pageKey: number;
+  mode?: "news" | "customText" | "graphic" | "hidden";
+  customCrawlText?: string | null;
+  graphicUrl?: string | null;
+}
+
+function customTextToLines(text: string): BroadcastNewsLine[] {
+  const chunks = text
+    .split(/\n+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (!chunks.length) return [];
+  return chunks.map((headline, i) => ({
+    id: `show-crawl-${i}`,
+    label: "SHOW",
+    headline,
+    isDao: false,
+    summary: "",
+  }));
 }
 
 export function FloatingNewsRail({
   lines,
   activeIndex,
   pageKey,
+  mode = "news",
+  customCrawlText,
+  graphicUrl,
 }: FloatingNewsRailProps) {
+  if (mode === "hidden") return null;
+
+  const displayLines =
+    mode === "customText"
+      ? customCrawlText?.trim()
+        ? customTextToLines(customCrawlText)
+        : []
+      : lines;
+
+  if (mode === "graphic" && graphicUrl) {
+    return (
+      <div
+        className="absolute z-20 pointer-events-none"
+        style={{
+          top: SAFE_ZONE_TOP,
+          right: SAFE_ZONE_RIGHT,
+          bottom: SAFE_ZONE_BOTTOM,
+          width: GLASS_WIDTH_PX,
+        }}
+        aria-label="Show graphic reel"
+      >
+        <ProgramZoneGraphic
+          src={graphicUrl}
+          className="w-full h-full"
+          objectFit="contain"
+        />
+      </div>
+    );
+  }
   const isDesktop = useMediaMinMd();
   const glassRef = useRef<HTMLDivElement>(null);
   const activeRef = useRef<HTMLDivElement>(null);
@@ -137,20 +188,20 @@ export function FloatingNewsRail({
     if (!isDesktop) {
       return mobileStackTranslateY(
         activeIndex,
-        lines.length,
+        displayLines.length,
         glassHeightPx,
         NEWS_MOBILE_DOCK_ACTIVE_BLOCK_PX,
         MOBILE_INACTIVE_ROW_PX,
       );
     }
-    return stackTranslateY(activeIndex, lines.length, glassHeightPx);
-  }, [activeIndex, lines.length, glassHeightPx, isDesktop]);
+    return stackTranslateY(activeIndex, displayLines.length, glassHeightPx);
+  }, [activeIndex, displayLines.length, glassHeightPx, isDesktop]);
 
   useEffect(() => {
     activeRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [activeIndex, pageKey]);
 
-  if (!lines.length) return null;
+  if (!displayLines.length) return null;
 
   if (!isDesktop) {
     return (
@@ -182,7 +233,7 @@ export function FloatingNewsRail({
               transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
               style={{ willChange: "transform", gap: MOBILE_RAIL_GAP_PX }}
             >
-              {lines.map((line, i) => {
+              {displayLines.map((line, i) => {
                 const isActive = i === activeIndex;
                 const summary = clipSummary(line.summary, 2);
                 return (
@@ -283,7 +334,7 @@ export function FloatingNewsRail({
             transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
             style={{ willChange: "transform" }}
           >
-            {lines.map((line, i) => {
+            {displayLines.map((line, i) => {
               const isActive = i === activeIndex;
               const summary = clipSummary(line.summary);
               const h = rowHeight(i, activeIndex);
@@ -296,7 +347,7 @@ export function FloatingNewsRail({
                     height: h,
                     minHeight: h,
                     maxHeight: h,
-                    marginBottom: i < lines.length - 1 ? ROW_GAP_PX : 0,
+                    marginBottom: i < displayLines.length - 1 ? ROW_GAP_PX : 0,
                   }}
                   animate={{ opacity: inactiveOpacity(i, activeIndex) }}
                   transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}

@@ -16,6 +16,7 @@ export interface NewsProgramNow {
   bumperUrl?: string | null;
   loopPlayback?: boolean;
   autoReturnOnEnd?: boolean;
+  maxDurationSeconds?: number | null;
 }
 
 /** Identity for the active player source — ignores label, schedule metadata, graphics. */

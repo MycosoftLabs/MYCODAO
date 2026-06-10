@@ -80,6 +80,7 @@ export function NewsLiveStage({
     showBumper,
     loopPlayback,
     autoReturnOnEnd,
+    maxDurationSeconds,
     reload,
     slotId,
     loading: programLoading,
@@ -136,6 +137,17 @@ export function NewsLiveStage({
       /* autoplay policy */
     });
   }, [mediaUrl, videoRef]);
+
+  useEffect(() => {
+    if (!isNasPlayback || !maxDurationSeconds || maxDurationSeconds <= 0) {
+      return;
+    }
+    const ms = maxDurationSeconds * 1000;
+    const t = window.setTimeout(() => {
+      onNasEnded();
+    }, ms);
+    return () => window.clearTimeout(t);
+  }, [isNasPlayback, maxDurationSeconds, mediaUrl, slotId, onNasEnded]);
 
   useEffect(() => {
     if (!onMediaSnapshotChange) return;

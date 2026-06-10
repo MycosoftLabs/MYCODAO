@@ -3,6 +3,8 @@ import {
   applyProducerPatch,
   buildProducerPublicView,
   readProducerPresets,
+  readProgramShowConfigs,
+  type ProgramShowConfig,
   type ProducerTitleContext,
 } from "@/lib/server/news-producer";
 import { resolveNewsProgramNow } from "@/lib/server/news-channel-program";
@@ -40,6 +42,10 @@ function buildProducerApiPayload(ctx?: ProducerTitleContext) {
         id: p.id,
         label: p.label,
         type: p.type,
+        nasPath: p.nasPath?.trim() || null,
+        videoUrl: p.videoUrl?.trim() || null,
+        videoId: p.videoId?.trim() || null,
+        channelId: p.channelId?.trim() || null,
         hasSource: Boolean(
           p.videoUrl?.trim() ||
             p.videoId?.trim() ||
@@ -53,6 +59,7 @@ function buildProducerApiPayload(ctx?: ProducerTitleContext) {
         logoNasPath: t.logoNasPath?.trim() || null,
       })),
     },
+    showConfigs: readProgramShowConfigs(),
   };
 }
 
@@ -185,6 +192,30 @@ export async function PATCH(req: Request) {
       clearLiveStreamDataMarketing: body.clearLiveStreamDataMarketing === true,
       clearTitleBarLogo: body.clearTitleBarLogo === true,
       returnToLive: body.returnToLive === true,
+      endShow: body.endShow === true,
+      pushShowLive: body.pushShowLive === true,
+      saveProgramShowConfig:
+        body.saveProgramShowConfig &&
+        typeof body.saveProgramShowConfig === "object"
+          ? (body.saveProgramShowConfig as {
+              programPresetId: string;
+              config: ProgramShowConfig;
+            })
+          : undefined,
+      selectProgramPresetId:
+        body.selectProgramPresetId === null
+          ? null
+          : typeof body.selectProgramPresetId === "string"
+            ? body.selectProgramPresetId
+            : undefined,
+      goOnAirProgramId:
+        typeof body.goOnAirProgramId === "string"
+          ? body.goOnAirProgramId
+          : undefined,
+      fireCommercialSlot:
+        body.fireCommercialSlot && typeof body.fireCommercialSlot === "object"
+          ? (body.fireCommercialSlot as { programId: string; slotId: string })
+          : undefined,
       updatedBy:
         typeof body.updatedBy === "string" ? body.updatedBy : auth.email,
     });

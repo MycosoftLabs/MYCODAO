@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { applyProducerPatch, readProducerState } from "@/lib/server/news-producer";
+import {
+  applyProducerPatch,
+  readProducerState,
+  resumeActiveShow,
+} from "@/lib/server/news-producer";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +19,11 @@ export async function POST() {
     if (t !== "commercial" && t !== "recorded") {
       return NextResponse.json({ ok: false, reason: "not_auto_return_type" });
     }
-    applyProducerPatch({ returnToLive: true, updatedBy: "nas-complete" });
+    if (state.activeShowProgramId) {
+      resumeActiveShow();
+    } else {
+      applyProducerPatch({ returnToLive: true, updatedBy: "nas-complete" });
+    }
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("news/program/nas-complete:", e);

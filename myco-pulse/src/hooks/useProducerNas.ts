@@ -35,6 +35,40 @@ export interface ScheduleSlot {
   end?: string;
   priority?: number;
   titlePresetId?: string;
+  programPresetId?: string;
+  streamlabsSceneId?: string;
+  streamlabsSceneName?: string;
+  googleCalendarEventId?: string;
+  notes?: string;
+  color?: string;
+  enabled?: boolean;
+}
+
+export interface SchedulerIntegrationsConfig {
+  streamlabs?: {
+    enabled?: boolean;
+    remoteApiUrl?: string;
+    remoteToken?: string;
+    autoSwitchOnSlotChange?: boolean;
+    sceneBySlotType?: Record<string, string>;
+    lastConnectedAt?: string;
+    lastError?: string;
+  };
+  googleCalendar?: {
+    enabled?: boolean;
+    calendarId?: string;
+    icalUrl?: string;
+    autoImportEnabled?: boolean;
+    exportFeedToken?: string;
+    lastSyncAt?: string;
+    lastSyncError?: string;
+    lastExportAt?: string;
+  };
+  scheduler?: {
+    autoGoOnAirOnSlotStart?: boolean;
+    autoPushLiveOnSlotStart?: boolean;
+    autoEndShowOnSlotEnd?: boolean;
+  };
 }
 
 export interface NewsChannelSchedule {
@@ -42,6 +76,7 @@ export interface NewsChannelSchedule {
   timezone: string;
   defaultSource: ScheduleSlot;
   slots: ScheduleSlot[];
+  integrations?: SchedulerIntegrationsConfig;
 }
 
 export function useProducerNas() {

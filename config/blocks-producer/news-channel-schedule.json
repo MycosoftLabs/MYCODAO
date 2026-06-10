@@ -1,6 +1,32 @@
 {
   "channel": "MycoDAO News",
   "timezone": "America/Los_Angeles",
+  "integrations": {
+    "streamlabs": {
+      "enabled": false,
+      "remoteApiUrl": "",
+      "remoteToken": "",
+      "autoSwitchOnSlotChange": true,
+      "sceneBySlotType": {
+        "youtube_live_channel": "",
+        "commercial": "",
+        "bumper": "",
+        "recorded": ""
+      }
+    },
+    "googleCalendar": {
+      "enabled": false,
+      "calendarId": "",
+      "icalUrl": "",
+      "autoImportEnabled": false,
+      "exportFeedToken": ""
+    },
+    "scheduler": {
+      "autoGoOnAirOnSlotStart": false,
+      "autoPushLiveOnSlotStart": true,
+      "autoEndShowOnSlotEnd": true
+    }
+  },
   "defaultSource": {
     "type": "default",
     "label": "Off air",

@@ -15,6 +15,8 @@
     "lint": "next lint",
     "check:backends": "node scripts/check-pulse-backends.mjs",
     "test:pulse-smoke": "node scripts/pulse-smoke-local.mjs",
+    "test:producer-side-panel": "node scripts/test-producer-side-panel.mjs",
+    "test:producer-patch": "npx --yes tsx scripts/test-producer-patch-direct.ts",
     "test:pulse-smoke:prod": "node scripts/pulse-smoke-local.mjs https://blocks.mycodao.com",
     "test:blocks-smoke:prod": "node scripts/pulse-smoke-local.mjs https://blocks.mycodao.com",
     "docs:pdf": "node scripts/generate-report-pdf.js",

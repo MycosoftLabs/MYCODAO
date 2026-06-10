@@ -71,6 +71,10 @@ curl.exe -s https://blocks.mycodao.com/api/news/program
 
 Hard-refresh Blocks after deploy (or purge Cloudflare) so `/blocks/` loads new `NewsBroadcastView` bundle.
 
-## Next phase (not in this release)
+## Next phase
 
-OBS / Streamlabs preview, Google Calendar, producer stream monitor — planned upgrade after loop/schedule is stable.
+**Shipped Jun 09, 2026:** [Producer Program Side Panel and per-show overlay config](./PRODUCER_PROGRAM_SIDE_PANEL_COMPLETE_JUN09_2026.md) — split producer layout, `ProgramShowConfig`, `showOverlay` on viewer, commercial resume-show via `nas-complete`.
+
+**Shipped Jun 10, 2026:** [Scheduler Phase 2 — Streamlabs, Google Calendar, auto go-on-air, n8n cron](./BLOCKS_SCHEDULER_PHASE2_COMPLETE_JUN10_2026.md) and [Scheduler integrations](./SCHEDULER_STREAMLABS_GCAL_COMPLETE_JUN10_2026.md).
+
+**Still planned:** OBS / Streamlabs in-producer preview, producer stream monitor.

@@ -102,6 +102,7 @@ export function useNewsProgramState() {
 
   const loopPlayback = Boolean(program?.loopPlayback);
   const autoReturnOnEnd = Boolean(program?.autoReturnOnEnd);
+  const maxDurationSeconds = program?.maxDurationSeconds ?? null;
 
   return {
     embedUrl,
@@ -119,6 +120,7 @@ export function useNewsProgramState() {
     playbackActive,
     loopPlayback,
     autoReturnOnEnd,
+    maxDurationSeconds,
     reload,
     isConfigured: Boolean(playbackUrl || bumperUrl),
     isNasPlayback: Boolean(mediaUrl),

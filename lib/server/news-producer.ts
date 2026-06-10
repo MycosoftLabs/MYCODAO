@@ -6,6 +6,25 @@ import {
 } from "@/lib/news-channel-embed";
 import type { ProgramSourceType } from "@/lib/server/news-channel-program";
 import { resolveBlocksMediaFile } from "@/lib/server/blocks-nas-media";
+import {
+  buildShowOverlay,
+  getShowConfigForProgram,
+  readProgramShowConfigs,
+  writeProgramShowConfig,
+  type ProgramShowConfig,
+  type ShowOverlayPublic,
+} from "@/lib/server/news-program-show-config";
+import {
+  applyCommercialSlotToState,
+  maxSecondsForActiveCommercial,
+} from "@/lib/server/news-program-commercials";
+
+export type { ProgramShowConfig, ShowOverlayPublic };
+export {
+  getShowConfigForProgram,
+  readProgramShowConfigs,
+  writeProgramShowConfig,
+};
 
 export interface BroadcastTalentLine {
   name: string;
@@ -86,6 +105,13 @@ export interface NewsProducerState {
   liveStreamDataAssetIds: string[];
   /** Square marketing logo in Live Stream Data widget (NAS graphics/) */
   liveStreamDataMarketingNasPath: string | null;
+  /** UI selection for program side panel */
+  selectedProgramPresetId: string | null;
+  /** Active configured show session (go on air) */
+  activeShowProgramId: string | null;
+  showStartedAt: string | null;
+  commercialFiredSlotIds: string[];
+  activeCommercialSlotId: string | null;
 }
 
 export interface NewsProducerPublic {
@@ -111,6 +137,10 @@ export interface NewsProducerPublic {
   liveStreamDataMarketingImageUrl: string | null;
   /** NAS graphics/ path for title bar logo (preset or custom title) */
   titleBarLogoNasPath: string | null;
+  selectedProgramPresetId: string | null;
+  activeShowProgramId: string | null;
+  showStartedAt: string | null;
+  showOverlay: ShowOverlayPublic | null;
 }
 
 const DEFAULT_STATE_PATH = path.join(
@@ -183,6 +213,11 @@ export function readProducerState(): NewsProducerState {
     activeGraphicNasPath: null,
     liveStreamDataAssetIds: [],
     liveStreamDataMarketingNasPath: null,
+    selectedProgramPresetId: null,
+    activeShowProgramId: null,
+    showStartedAt: null,
+    commercialFiredSlotIds: [],
+    activeCommercialSlotId: null,
   };
   const raw =
     readJsonFile<NewsProducerState>(statePath()) ??
@@ -199,6 +234,11 @@ export function readProducerState(): NewsProducerState {
       raw.liveStreamDataAssetIds ?? [],
     ),
     liveStreamDataMarketingNasPath: raw.liveStreamDataMarketingNasPath ?? null,
+    selectedProgramPresetId: raw.selectedProgramPresetId ?? null,
+    activeShowProgramId: raw.activeShowProgramId ?? null,
+    showStartedAt: raw.showStartedAt ?? null,
+    commercialFiredSlotIds: raw.commercialFiredSlotIds ?? [],
+    activeCommercialSlotId: raw.activeCommercialSlotId ?? null,
   };
 }
 
@@ -603,6 +643,14 @@ export function buildProducerPublicView(
     ? resolveNasMediaServeUrl(state.activeGraphicNasPath)
     : null;
 
+  const maxPlaybackSeconds = maxSecondsForActiveCommercial(state);
+  const showOverlay = buildShowOverlay(
+    state.activeShowProgramId,
+    state.programMode,
+    state.programOverride?.label ?? null,
+    maxPlaybackSeconds,
+  );
+
   return {
     updatedAt: state.updatedAt,
     talent: talent.lines,
@@ -628,6 +676,10 @@ export function buildProducerPublicView(
       ? resolveNasMediaServeUrl(state.liveStreamDataMarketingNasPath.trim())
       : null,
     titleBarLogoNasPath: titleBar.logoNasPath,
+    selectedProgramPresetId: state.selectedProgramPresetId ?? null,
+    activeShowProgramId: state.activeShowProgramId ?? null,
+    showStartedAt: state.showStartedAt ?? null,
+    showOverlay,
   };
 }
 
@@ -662,6 +714,168 @@ export function verifyProducerApiKey(req: Request): boolean {
   return Boolean(provided && provided === expected);
 }
 
+function clearShowRuntime(next: NewsProducerState): void {
+  next.activeShowProgramId = null;
+  next.showStartedAt = null;
+  next.commercialFiredSlotIds = [];
+  next.activeCommercialSlotId = null;
+}
+
+function mergeTalentLines(
+  presetIds: string[],
+  presets: NewsProducerPresets,
+  customLines: BroadcastTalentLine[] | undefined,
+): BroadcastTalentLine[] {
+  const seen = new Set<string>();
+  const lines: BroadcastTalentLine[] = [];
+
+  for (const id of presetIds) {
+    const preset = presets.talent.find((t) => t.id === id);
+    for (const line of preset?.lines ?? []) {
+      const key = line.name.trim().toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      lines.push(line);
+    }
+  }
+
+  for (const line of customLines ?? []) {
+    const key = line.name.trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    lines.push(line);
+  }
+
+  return lines;
+}
+
+function applyShowConfigToState(
+  next: NewsProducerState,
+  config: ProgramShowConfig,
+  presets: NewsProducerPresets,
+): void {
+  if (config.titlePresetId) {
+    applyTitlePresetSync(next, presets, config.titlePresetId);
+  }
+  if (config.titleLogoNasPath?.trim()) {
+    const rel = config.titleLogoNasPath.trim();
+    if (resolveBlocksMediaFile(rel)) {
+      next.customTitleLogoNasPath = rel;
+    }
+  }
+
+  const talentIds = config.talentPresetIds ?? [];
+  if (talentIds.length === 1) {
+    next.activeTalentPresetId = talentIds[0];
+    const extra = config.customTalent?.filter(Boolean) ?? [];
+    if (extra.length) {
+      const preset = presets.talent.find((t) => t.id === talentIds[0]);
+      const merged = mergeTalentLines(talentIds, presets, [
+        ...(preset?.lines ?? []),
+        ...extra,
+      ]);
+      next.customTalent = merged.length ? merged : null;
+      next.activeTalentPresetId = null;
+    } else {
+      next.customTalent = null;
+    }
+  } else if (talentIds.length > 1 || (config.customTalent?.length ?? 0) > 0) {
+    const merged = mergeTalentLines(talentIds, presets, config.customTalent);
+    next.customTalent = merged.length ? merged : null;
+    next.activeTalentPresetId = null;
+  }
+
+  if (config.liveData.enabled) {
+    next.liveStreamDataAssetIds = normalizeLiveStreamDataAssetIds(
+      config.liveData.assetIds ?? [],
+    );
+    const marketing = config.liveData.marketingNasPath?.trim() || null;
+    if (marketing && resolveBlocksMediaFile(marketing)) {
+      next.liveStreamDataMarketingNasPath = marketing;
+    } else if (!marketing) {
+      /* keep existing marketing unless explicitly cleared in config */
+    }
+  } else {
+    next.liveStreamDataAssetIds = [];
+    next.liveStreamDataMarketingNasPath = null;
+  }
+
+  const fullscreen = config.graphicsZones?.find((z) => z.zone === "fullscreen");
+  if (fullscreen?.nasPath?.trim() && resolveBlocksMediaFile(fullscreen.nasPath)) {
+    next.activeGraphicNasPath = fullscreen.nasPath.trim();
+  }
+}
+
+function applyShowStreamFromPreset(
+  next: NewsProducerState,
+  preset: ProgramAssetPreset,
+  config?: ProgramShowConfig | null,
+): void {
+  if (preset.type === "live" || preset.id === "return-live") {
+    next.programMode = "schedule";
+    next.activeProgramPresetId = null;
+    next.programOverride = null;
+    return;
+  }
+
+  const configNas = config?.showVideoNasPath?.trim() || null;
+  const configUrl = config?.showVideoUrl?.trim() || null;
+  const nasPath =
+    configNas && resolveBlocksMediaFile(configNas) ? configNas : preset.nasPath;
+
+  next.programMode = preset.type;
+  next.activeProgramPresetId = preset.id;
+  next.programOverride = {
+    label: preset.label,
+    type: preset.type,
+    videoUrl: configUrl || preset.videoUrl,
+    videoId: preset.videoId,
+    channelId: preset.channelId,
+    nasPath,
+  };
+}
+
+function pushActiveShowLive(next: NewsProducerState, presets: NewsProducerPresets): boolean {
+  const showId = next.activeShowProgramId;
+  if (!showId) return false;
+  const preset = presets.program.find((p) => p.id === showId);
+  const config = getShowConfigForProgram(showId);
+  if (!preset || !config) return false;
+  applyShowConfigToState(next, config, presets);
+  applyShowStreamFromPreset(next, preset, config);
+  return true;
+}
+
+export function resumeActiveShow(): NewsProducerState {
+  const state = readProducerState();
+  if (!state.activeShowProgramId) {
+    return applyProducerPatch({ returnToLive: true, updatedBy: "nas-complete" });
+  }
+
+  const presets = readProducerPresets();
+  const preset = presets.program.find(
+    (p) => p.id === state.activeShowProgramId,
+  );
+  const config = getShowConfigForProgram(state.activeShowProgramId);
+  if (!preset || !config) {
+    return applyProducerPatch({ returnToLive: true, updatedBy: "nas-complete" });
+  }
+
+  const next: NewsProducerState = { ...state };
+
+  if (state.activeCommercialSlotId) {
+    const fired = new Set(next.commercialFiredSlotIds ?? []);
+    fired.add(state.activeCommercialSlotId);
+    next.commercialFiredSlotIds = [...fired];
+    next.activeCommercialSlotId = null;
+  }
+
+  applyShowConfigToState(next, config, presets);
+  applyShowStreamFromPreset(next, preset, config);
+  next.updatedAt = new Date().toISOString();
+  return writeProducerState(next);
+}
+
 type PatchBody = Partial<{
   activeTalentPresetId: string | null;
   customTalent: BroadcastTalentLine[] | null;
@@ -685,6 +899,12 @@ type PatchBody = Partial<{
   clearLiveStreamDataMarketing: boolean;
   clearTitleBarLogo: boolean;
   returnToLive: boolean;
+  endShow: boolean;
+  pushShowLive: boolean;
+  saveProgramShowConfig: { programPresetId: string; config: ProgramShowConfig };
+  selectProgramPresetId: string | null;
+  goOnAirProgramId: string;
+  fireCommercialSlot: { programId: string; slotId: string };
   updatedBy: string;
 }>;
 
@@ -693,13 +913,60 @@ export function applyProducerPatch(body: PatchBody): NewsProducerState {
   const presets = readProducerPresets();
   const next: NewsProducerState = { ...state };
 
-  if (body.returnToLive) {
+  if (body.returnToLive || body.endShow) {
+    clearShowRuntime(next);
     next.programMode = "schedule";
     next.activeProgramPresetId = null;
     next.programOverride = null;
     next.activeGraphicNasPath = null;
     next.activeTitlePresetId = null;
     next.customTitleLogoNasPath = null;
+  }
+
+  if (body.saveProgramShowConfig?.programPresetId) {
+    writeProgramShowConfig(
+      body.saveProgramShowConfig.programPresetId,
+      body.saveProgramShowConfig.config,
+    );
+  }
+
+  if (body.selectProgramPresetId !== undefined) {
+    next.selectedProgramPresetId = body.selectProgramPresetId;
+  }
+
+  if (body.goOnAirProgramId) {
+    const preset = presets.program.find((p) => p.id === body.goOnAirProgramId);
+    const config = getShowConfigForProgram(body.goOnAirProgramId);
+    if (preset && config) {
+      clearShowRuntime(next);
+      next.activeShowProgramId = preset.id;
+      next.showStartedAt = new Date().toISOString();
+      next.selectedProgramPresetId = preset.id;
+      applyShowConfigToState(next, config, presets);
+      applyShowStreamFromPreset(next, preset, config);
+    }
+  }
+
+  if (body.pushShowLive) {
+    pushActiveShowLive(next, presets);
+  }
+
+  if (body.fireCommercialSlot?.programId && body.fireCommercialSlot?.slotId) {
+    const config = getShowConfigForProgram(body.fireCommercialSlot.programId);
+    const slot = config?.commercials?.find(
+      (s) => s.id === body.fireCommercialSlot!.slotId,
+    );
+    if (slot?.enabled && slot.nasPath?.trim()) {
+      const patched = applyCommercialSlotToState(
+        next,
+        slot,
+        `Commercial · ${slot.id}`,
+      );
+      Object.assign(next, patched);
+      if (!next.activeShowProgramId) {
+        next.activeShowProgramId = body.fireCommercialSlot.programId;
+      }
+    }
   }
 
   if (body.clearGraphic) {

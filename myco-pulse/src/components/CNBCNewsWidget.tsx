@@ -47,6 +47,7 @@ import {
 } from '../lib/newsStudioLayout';
 import { MarketsNowMobileRail } from './MarketsNowMobileRail';
 import { FloatingNewsRail } from './FloatingNewsRail';
+import { ProgramZoneGraphic } from './ProgramZoneGraphic';
 import { ProducerTalentBar } from './ProducerTalentBar';
 import { ProducerTitleBar } from './ProducerTitleBar';
 import { LiveStreamMarketingLogo } from './LiveStreamMarketingLogo';
@@ -372,7 +373,12 @@ export const CNBCNewsWidget = ({
   const [timezoneIndex, setTimezoneIndex] = useState(0);
   const [acquisitionIndex, setAcquisitionIndex] = useState(0);
   const [marketsCategoryIndex, setMarketsCategoryIndex] = useState(0);
-  const { liveStreamData } = useNewsProducer();
+  const { liveStreamData, view: producerView } = useNewsProducer();
+  const showOverlay = producerView?.showOverlay ?? null;
+  const liveDataVisible = showOverlay ? showOverlay.liveDataEnabled : true;
+  const bottomBarHidden = showOverlay?.bottomBarMode === 'hidden';
+  const bottomBarCustomText = showOverlay?.bottomBarCustomText ?? null;
+  const bottomBarGraphicUrl = showOverlay?.bottomBarGraphicUrl ?? null;
 
   const bumperZoneClocks = useMemo(() => buildBumperZoneClocks(), [clockTick]);
 
@@ -530,10 +536,12 @@ export const CNBCNewsWidget = ({
     return () => clearInterval(t);
   }, [currentPageLines.length, floatingNewsPages.length]);
 
-  const tickerSegments = useMemo(
-    () => buildLiveNewsTickerSegments(newsLines, tickers),
-    [newsLines, tickers]
-  );
+  const tickerSegments = useMemo(() => {
+    if (showOverlay?.bottomBarMode === 'customText' && bottomBarCustomText) {
+      return [{ kind: 'news' as const, text: bottomBarCustomText }];
+    }
+    return buildLiveNewsTickerSegments(newsLines, tickers);
+  }, [newsLines, tickers, showOverlay?.bottomBarMode, bottomBarCustomText]);
 
   const marketsCategorySets = useMemo(
     () => buildMarketsNowCategorySets(marketIndices, tickers),
@@ -574,9 +582,15 @@ export const CNBCNewsWidget = ({
           "relative flex-1 min-h-0 overflow-hidden z-10",
           mobileStacked
             ? "flex flex-row"
-            : "grid grid-cols-1 md:[grid-template-columns:1fr_var(--news-markets-rail-width)]",
+            : liveDataVisible
+              ? "grid grid-cols-1 md:[grid-template-columns:1fr_var(--news-markets-rail-width)]"
+              : "grid grid-cols-1",
         )}
-        style={{ ["--news-markets-rail-width" as string]: marketsRailWidth }}
+        style={
+          liveDataVisible
+            ? { ["--news-markets-rail-width" as string]: marketsRailWidth }
+            : undefined
+        }
       >
         <div
           className={cn(
@@ -611,40 +625,52 @@ export const CNBCNewsWidget = ({
             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_55%,#000_90%)] pointer-events-none opacity-25 md:opacity-35" />
           ) : null}
 
-          <motion.div
-            className="absolute top-[calc(1.25rem+10px)] left-5 z-20 hidden md:flex flex-col gap-0 pointer-events-auto"
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.45 }}
-          >
-            <div className="bg-[#0055cc] px-3 py-0.5 text-[9px] font-black text-white uppercase tracking-[0.2em]">
-              LIVE STREAM DATA
-            </div>
-            <LiveStreamAcquisitionPanel
-              quote={
-                acquisitionQuote ?? {
-                  symbol: "BTC",
-                  label: "Bitcoin CM",
-                  price: "—",
-                  change: "—",
-                  up: true,
+          {liveDataVisible ? (
+            <motion.div
+              className="absolute top-[calc(1.25rem+10px)] left-5 z-20 hidden md:flex flex-col gap-0 pointer-events-auto"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.45 }}
+            >
+              <div className="bg-[#0055cc] px-3 py-0.5 text-[9px] font-black text-white uppercase tracking-[0.2em]">
+                LIVE STREAM DATA
+              </div>
+              <LiveStreamAcquisitionPanel
+                quote={
+                  acquisitionQuote ?? {
+                    symbol: "BTC",
+                    label: "Bitcoin CM",
+                    price: "—",
+                    change: "—",
+                    up: true,
+                  }
                 }
-              }
-              marketingImageUrl={liveStreamData.marketingImageUrl}
-            />
-          </motion.div>
+                marketingImageUrl={liveStreamData.marketingImageUrl}
+              />
+            </motion.div>
+          ) : showOverlay?.liveDataGraphicUrl ? (
+            <div className="absolute top-[calc(1.25rem+10px)] left-5 z-20 hidden md:block w-[200px] h-[120px] pointer-events-none">
+              <ProgramZoneGraphic
+                src={showOverlay.liveDataGraphicUrl}
+                className="w-full h-full"
+              />
+            </div>
+          ) : null}
 
           <FloatingNewsRail
             lines={currentPageLines}
             activeIndex={activeTabIndex}
             pageKey={newsPageIndex}
+            mode={showOverlay?.newsReelMode ?? 'news'}
+            customCrawlText={showOverlay?.newsReelCustomText}
+            graphicUrl={showOverlay?.newsReelGraphicUrl}
           />
 
           {overlayMode && !mobileStacked ? <ProducerTalentBar /> : null}
           </div>
         </div>
 
-        {mobileStacked ? (
+        {mobileStacked && liveDataVisible ? (
           <MarketsNowMobileRail
             sets={marketsCategorySets}
             activeIndex={marketsCategoryIndex}
@@ -652,7 +678,7 @@ export const CNBCNewsWidget = ({
           />
         ) : null}
 
-        {/* MARKETS NOW — desktop rail only; hidden on phone */}
+        {liveDataVisible ? (
         <div
           className="hidden md:grid h-full min-h-0 min-w-0 border-l border-white/10 relative z-30 overflow-hidden bg-[#0a1128]"
           style={{ gridTemplateRows: 'auto minmax(0, 1fr) auto' }}
@@ -676,6 +702,14 @@ export const CNBCNewsWidget = ({
             </div>
           </div>
         </div>
+        ) : showOverlay?.liveDataGraphicUrl ? (
+          <div className="hidden md:block h-full min-w-0 border-l border-white/10 relative z-30 overflow-hidden bg-[#0a1128] p-4">
+            <ProgramZoneGraphic
+              src={showOverlay.liveDataGraphicUrl}
+              className="w-full h-full min-h-[200px]"
+            />
+          </div>
+        ) : null}
       </div>
 
       {mobileStacked ? (
@@ -687,7 +721,7 @@ export const CNBCNewsWidget = ({
         />
       ) : null}
 
-      {/* Bottom bumper + structured crawl ticker — fixed footprint, never overlays Markets Now */}
+      {!bottomBarHidden ? (
       <div
         className={cn(
           "shrink-0 flex flex-col relative z-50 bg-black",
@@ -695,6 +729,12 @@ export const CNBCNewsWidget = ({
         )}
         style={{ minHeight: bumperHeight }}
       >
+        {showOverlay?.bottomBarMode === 'graphic' && bottomBarGraphicUrl ? (
+          <div className="flex items-center justify-center bg-black" style={{ minHeight: bumperHeight }}>
+            <ProgramZoneGraphic src={bottomBarGraphicUrl} className="max-h-[88px] w-full px-4" />
+          </div>
+        ) : (
+          <>
         <div
           className="flex border-t-2 border-white/20"
           style={{ height: NEWS_BUMPER_ROW_HEIGHT }}
@@ -714,10 +754,18 @@ export const CNBCNewsWidget = ({
             </div>
           </div>
           <div className="flex-1 min-w-0 bg-white overflow-hidden flex items-center">
-            {currentPageLines.length ? (
-              <HeadlineVerticalTicker lines={currentPageLines} activeIndex={activeTabIndex} />
-            ) : displayLines.length ? (
-              <HeadlineVerticalTicker lines={displayLines} activeIndex={0} />
+            {showOverlay?.bottomBarMode === 'customText' ? (
+              bottomBarCustomText ? (
+                <p className="px-4 text-[11px] font-black uppercase text-[#0055cc] line-clamp-3">
+                  {bottomBarCustomText}
+                </p>
+              ) : null
+            ) : showOverlay?.bottomBarMode === 'newsTicker' || !showOverlay ? (
+              currentPageLines.length ? (
+                <HeadlineVerticalTicker lines={currentPageLines} activeIndex={activeTabIndex} />
+              ) : displayLines.length ? (
+                <HeadlineVerticalTicker lines={displayLines} activeIndex={0} />
+              ) : null
             ) : null}
           </div>
         </div>
@@ -727,7 +775,10 @@ export const CNBCNewsWidget = ({
           label="LIVE"
           className="h-[26px] bg-[#0a0a0a] [&_.pulse-ticker-crawl]:text-[7px] sm:[&_.pulse-ticker-crawl]:text-[9px]"
         />
+          </>
+        )}
       </div>
+      ) : null}
     </div>
   );
 };

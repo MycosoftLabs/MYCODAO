@@ -32,6 +32,10 @@ import { loadMarketsSnapshot } from "../lib/pulseMarketsStore";
 import type { PulseTicker } from "../lib/pulseApi";
 import type { StudioMarketIndex } from "../data/studioPresets";
 import { NasGraphicsPicker } from "./NasGraphicsPicker";
+import { ProgramDetailPanel } from "./ProgramDetailPanel";
+import { SchedulerDetailPanel } from "./SchedulerDetailPanel";
+import { SchedulerWeekTimeline } from "./SchedulerWeekTimeline";
+import { useSchedulerIntegrations } from "../hooks/useSchedulerIntegrations";
 
 interface ProducerDashboardProps {
   onExit: () => void;
@@ -61,10 +65,19 @@ function formatBytes(n: number): string {
 
 export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
   const auth = useProducerAuth();
+  const [panelProgramId, setPanelProgramId] = useState<string | null>(null);
+  const [panelScheduleSlotId, setPanelScheduleSlotId] = useState<string | null>(
+    null,
+  );
+  const [showScheduleIntegrations, setShowScheduleIntegrations] =
+    useState(false);
+
   const { view, presets, loading, error, patch, reload } = useNewsProducer({
     includePresets: true,
     accessToken: auth.accessToken,
+    pausePoll: panelProgramId !== null || panelScheduleSlotId !== null,
   });
+  const schedulerIntegrations = useSchedulerIntegrations(auth.accessToken);
   const nas = useProducerNas();
   const [authError, setAuthError] = useState<string | null>(null);
   const [authOk, setAuthOk] = useState(false);
@@ -88,7 +101,6 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
   const [scheduleDraft, setScheduleDraft] = useState<NewsChannelSchedule | null>(
     null,
   );
-
   useEffect(() => {
     if (nas.schedule) setScheduleDraft(nas.schedule);
   }, [nas.schedule]);
@@ -152,6 +164,49 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
       ),
     [nas.assets],
   );
+
+  const commercialNasAssets = useMemo(
+    () =>
+      nas.assets.filter(
+        (a) =>
+          a.category === "commercials" ||
+          a.category === "shows" ||
+          a.relPath.startsWith("commercials/"),
+      ),
+    [nas.assets],
+  );
+
+  const showVideoAssets = useMemo(
+    () =>
+      nas.assets.filter(
+        (a) =>
+          a.category === "shows" ||
+          a.relPath.startsWith("shows/") ||
+          a.kind === "video",
+      ),
+    [nas.assets],
+  );
+
+  const panelPreset = useMemo(
+    () => presets?.program?.find((p) => p.id === panelProgramId) ?? null,
+    [presets?.program, panelProgramId],
+  );
+
+  const panelShowConfigKey = useMemo(() => {
+    if (!panelProgramId) return "";
+    const cfg = view?.showConfigs?.[panelProgramId];
+    return cfg ? JSON.stringify(cfg) : "";
+  }, [
+    panelProgramId,
+    panelProgramId
+      ? JSON.stringify(view?.showConfigs?.[panelProgramId] ?? null)
+      : "",
+  ]);
+
+  const panelShowConfig = useMemo(() => {
+    if (!panelShowConfigKey) return null;
+    return JSON.parse(panelShowConfigKey) as import("../hooks/useNewsProducer").ProgramShowConfig;
+  }, [panelShowConfigKey]);
 
   const coreTitlePresets = useMemo(
     () =>
@@ -232,12 +287,46 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
     await runPatch({ customTalent: lines, activeTalentPresetId: null });
   }
 
-  async function fireProgram(id: string) {
-    await runPatch({ fireProgramPresetId: id });
+  async function selectProgram(id: string) {
+    setPanelProgramId(id);
+    if (view?.selectedProgramPresetId !== id) {
+      await runPatch({ selectProgramPresetId: id });
+    }
+  }
+
+  async function saveProgramShowConfig(
+    programPresetId: string,
+    config: import("../hooks/useNewsProducer").ProgramShowConfig,
+  ) {
+    await runPatch({ saveProgramShowConfig: { programPresetId, config } });
+  }
+
+  async function goOnAirProgram(programId: string) {
+    await runPatch({ goOnAirProgramId: programId });
+  }
+
+  async function fireCommercialSlot(programId: string, slotId: string) {
+    await runPatch({ fireCommercialSlot: { programId, slotId } });
+  }
+
+  async function endShow() {
+    await runPatch({ endShow: true });
+    setPanelProgramId(null);
+  }
+
+  async function pushShowLive(
+    programPresetId: string,
+    config: import("../hooks/useNewsProducer").ProgramShowConfig,
+  ) {
+    await runPatch({
+      saveProgramShowConfig: { programPresetId, config },
+      pushShowLive: true,
+    });
   }
 
   async function returnToLive() {
     await runPatch({ returnToLive: true });
+    setPanelProgramId(null);
   }
 
   async function fireCustomProgram() {
@@ -308,10 +397,11 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
 
   function addSlot() {
     if (!scheduleDraft) return;
+    const id = `slot-${Date.now()}`;
     const slots = [
       ...scheduleDraft.slots,
       {
-        id: `slot-${Date.now()}`,
+        id,
         type: "commercial",
         label: "New slot",
         nasPath: "",
@@ -319,10 +409,54 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
         start: "12:00",
         end: "12:05",
         priority: 10,
+        enabled: true,
       },
     ];
     setScheduleDraft({ ...scheduleDraft, slots });
+    setPanelScheduleSlotId(id);
   }
+
+  function selectScheduleSlot(slotId: string) {
+    setPanelScheduleSlotId(slotId);
+  }
+
+  function updateIntegrationsDraft(
+    patch: NonNullable<typeof scheduleDraft>["integrations"],
+  ) {
+    if (!scheduleDraft) return;
+    setScheduleDraft({
+      ...scheduleDraft,
+      integrations: {
+        ...scheduleDraft.integrations,
+        ...patch,
+        streamlabs: {
+          ...scheduleDraft.integrations?.streamlabs,
+          ...patch?.streamlabs,
+        },
+        googleCalendar: {
+          ...scheduleDraft.integrations?.googleCalendar,
+          ...patch?.googleCalendar,
+        },
+        scheduler: {
+          ...scheduleDraft.integrations?.scheduler,
+          ...patch?.scheduler,
+        },
+      },
+    });
+  }
+
+  const panelScheduleSlotIndex = useMemo(() => {
+    if (!scheduleDraft || !panelScheduleSlotId) return -1;
+    return scheduleDraft.slots.findIndex((s) => s.id === panelScheduleSlotId);
+  }, [scheduleDraft, panelScheduleSlotId]);
+
+  const panelScheduleSlot =
+    panelScheduleSlotIndex >= 0 && scheduleDraft
+      ? scheduleDraft.slots[panelScheduleSlotIndex]
+      : null;
+
+  const nowScheduleSlotId =
+    typeof nas.programNow?.slotId === "string" ? nas.programNow.slotId : null;
 
   function removeSlot(index: number) {
     if (!scheduleDraft) return;
@@ -430,7 +564,16 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
         ))}
       </nav>
 
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 max-w-5xl mx-auto w-full">
+      <div className="flex flex-1 min-h-0">
+      <div
+        className={cn(
+          "flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 w-full min-w-0",
+          (panelProgramId && tab === "program") ||
+          (panelScheduleSlotId && tab === "schedule")
+            ? "hidden md:block"
+            : "",
+        )}
+      >
         <section className="border border-amber-500/30 bg-amber-500/5 p-4 space-y-3">
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-400">
             Producer sign-in
@@ -780,170 +923,76 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
 
         {tab === "schedule" && scheduleDraft ? (
           <section className="space-y-4">
-            <p className="text-xs text-white/60">
-              Timezone: <strong>{scheduleDraft.timezone}</strong>. Slots use{" "}
-              <code>nasPath</code> (e.g.{" "}
-              <code>commercials/mycodao-15s.mp4</code>) or YouTube fields.
-              Higher priority wins overlaps.
+            <h2 className="text-[10px] font-black uppercase tracking-[0.25em] text-white/70 flex items-center gap-2">
+              <Calendar className="size-4" />
+              Channel scheduler
+            </h2>
+            <p className="text-xs text-white/50">
+              Tap a slot on the week grid or list to edit in the side panel.
+              Streamlabs scenes switch automatically when a slot goes on air
+              (when enabled). Import Google Calendar events as slots.
             </p>
 
-            <div className="border border-white/10 p-4 space-y-3 bg-black/30">
-              <p className="text-[10px] font-bold uppercase text-white/50">
-                Default source
-              </p>
-              <input
-                value={scheduleDraft.defaultSource.label}
-                onChange={(e) =>
-                  setScheduleDraft({
-                    ...scheduleDraft,
-                    defaultSource: {
-                      ...scheduleDraft.defaultSource,
-                      label: e.target.value,
-                    },
-                  })
-                }
-                placeholder="Label"
-                className="w-full h-12 px-4 text-base bg-black border border-white/20"
-              />
-              <input
-                value={scheduleDraft.defaultSource.nasPath ?? ""}
-                onChange={(e) =>
-                  setScheduleDraft({
-                    ...scheduleDraft,
-                    defaultSource: {
-                      ...scheduleDraft.defaultSource,
-                      nasPath: e.target.value,
-                    },
-                  })
-                }
-                placeholder="NAS path (optional)"
-                className="w-full h-12 px-4 text-base bg-black border border-white/20 font-mono text-sm"
-              />
-              <input
-                value={scheduleDraft.defaultSource.videoUrl ?? ""}
-                onChange={(e) =>
-                  setScheduleDraft({
-                    ...scheduleDraft,
-                    defaultSource: {
-                      ...scheduleDraft.defaultSource,
-                      videoUrl: e.target.value,
-                    },
-                  })
-                }
-                placeholder="YouTube URL (optional)"
-                className="w-full h-12 px-4 text-base bg-black border border-white/20"
-              />
-            </div>
-
-            {scheduleDraft.slots.map((slot, index) => (
-              <div
-                key={slot.id}
-                className="border border-white/10 p-4 space-y-2 bg-black/20"
-              >
-                <div className="flex justify-between items-center gap-2">
-                  <p className="text-[10px] font-black uppercase text-[#5eb3ff]">
-                    Slot {index + 1}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => removeSlot(index)}
-                    className="text-[9px] text-red-400 uppercase font-bold min-h-[44px] px-2 touch-manipulation"
-                  >
-                    Remove
-                  </button>
-                </div>
-                <div className="grid sm:grid-cols-2 gap-2">
-                  <input
-                    value={slot.label}
-                    onChange={(e) =>
-                      updateSlot(index, { label: e.target.value })
-                    }
-                    placeholder="Label"
-                    className="h-12 px-4 text-base bg-black border border-white/20"
-                  />
-                  <select
-                    value={slot.type}
-                    onChange={(e) =>
-                      updateSlot(index, { type: e.target.value })
-                    }
-                    className="h-12 px-4 text-base bg-black border border-white/20"
-                  >
-                    <option value="commercial">commercial</option>
-                    <option value="youtube_video">youtube_video</option>
-                    <option value="youtube_live_channel">
-                      youtube_live_channel
-                    </option>
-                    <option value="partner_stream">partner_stream</option>
-                    <option value="recorded">recorded</option>
-                  </select>
-                  <input
-                    value={slot.start ?? ""}
-                    onChange={(e) =>
-                      updateSlot(index, { start: e.target.value })
-                    }
-                    placeholder="Start HH:mm"
-                    className="h-12 px-4 text-base bg-black border border-white/20"
-                  />
-                  <input
-                    value={slot.end ?? ""}
-                    onChange={(e) => updateSlot(index, { end: e.target.value })}
-                    placeholder="End HH:mm"
-                    className="h-12 px-4 text-base bg-black border border-white/20"
-                  />
-                  <input
-                    value={slot.nasPath ?? ""}
-                    onChange={(e) =>
-                      updateSlot(index, { nasPath: e.target.value })
-                    }
-                    placeholder="NAS path"
-                    className="h-12 px-4 text-base bg-black border border-white/20 font-mono text-sm sm:col-span-2"
-                  />
-                  <input
-                    value={String(slot.priority ?? 0)}
-                    onChange={(e) =>
-                      updateSlot(index, {
-                        priority: Number(e.target.value) || 0,
-                      })
-                    }
-                    placeholder="Priority"
-                    className="h-12 px-4 text-base bg-black border border-white/20"
-                  />
-                  <input
-                    value={(slot.days ?? []).join(",")}
-                    onChange={(e) =>
-                      updateSlot(index, {
-                        days: e.target.value
-                          .split(",")
-                          .map((d) => Number(d.trim()))
-                          .filter((n) => !Number.isNaN(n)),
-                      })
-                    }
-                    placeholder="Days 0-6 comma-separated"
-                    className="h-12 px-4 text-base bg-black border border-white/20"
-                  />
-                  <select
-                    value={slot.titlePresetId ?? ""}
-                    onChange={(e) =>
-                      updateSlot(index, {
-                        titlePresetId: e.target.value || undefined,
-                      })
-                    }
-                    className="h-12 px-4 text-base bg-black border border-white/20 sm:col-span-2"
-                  >
-                    <option value="">Title preset (auto from label)</option>
-                    {(presets?.title ?? []).map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.label}
-                        {t.logoNasPath ? ` · ${t.logoNasPath}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <p className="text-[9px] text-white/35">
-                  Days: {DAY_LABELS.map((d, i) => `${i}=${d}`).join(", ")}
+            {nas.programNow ? (
+              <div className="border border-emerald-500/30 bg-emerald-500/5 p-3 text-xs">
+                <p className="font-bold text-emerald-300 uppercase text-[10px]">
+                  On air now
+                </p>
+                <p className="text-white/80 mt-1">
+                  {(nas.programNow.label as string) ?? "—"} · slot{" "}
+                  <code>{nowScheduleSlotId ?? "—"}</code>
+                  {nas.programNow.nextChangeAt ? (
+                    <>
+                      {" "}
+                      · next change{" "}
+                      {new Date(
+                        String(nas.programNow.nextChangeAt),
+                      ).toLocaleTimeString()}
+                    </>
+                  ) : null}
                 </p>
               </div>
-            ))}
+            ) : null}
+
+            <SchedulerWeekTimeline
+              slots={scheduleDraft.slots}
+              timezone={scheduleDraft.timezone}
+              selectedSlotId={panelScheduleSlotId}
+              nowSlotId={nowScheduleSlotId}
+              onSelectSlot={selectScheduleSlot}
+            />
+
+            <div className="space-y-2">
+              {scheduleDraft.slots.map((slot, index) => (
+                <button
+                  key={slot.id}
+                  type="button"
+                  onClick={() => selectScheduleSlot(slot.id)}
+                  className={cn(
+                    "w-full text-left min-h-[52px] px-4 py-3 border touch-manipulation flex items-center justify-between gap-3",
+                    panelScheduleSlotId === slot.id
+                      ? "border-[#5eb3ff] bg-[#5eb3ff]/10"
+                      : "border-white/15 hover:bg-white/5",
+                    slot.enabled === false && "opacity-50",
+                  )}
+                >
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-black uppercase truncate">
+                      {slot.label}
+                    </p>
+                    <p className="text-[9px] text-white/45 font-mono">
+                      {slot.start}–{slot.end} · {slot.type} · p
+                      {slot.priority ?? 0}
+                    </p>
+                  </div>
+                  {nowScheduleSlotId === slot.id ? (
+                    <span className="text-[9px] text-emerald-400 font-black uppercase shrink-0">
+                      live
+                    </span>
+                  ) : null}
+                </button>
+              ))}
+            </div>
 
             <div className="flex flex-col sm:flex-row gap-2">
               <button
@@ -955,11 +1004,10 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
               </button>
               <button
                 type="button"
-                disabled={busy || controlsLocked}
-                onClick={() => void saveScheduleDraft()}
-                className="flex-1 min-h-[48px] bg-[#0055cc] text-[10px] font-black uppercase touch-manipulation disabled:opacity-50"
+                onClick={() => setShowScheduleIntegrations((v) => !v)}
+                className="min-h-[48px] px-4 border border-[#5eb3ff]/40 text-[10px] font-black uppercase touch-manipulation"
               >
-                Save schedule to server
+                {showScheduleIntegrations ? "Hide" : "Show"} integrations
               </button>
             </div>
           </section>
@@ -1203,8 +1251,12 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
           <section className="space-y-3">
             <h2 className="text-[10px] font-black uppercase tracking-[0.25em] text-white/70 flex items-center gap-2">
               <Tv className="size-4" />
-              Program — presets & YouTube
+              Program — configure show, then go on air
             </h2>
+            <p className="text-xs text-white/50">
+              Tap a show preset to open the side panel. Saving does not cut to
+              video — use Go on air when ready.
+            </p>
             <button
               type="button"
               disabled={busy || controlsLocked}
@@ -1214,29 +1266,40 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
               Return to live
             </button>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {(presets?.program ?? []).map((p) => (
+              {(presets?.program ?? []).map((p) => {
+                const selected =
+                  view?.selectedProgramPresetId === p.id ||
+                  panelProgramId === p.id;
+                const onAir =
+                  view?.activeShowProgramId === p.id ||
+                  (view?.activeProgramPresetId === p.id &&
+                    Boolean(view?.showStartedAt));
+                return (
                 <button
                   key={p.id}
                   type="button"
                   disabled={
                     busy ||
                     controlsLocked ||
-                    (p.type !== "live" && !p.hasSource)
+                    (p.type !== "live" && !p.hasSource && !p.id.startsWith("show-"))
                   }
-                  onClick={() => void fireProgram(p.id)}
+                  onClick={() => void selectProgram(p.id)}
                   className={cn(
                     "min-h-[52px] px-4 py-3 text-left border touch-manipulation disabled:opacity-40",
-                    view?.activeProgramPresetId === p.id
-                      ? "border-amber-400 bg-amber-400/10"
-                      : "border-white/15 hover:bg-white/5",
+                    onAir
+                      ? "border-emerald-400 bg-emerald-400/10"
+                      : selected
+                        ? "border-[#5eb3ff] bg-[#5eb3ff]/10"
+                        : "border-white/15 hover:bg-white/5",
                   )}
                 >
                   <p className="text-[11px] font-black uppercase">{p.label}</p>
                   <p className="text-[9px] text-white/50 uppercase mt-0.5">
-                    {p.type}
+                    {onAir ? "on air" : p.type}
                   </p>
                 </button>
-              ))}
+              );
+              })}
             </div>
             <div className="border border-white/10 p-4 space-y-3 bg-black/40">
               <input
@@ -1264,6 +1327,82 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
         <p className="text-[9px] text-white/35 uppercase tracking-widest pb-8 text-center">
           NAS: MYCODAO/BLOCKS · Scheduler: data/news-channel-schedule.json
         </p>
+      </div>
+
+      {panelScheduleSlotId &&
+      tab === "schedule" &&
+      scheduleDraft &&
+      panelScheduleSlot &&
+      panelScheduleSlotIndex >= 0 ? (
+        <SchedulerDetailPanel
+          slot={panelScheduleSlot}
+          slotIndex={panelScheduleSlotIndex}
+          timezone={scheduleDraft.timezone}
+          integrations={scheduleDraft.integrations ?? {}}
+          titlePresets={presets?.title ?? []}
+          programPresets={presets?.program ?? []}
+          videoAssets={showVideoAssets}
+          streamlabs={schedulerIntegrations.streamlabs}
+          calendarEvents={schedulerIntegrations.calendarEvents}
+          isOnAirNow={nowScheduleSlotId === panelScheduleSlotId}
+          busy={busy || schedulerIntegrations.loading}
+          disabled={controlsLocked}
+          onClose={() => setPanelScheduleSlotId(null)}
+          onChangeSlot={updateSlot}
+          onChangeIntegrations={updateIntegrationsDraft}
+          onSave={saveScheduleDraft}
+          onDelete={() => {
+            removeSlot(panelScheduleSlotIndex);
+            setPanelScheduleSlotId(null);
+          }}
+          onTestStreamlabs={async () => {
+            await saveScheduleDraft();
+            await schedulerIntegrations.testStreamlabs();
+          }}
+          onSwitchScene={(id) => schedulerIntegrations.switchScene(id)}
+          onImportCalendar={async () => {
+            await saveScheduleDraft();
+            await schedulerIntegrations.importCalendar({ merge: true });
+            await nas.reload();
+            if (nas.schedule) setScheduleDraft(nas.schedule);
+          }}
+          onExportCalendar={() => schedulerIntegrations.exportCalendarIcs()}
+          onGenerateFeedUrl={async () => {
+            await saveScheduleDraft();
+            const data = await schedulerIntegrations.generateExportFeed();
+            if (data.schedule) setScheduleDraft(data.schedule as NewsChannelSchedule);
+          }}
+          exportFeedUrl={schedulerIntegrations.exportFeedUrl}
+          showIntegrations={showScheduleIntegrations}
+        />
+      ) : null}
+
+      {panelProgramId && tab === "program" && panelPreset ? (
+        <ProgramDetailPanel
+          programId={panelProgramId}
+          programLabel={panelPreset.label}
+          initialConfig={panelShowConfig}
+          configSyncKey={panelShowConfigKey}
+          titlePresets={presets?.title ?? []}
+          talentPresets={presets?.talent ?? []}
+          assetCatalog={assetCatalog}
+          assetCatalogByCategory={assetCatalogByCategory}
+          graphics={liveDataGraphics}
+          commercialAssets={commercialNasAssets}
+          showVideoAssets={showVideoAssets}
+          presetDefaultNasPath={panelPreset.nasPath ?? null}
+          presetDefaultVideoUrl={panelPreset.videoUrl ?? null}
+          isOnAir={view?.activeShowProgramId === panelProgramId}
+          busy={busy}
+          disabled={controlsLocked}
+          onClose={() => setPanelProgramId(null)}
+          onSave={(config) => saveProgramShowConfig(panelProgramId, config)}
+          onGoOnAir={(id) => goOnAirProgram(id)}
+          onPushLive={(id, config) => pushShowLive(id, config)}
+          onEndShow={() => endShow()}
+          onFireCommercial={(pid, slotId) => fireCommercialSlot(pid, slotId)}
+        />
+      ) : null}
       </div>
 
       {busy ? (

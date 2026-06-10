@@ -7,11 +7,28 @@ import {
 } from "@/lib/news-channel-embed";
 import { newsIdleBumperUrl } from "@/lib/news-bumper";
 import {
+  findDueOffsetCommercial,
+  applyCommercialSlotToState,
+  maxSecondsForActiveCommercial,
+} from "@/lib/server/news-program-commercials";
+import {
   resolveNasMediaServeUrl,
   resolveProducerProgramEmbed,
   readProducerState,
+  writeProducerState,
   type NewsProducerState,
 } from "@/lib/server/news-producer";
+import type {
+  BlocksChannelSchedule,
+  SchedulerIntegrations,
+  SchedulerProgramSlot,
+} from "@/lib/server/blocks-scheduler-types";
+import {
+  readSchedulerRuntime,
+  writeSchedulerRuntime,
+} from "@/lib/server/blocks-scheduler-runtime";
+import { switchStreamlabsScene } from "@/lib/server/streamlabs-slobs-client";
+import { syncSchedulerSlotAutomation } from "@/lib/server/blocks-scheduler-auto-actions";
 
 export type ProgramSourceType =
   | "default"
@@ -50,7 +67,10 @@ export interface NewsChannelSchedule {
   timezone: string;
   defaultSource: ProgramSource;
   slots: ProgramSlot[];
+  integrations?: SchedulerIntegrations;
 }
+
+export type { BlocksChannelSchedule, SchedulerProgramSlot, SchedulerIntegrations };
 
 export interface NewsProgramNow {
   channel: string;
@@ -72,6 +92,8 @@ export interface NewsProgramNow {
   loopPlayback?: boolean;
   /** When NAS clip ends, return producer console to scheduled live. */
   autoReturnOnEnd?: boolean;
+  /** Max NAS playback seconds (commercial playMode maxSeconds). */
+  maxDurationSeconds?: number | null;
 }
 
 const DEFAULT_SCHEDULE_PATH = path.join(
@@ -268,6 +290,35 @@ function idleOffAirProgram(
   });
 }
 
+function maybeApplyStreamlabsForSlot(
+  slot: ProgramSlot,
+  integrations: SchedulerIntegrations | undefined,
+): void {
+  const cfg = integrations?.streamlabs;
+  if (!cfg?.enabled || !cfg.autoSwitchOnSlotChange) return;
+  const apiUrl = cfg.remoteApiUrl?.trim();
+  const token = cfg.remoteToken?.trim();
+  if (!apiUrl || !token) return;
+
+  const ext = slot as SchedulerProgramSlot;
+  const sceneId =
+    ext.streamlabsSceneId?.trim() ||
+    cfg.sceneBySlotType?.[slot.type]?.trim();
+  if (!sceneId) return;
+
+  const runtime = readSchedulerRuntime();
+  if (runtime.lastStreamlabsSlotId === slot.id) return;
+
+  writeSchedulerRuntime({
+    lastStreamlabsSlotId: slot.id,
+    lastStreamlabsSwitchAt: new Date().toISOString(),
+  });
+
+  switchStreamlabsScene(apiUrl, token, sceneId).catch((e) => {
+    console.error("Streamlabs scene switch:", e);
+  });
+}
+
 function resolveScheduleProgramNow(
   now: Date,
   producerGraphic: string | null,
@@ -279,12 +330,23 @@ function resolveScheduleProgramNow(
   const { day, minutes } = localParts(now, tz);
 
   const active = schedule.slots
+    .filter((s) => (s as SchedulerProgramSlot).enabled !== false)
     .filter((s) => slotActive(s, day, minutes))
     .filter((s) => sourceIsPlayable(s))
     .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
 
   const pick = active[0] ?? schedule.defaultSource;
   const slotId = active[0]?.id ?? "default";
+
+  if (active[0]) {
+    void maybeApplyStreamlabsForSlot(active[0], schedule.integrations);
+    syncSchedulerSlotAutomation(
+      active[0] as SchedulerProgramSlot,
+      schedule,
+    );
+  } else {
+    syncSchedulerSlotAutomation(null, schedule);
+  }
   const defaultPlayable = sourceIsPlayable(schedule.defaultSource);
   const resolvedPick =
     active[0] ?? (defaultPlayable ? schedule.defaultSource : pick);
@@ -330,7 +392,18 @@ function envLiveOverride(): NewsProgramNow | null {
 }
 
 export function resolveNewsProgramNow(now = new Date()): NewsProgramNow {
-  const producerState = readProducerState();
+  let producerState = readProducerState();
+  const dueCommercial = findDueOffsetCommercial(producerState, now);
+  if (dueCommercial) {
+    producerState = applyCommercialSlotToState(
+      producerState,
+      dueCommercial,
+      `Commercial · ${dueCommercial.id}`,
+    );
+    writeProducerState(producerState);
+  }
+
+  const maxDurationSeconds = maxSecondsForActiveCommercial(producerState);
   const producerProgram = resolveProducerProgramEmbed(producerState);
   const producerGraphic = producerState.activeGraphicNasPath
     ? resolveNasMediaServeUrl(producerState.activeGraphicNasPath)
@@ -356,6 +429,7 @@ export function resolveNewsProgramNow(now = new Date()): NewsProgramNow {
       timezone: "America/Los_Angeles",
       nextChangeAt: null,
       scheduleVersion: `producer-${producerState.updatedAt}`,
+      maxDurationSeconds,
       ...nasFlags,
     });
   }

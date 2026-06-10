@@ -1,0 +1,131 @@
+{
+  "name": "BLOCKS Scheduler — Google Calendar auto-import",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every hour",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.BLOCKS_BASE_URL || 'https://blocks.mycodao.com' }}/api/news/producer/integrations/calendar/cron",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-blocks-cron-secret",
+              "value": "={{ $env.BLOCKS_SCHEDULER_CRON_SECRET }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "calendar-cron",
+      "name": "Import calendar to slots",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "ok-check",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if-ok",
+      "name": "Import succeeded?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "content": "=BLOCKS calendar sync: imported {{ $json.imported }} slot(s), total {{ $json.totalSlots }}"
+      },
+      "id": "note-ok",
+      "name": "Log success",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [920, 200]
+    },
+    {
+      "parameters": {
+        "content": "=BLOCKS calendar sync failed or skipped: {{ $json.error || $json.reason || 'unknown' }}"
+      },
+      "id": "note-fail",
+      "name": "Log failure",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [920, 400]
+    }
+  ],
+  "connections": {
+    "Every hour": {
+      "main": [
+        [
+          {
+            "node": "Import calendar to slots",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Import calendar to slots": {
+      "main": [
+        [
+          {
+            "node": "Import succeeded?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    {
+      "name": "blocks"
+    },
+    {
+      "name": "scheduler"
+    }
+  ]
+}
