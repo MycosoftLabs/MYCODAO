@@ -36,6 +36,7 @@ import { ProgramDetailPanel } from "./ProgramDetailPanel";
 import { SchedulerDetailPanel } from "./SchedulerDetailPanel";
 import { SchedulerWeekTimeline } from "./SchedulerWeekTimeline";
 import { SchedulerCalendarStrip } from "./SchedulerCalendarStrip";
+import { SchedulerIntegrationsSection } from "./SchedulerIntegrationsSection";
 import { useSchedulerIntegrations } from "../hooks/useSchedulerIntegrations";
 
 interface ProducerDashboardProps {
@@ -1027,11 +1028,51 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
               <button
                 type="button"
                 onClick={() => setShowScheduleIntegrations((v) => !v)}
-                className="min-h-[48px] px-4 border border-[#5eb3ff]/40 text-[10px] font-black uppercase touch-manipulation"
+                aria-expanded={showScheduleIntegrations}
+                className={cn(
+                  "min-h-[48px] px-4 border text-[10px] font-black uppercase touch-manipulation",
+                  showScheduleIntegrations
+                    ? "border-[#5eb3ff] bg-[#5eb3ff]/15 text-[#5eb3ff]"
+                    : "border-[#5eb3ff]/40",
+                )}
               >
-                {showScheduleIntegrations ? "Hide" : "Show"} integrations
+                {showScheduleIntegrations ? "Hide" : "Show"} Streamlabs &amp;
+                automation
               </button>
             </div>
+
+            {showScheduleIntegrations ? (
+              <SchedulerIntegrationsSection
+                integrations={scheduleDraft.integrations ?? {}}
+                streamlabs={schedulerIntegrations.streamlabs}
+                calendarEvents={schedulerIntegrations.calendarEvents}
+                exportFeedUrl={schedulerIntegrations.exportFeedUrl}
+                busy={busy || schedulerIntegrations.loading}
+                disabled={controlsLocked}
+                onChangeIntegrations={updateIntegrationsDraft}
+                onSave={saveScheduleDraft}
+                onTestStreamlabs={async () => {
+                  await saveScheduleDraft();
+                  await schedulerIntegrations.testStreamlabs();
+                }}
+                onImportCalendar={async () => {
+                  await saveScheduleDraft();
+                  await schedulerIntegrations.importCalendar({ merge: true });
+                  await nas.reload();
+                  if (nas.schedule) setScheduleDraft(nas.schedule);
+                }}
+                onExportCalendar={() =>
+                  schedulerIntegrations.exportCalendarIcs()
+                }
+                onGenerateFeedUrl={async () => {
+                  await saveScheduleDraft();
+                  const data = await schedulerIntegrations.generateExportFeed();
+                  if (data.schedule) {
+                    setScheduleDraft(data.schedule as NewsChannelSchedule);
+                  }
+                }}
+              />
+            ) : null}
           </section>
         ) : null}
 
@@ -1360,42 +1401,21 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
           slot={panelScheduleSlot}
           slotIndex={panelScheduleSlotIndex}
           timezone={scheduleDraft.timezone}
-          integrations={scheduleDraft.integrations ?? {}}
           titlePresets={presets?.title ?? []}
           programPresets={presets?.program ?? []}
           videoAssets={showVideoAssets}
           streamlabs={schedulerIntegrations.streamlabs}
-          calendarEvents={schedulerIntegrations.calendarEvents}
           isOnAirNow={nowScheduleSlotId === panelScheduleSlotId}
           busy={busy || schedulerIntegrations.loading}
           disabled={controlsLocked}
           onClose={() => setPanelScheduleSlotId(null)}
           onChangeSlot={updateSlot}
-          onChangeIntegrations={updateIntegrationsDraft}
           onSave={saveScheduleDraft}
           onDelete={() => {
             removeSlot(panelScheduleSlotIndex);
             setPanelScheduleSlotId(null);
           }}
-          onTestStreamlabs={async () => {
-            await saveScheduleDraft();
-            await schedulerIntegrations.testStreamlabs();
-          }}
           onSwitchScene={(id) => schedulerIntegrations.switchScene(id)}
-          onImportCalendar={async () => {
-            await saveScheduleDraft();
-            await schedulerIntegrations.importCalendar({ merge: true });
-            await nas.reload();
-            if (nas.schedule) setScheduleDraft(nas.schedule);
-          }}
-          onExportCalendar={() => schedulerIntegrations.exportCalendarIcs()}
-          onGenerateFeedUrl={async () => {
-            await saveScheduleDraft();
-            const data = await schedulerIntegrations.generateExportFeed();
-            if (data.schedule) setScheduleDraft(data.schedule as NewsChannelSchedule);
-          }}
-          exportFeedUrl={schedulerIntegrations.exportFeedUrl}
-          showIntegrations={showScheduleIntegrations}
         />
       ) : null}
 

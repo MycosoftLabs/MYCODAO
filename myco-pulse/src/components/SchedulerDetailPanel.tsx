@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import {
-  Calendar,
   ChevronLeft,
   Loader2,
   Radio,
@@ -12,59 +11,26 @@ import {
 import { cn } from "../lib/utils";
 import type { BlocksMediaAsset, ScheduleSlot } from "../hooks/useProducerNas";
 import type { ProducerPresetOption } from "../hooks/useNewsProducer";
-import type {
-  CalendarEventPreview,
-  StreamlabsStatusPayload,
-} from "../hooks/useSchedulerIntegrations";
+import type { StreamlabsStatusPayload } from "../hooks/useSchedulerIntegrations";
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-interface SchedulerIntegrationsDraft {
-  streamlabs?: {
-    enabled?: boolean;
-    remoteApiUrl?: string;
-    remoteToken?: string;
-    autoSwitchOnSlotChange?: boolean;
-  };
-  googleCalendar?: {
-    enabled?: boolean;
-    calendarId?: string;
-    icalUrl?: string;
-    autoImportEnabled?: boolean;
-    exportFeedToken?: string;
-  };
-  scheduler?: {
-    autoGoOnAirOnSlotStart?: boolean;
-    autoPushLiveOnSlotStart?: boolean;
-    autoEndShowOnSlotEnd?: boolean;
-  };
-}
 
 interface SchedulerDetailPanelProps {
   slot: ScheduleSlot;
   slotIndex: number;
   timezone: string;
-  integrations: SchedulerIntegrationsDraft;
   titlePresets: ProducerPresetOption[];
   programPresets: ProducerPresetOption[];
   videoAssets: BlocksMediaAsset[];
   streamlabs: StreamlabsStatusPayload | null;
-  calendarEvents: CalendarEventPreview[];
   isOnAirNow: boolean;
   busy: boolean;
   disabled: boolean;
   onClose: () => void;
   onChangeSlot: (index: number, patch: Partial<ScheduleSlot>) => void;
-  onChangeIntegrations: (patch: SchedulerIntegrationsDraft) => void;
   onSave: () => Promise<void>;
   onDelete: () => void;
-  onTestStreamlabs: () => Promise<void>;
   onSwitchScene: (sceneId: string) => Promise<void>;
-  onImportCalendar: () => Promise<void>;
-  onExportCalendar: () => Promise<void>;
-  onGenerateFeedUrl: () => Promise<void>;
-  exportFeedUrl?: string | null;
-  showIntegrations?: boolean;
 }
 
 function toggleDay(days: number[] | undefined, day: number): number[] {
@@ -78,27 +44,18 @@ export function SchedulerDetailPanel({
   slot,
   slotIndex,
   timezone,
-  integrations,
   titlePresets,
   programPresets,
   videoAssets,
   streamlabs,
-  calendarEvents,
   isOnAirNow,
   busy,
   disabled,
   onClose,
   onChangeSlot,
-  onChangeIntegrations,
   onSave,
   onDelete,
-  onTestStreamlabs,
   onSwitchScene,
-  onImportCalendar,
-  onExportCalendar,
-  onGenerateFeedUrl,
-  exportFeedUrl,
-  showIntegrations = false,
 }: SchedulerDetailPanelProps) {
   const [localBusy, setLocalBusy] = useState(false);
   const actionsLocked = busy || localBusy || disabled;
@@ -388,246 +345,6 @@ export function SchedulerDetailPanel({
             className="w-full px-4 py-3 text-base bg-black border border-white/20 resize-y"
           />
         </div>
-
-        {showIntegrations ? (
-          <section className="border border-white/10 p-4 space-y-4 bg-black/40">
-            <p className="text-[10px] font-black uppercase tracking-widest text-[#5eb3ff]">
-              Integrations
-            </p>
-
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 min-h-[44px]">
-                <input
-                  type="checkbox"
-                  checked={integrations.streamlabs?.enabled ?? false}
-                  disabled={formDisabled}
-                  onChange={(e) =>
-                    onChangeIntegrations({
-                      streamlabs: {
-                        ...integrations.streamlabs,
-                        enabled: e.target.checked,
-                      },
-                    })
-                  }
-                />
-                <span className="text-sm">Streamlabs auto scene switch</span>
-              </label>
-              <input
-                value={integrations.streamlabs?.remoteApiUrl ?? ""}
-                disabled={formDisabled}
-                onChange={(e) =>
-                  onChangeIntegrations({
-                    streamlabs: {
-                      ...integrations.streamlabs,
-                      remoteApiUrl: e.target.value,
-                    },
-                  })
-                }
-                placeholder="Remote API URL e.g. http://192.168.0.241:59650/api"
-                className="w-full h-12 px-4 text-base bg-black border border-white/20 font-mono text-sm"
-              />
-              <input
-                type="password"
-                value={integrations.streamlabs?.remoteToken ?? ""}
-                disabled={formDisabled}
-                onChange={(e) =>
-                  onChangeIntegrations({
-                    streamlabs: {
-                      ...integrations.streamlabs,
-                      remoteToken: e.target.value,
-                    },
-                  })
-                }
-                placeholder="Remote control token"
-                className="w-full h-12 px-4 text-base bg-black border border-white/20"
-              />
-              <button
-                type="button"
-                disabled={actionsLocked}
-                onClick={() => void runAction(onTestStreamlabs)}
-                className="w-full min-h-[44px] border border-[#5eb3ff]/40 text-[10px] font-black uppercase touch-manipulation disabled:opacity-50"
-              >
-                Test Streamlabs connection
-              </button>
-              {streamlabs ? (
-                <p className="text-[9px] text-white/45">
-                  {streamlabs.connected
-                    ? `Connected · ${streamlabs.live ? "LIVE" : "offline"} · scene: ${streamlabs.activeSceneName ?? "—"}`
-                    : streamlabs.error ?? "Not connected"}
-                </p>
-              ) : null}
-            </div>
-
-            <div className="space-y-2 border-t border-white/10 pt-4">
-              <p className="text-[9px] font-bold uppercase text-white/50">
-                Scheduler automation
-              </p>
-              <label className="flex items-center gap-2 min-h-[44px]">
-                <input
-                  type="checkbox"
-                  checked={
-                    integrations.scheduler?.autoGoOnAirOnSlotStart ?? false
-                  }
-                  disabled={formDisabled}
-                  onChange={(e) =>
-                    onChangeIntegrations({
-                      scheduler: {
-                        ...integrations.scheduler,
-                        autoGoOnAirOnSlotStart: e.target.checked,
-                      },
-                    })
-                  }
-                />
-                <span className="text-sm">
-                  Auto go on air when slot with program preset starts
-                </span>
-              </label>
-              <label className="flex items-center gap-2 min-h-[44px]">
-                <input
-                  type="checkbox"
-                  checked={
-                    integrations.scheduler?.autoPushLiveOnSlotStart !== false &&
-                    (integrations.scheduler?.autoGoOnAirOnSlotStart ?? false)
-                  }
-                  disabled={
-                    formDisabled ||
-                    !(integrations.scheduler?.autoGoOnAirOnSlotStart ?? false)
-                  }
-                  onChange={(e) =>
-                    onChangeIntegrations({
-                      scheduler: {
-                        ...integrations.scheduler,
-                        autoPushLiveOnSlotStart: e.target.checked,
-                      },
-                    })
-                  }
-                />
-                <span className="text-sm">Push show live to viewers</span>
-              </label>
-              <label className="flex items-center gap-2 min-h-[44px]">
-                <input
-                  type="checkbox"
-                  checked={
-                    integrations.scheduler?.autoEndShowOnSlotEnd ?? false
-                  }
-                  disabled={formDisabled}
-                  onChange={(e) =>
-                    onChangeIntegrations({
-                      scheduler: {
-                        ...integrations.scheduler,
-                        autoEndShowOnSlotEnd: e.target.checked,
-                      },
-                    })
-                  }
-                />
-                <span className="text-sm">
-                  Auto end show when scheduler slot ends
-                </span>
-              </label>
-            </div>
-
-            <div className="space-y-2 border-t border-white/10 pt-4">
-              <label className="flex items-center gap-2 min-h-[44px]">
-                <input
-                  type="checkbox"
-                  checked={integrations.googleCalendar?.enabled ?? false}
-                  disabled={formDisabled}
-                  onChange={(e) =>
-                    onChangeIntegrations({
-                      googleCalendar: {
-                        ...integrations.googleCalendar,
-                        enabled: e.target.checked,
-                      },
-                    })
-                  }
-                />
-                <span className="text-sm flex items-center gap-2">
-                  <Calendar className="size-4" /> Google Calendar
-                </span>
-              </label>
-              <input
-                value={integrations.googleCalendar?.icalUrl ?? ""}
-                disabled={formDisabled}
-                onChange={(e) =>
-                  onChangeIntegrations({
-                    googleCalendar: {
-                      ...integrations.googleCalendar,
-                      icalUrl: e.target.value,
-                    },
-                  })
-                }
-                placeholder="Public iCal URL (or leave blank + calendar ID)"
-                className="w-full h-12 px-4 text-base bg-black border border-white/20 text-sm"
-              />
-              <input
-                value={integrations.googleCalendar?.calendarId ?? ""}
-                disabled={formDisabled}
-                onChange={(e) =>
-                  onChangeIntegrations({
-                    googleCalendar: {
-                      ...integrations.googleCalendar,
-                      calendarId: e.target.value,
-                    },
-                  })
-                }
-                placeholder="Calendar ID (email or group calendar)"
-                className="w-full h-12 px-4 text-base bg-black border border-white/20 text-sm"
-              />
-              <label className="flex items-center gap-2 min-h-[44px]">
-                <input
-                  type="checkbox"
-                  checked={
-                    integrations.googleCalendar?.autoImportEnabled ?? false
-                  }
-                  disabled={formDisabled}
-                  onChange={(e) =>
-                    onChangeIntegrations({
-                      googleCalendar: {
-                        ...integrations.googleCalendar,
-                        autoImportEnabled: e.target.checked,
-                      },
-                    })
-                  }
-                />
-                <span className="text-sm">n8n hourly auto-import (cron)</span>
-              </label>
-              <button
-                type="button"
-                disabled={actionsLocked}
-                onClick={() => void runAction(onImportCalendar)}
-                className="w-full min-h-[44px] bg-[#0055cc] text-[10px] font-black uppercase touch-manipulation disabled:opacity-50"
-              >
-                Import calendar → slots
-              </button>
-              <button
-                type="button"
-                disabled={actionsLocked}
-                onClick={() => void runAction(onExportCalendar)}
-                className="w-full min-h-[44px] border border-white/20 text-[10px] font-black uppercase touch-manipulation disabled:opacity-50"
-              >
-                Download .ics export
-              </button>
-              <button
-                type="button"
-                disabled={actionsLocked}
-                onClick={() => void runAction(onGenerateFeedUrl)}
-                className="w-full min-h-[44px] border border-[#5eb3ff]/40 text-[10px] font-black uppercase touch-manipulation disabled:opacity-50"
-              >
-                Generate Google subscribe URL
-              </button>
-              {exportFeedUrl ? (
-                <p className="text-[9px] text-white/45 break-all font-mono">
-                  Subscribe in Google Calendar → From URL: {exportFeedUrl}
-                </p>
-              ) : null}
-              {calendarEvents.length > 0 ? (
-                <p className="text-[9px] text-white/45">
-                  {calendarEvents.length} upcoming events loaded
-                </p>
-              ) : null}
-            </div>
-          </section>
-        ) : null}
       </div>
 
       <div className="shrink-0 p-4 border-t border-white/10 flex flex-col gap-2">
