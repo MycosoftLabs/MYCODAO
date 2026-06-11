@@ -16,6 +16,11 @@ function nextId(): number {
   return lastRpcId;
 }
 
+function sockJsUrl(apiUrl: string): string {
+  const base = apiUrl.trim().replace(/\/$/, "");
+  return base.endsWith("/api") ? base : `${base}/api`;
+}
+
 async function slobsRpc(
   apiUrl: string,
   token: string,
@@ -23,36 +28,23 @@ async function slobsRpc(
   method: string,
   args: unknown[] = [],
 ): Promise<unknown> {
-  const base = apiUrl.replace(/\/$/, "");
-  const wsUrl = base
-    .replace(/^http:/i, "ws:")
-    .replace(/^https:/i, "wss:")
-    .replace(/\/api$/i, "/api");
-
-  const WebSocketImpl =
-    typeof globalThis.WebSocket !== "undefined"
-      ? globalThis.WebSocket
-      : null;
-
-  if (!WebSocketImpl) {
-    throw new Error("WebSocket unavailable in this runtime");
-  }
+  const { default: SockJS } = await import("sockjs-client");
 
   return new Promise((resolve, reject) => {
-    const ws = new WebSocketImpl(wsUrl);
+    const socket = new SockJS(sockJsUrl(apiUrl));
     const timeout = setTimeout(() => {
-      ws.close();
+      socket.close();
       reject(new Error("Streamlabs connection timed out"));
     }, 8000);
 
     let authed = false;
 
-    ws.addEventListener("message", (ev) => {
+    socket.onmessage = (ev) => {
       try {
         const data = JSON.parse(String(ev.data)) as JsonRpcResult;
         if (!authed && data.result !== undefined) {
           authed = true;
-          ws.send(
+          socket.send(
             JSON.stringify({
               jsonrpc: "2.0",
               id: nextId(),
@@ -64,29 +56,31 @@ async function slobsRpc(
         }
         if (data.error) {
           clearTimeout(timeout);
-          ws.close();
+          socket.close();
           reject(new Error(data.error.message ?? "Streamlabs RPC error"));
           return;
         }
         if (data.result !== undefined) {
           clearTimeout(timeout);
-          ws.close();
+          socket.close();
           resolve(data.result);
         }
       } catch (e) {
         clearTimeout(timeout);
-        ws.close();
+        socket.close();
         reject(e);
       }
-    });
+    };
 
-    ws.addEventListener("error", () => {
-      clearTimeout(timeout);
-      reject(new Error("Streamlabs WebSocket error"));
-    });
+    socket.onclose = () => {
+      if (!authed) {
+        clearTimeout(timeout);
+        reject(new Error("Streamlabs connection closed before auth"));
+      }
+    };
 
-    ws.addEventListener("open", () => {
-      ws.send(
+    socket.onopen = () => {
+      socket.send(
         JSON.stringify({
           jsonrpc: "2.0",
           id: nextId(),
@@ -97,7 +91,7 @@ async function slobsRpc(
           },
         }),
       );
-    });
+    };
   });
 }
 
