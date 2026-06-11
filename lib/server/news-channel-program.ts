@@ -29,6 +29,7 @@ import {
 } from "@/lib/server/blocks-scheduler-runtime";
 import { switchStreamlabsScene } from "@/lib/server/streamlabs-slobs-client";
 import { syncSchedulerSlotAutomation } from "@/lib/server/blocks-scheduler-auto-actions";
+import { mergeSchedulerIntegrationsFromEnv } from "@/lib/server/blocks-scheduler-env";
 
 export type ProgramSourceType =
   | "default"
@@ -116,7 +117,12 @@ export function readNewsChannelSchedule(): NewsChannelSchedule | null {
   for (const filePath of [scheduleFilePath(), SEED_SCHEDULE_PATH]) {
     try {
       const raw = fs.readFileSync(filePath, "utf8");
-      return JSON.parse(raw) as NewsChannelSchedule;
+      const parsed = JSON.parse(raw) as NewsChannelSchedule;
+      const integrations = mergeSchedulerIntegrationsFromEnv(
+        parsed.integrations,
+      );
+      if (!integrations) return parsed;
+      return { ...parsed, integrations };
     } catch {
       /* try next */
     }

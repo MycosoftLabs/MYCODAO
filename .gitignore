@@ -23,6 +23,7 @@ yarn-error.log*
 .env
 .env.production
 .env*.local
+.credentials.local
 
 # Pulse podcast chat persistence (VM / single instance)
 /data/

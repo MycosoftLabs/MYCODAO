@@ -21,6 +21,21 @@ export function mindexInternalHeaders(): Record<string, string> {
   return { "X-Internal-Token": t };
 }
 
+/** Headers for MINDEX `/api/mindex/taxa` (requires X-API-Key when API_KEYS is configured). */
+export function mindexApiKeyHeaders(): Record<string, string> {
+  const key = process.env.MINDEX_API_KEY?.trim();
+  if (!key) return {};
+  return { "X-API-Key": key };
+}
+
+/** Normalize MINDEX API root to include `/api/mindex` when only host:port is set. */
+export function mindexApiRoot(): string {
+  const base = mindexApiBase();
+  if (!base) return "";
+  if (base.endsWith("/api/mindex")) return base;
+  return `${base}/api/mindex`;
+}
+
 /** Aggressive refresh defaults for private fiber / colocated ingest (still bounded by upstream APIs). */
 export function pulseTradeFastPath(): boolean {
   return process.env.PULSE_TRADE_FAST_PATH === "true" || process.env.PULSE_TRADE_FAST_PATH === "1";

@@ -7,6 +7,11 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 let cachedService: SupabaseClient | null | undefined;
 let cachedAnon: SupabaseClient | null | undefined;
 
+/** Next.js App Router caches fetch by default; Supabase REST must always be fresh. */
+function supabaseFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  return fetch(input, { ...init, cache: "no-store" });
+}
+
 function supabaseUrl(): string | null {
   return (
     process.env.SUPABASE_URL?.trim() ||
@@ -25,6 +30,7 @@ export function getSupabaseServiceRole(): SupabaseClient | null {
   }
   cachedService = createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: supabaseFetch },
   });
   return cachedService;
 }
@@ -42,6 +48,7 @@ export function getSupabaseAnon(): SupabaseClient | null {
   }
   cachedAnon = createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: supabaseFetch },
   });
   return cachedAnon;
 }
