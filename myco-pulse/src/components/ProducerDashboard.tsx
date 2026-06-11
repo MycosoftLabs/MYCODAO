@@ -35,6 +35,7 @@ import { NasGraphicsPicker } from "./NasGraphicsPicker";
 import { ProgramDetailPanel } from "./ProgramDetailPanel";
 import { SchedulerDetailPanel } from "./SchedulerDetailPanel";
 import { SchedulerWeekTimeline } from "./SchedulerWeekTimeline";
+import { SchedulerCalendarStrip } from "./SchedulerCalendarStrip";
 import { useSchedulerIntegrations } from "../hooks/useSchedulerIntegrations";
 
 interface ProducerDashboardProps {
@@ -928,10 +929,31 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
               Channel scheduler
             </h2>
             <p className="text-xs text-white/50">
-              Tap a slot on the week grid or list to edit in the side panel.
-              Streamlabs scenes switch automatically when a slot goes on air
-              (when enabled). Import Google Calendar events as slots.
+              The week grid is your <strong className="text-white/70">recurring</strong>{" "}
+              channel lineup (Sun–Sat times). Google Calendar events load in the
+              blue panel below — import them to create slots on the grid.
             </p>
+
+            <SchedulerCalendarStrip
+              configured={schedulerIntegrations.calendarConfigured}
+              events={schedulerIntegrations.calendarEvents}
+              loading={schedulerIntegrations.loading}
+              busy={busy}
+              disabled={controlsLocked}
+              onRefresh={async () => {
+                await schedulerIntegrations.reload();
+                if (!schedulerIntegrations.calendarConfigured) return;
+                await schedulerIntegrations.importCalendar({ merge: true });
+                await nas.reload();
+                if (nas.schedule) setScheduleDraft(nas.schedule);
+              }}
+              onImport={async () => {
+                await saveScheduleDraft();
+                await schedulerIntegrations.importCalendar({ merge: true });
+                await nas.reload();
+                if (nas.schedule) setScheduleDraft(nas.schedule);
+              }}
+            />
 
             {nas.programNow ? (
               <div className="border border-emerald-500/30 bg-emerald-500/5 p-3 text-xs">
