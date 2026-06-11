@@ -82,6 +82,5 @@
   },
   "settings": {
     "executionOrder": "v1"
-  },
-  "tags": ["blocks", "scheduler", "calendar"]
+  }
 }

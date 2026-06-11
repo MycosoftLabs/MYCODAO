@@ -1,12 +1,7 @@
 # BLOCKS Scheduler Integrations Phase 2 — Local Build Complete
 
 **Date:** June 9, 2026  
-**Status:** Complete (local only — **not deployed**)  
-**Related:** `docs/SCHEDULER_STREAMLABS_GCAL_COMPLETE_JUN10_2026.md`, `docs/BLOCKS_NEWS_24_7_CHANNEL_PLAN_JUN04_2026.md`
-
-## Scope
-
-Built all proposed scheduler integrations **except Asana**, for local dev and test on port **3004**. No VM deploy, no Cloudflare purge, no production push until Morgan approves.
+**Status:** Complete — **deployed** June 11, 2026. See `docs/BLOCKS_SCHEDULER_INTEGRATIONS_DEPLOY_COMPLETE_JUN11_2026.md`.
 
 ## Delivered
 
