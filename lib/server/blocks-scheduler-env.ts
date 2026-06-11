@@ -68,6 +68,50 @@ export function mergeSchedulerIntegrationsFromEnv(
         integrations?.scheduler?.autoEndShowOnSlotEnd ?? true,
       ...integrations?.scheduler,
     },
+    notifications: {
+      enabled:
+        integrations?.notifications?.enabled ??
+        Boolean(envTrim("BLOCKS_SLACK_WEBHOOK_URL") || envTrim("BLOCKS_DISCORD_WEBHOOK_URL")),
+      slackWebhookUrl:
+        integrations?.notifications?.slackWebhookUrl?.trim() ||
+        envTrim("BLOCKS_SLACK_WEBHOOK_URL"),
+      discordWebhookUrl:
+        integrations?.notifications?.discordWebhookUrl?.trim() ||
+        envTrim("BLOCKS_DISCORD_WEBHOOK_URL"),
+      genericWebhookUrl:
+        integrations?.notifications?.genericWebhookUrl?.trim() ||
+        envTrim("BLOCKS_NOTIFY_WEBHOOK_URL"),
+      ...integrations?.notifications,
+    },
+    mas: {
+      enabled: integrations?.mas?.enabled ?? Boolean(envTrim("MAS_SCHEDULER_WEBHOOK_URL")),
+      webhookUrl:
+        integrations?.mas?.webhookUrl?.trim() ||
+        envTrim("MAS_SCHEDULER_WEBHOOK_URL"),
+      ...integrations?.mas,
+    },
+    youtube: {
+      channelId:
+        integrations?.youtube?.channelId?.trim() ||
+        envTrim("BLOCKS_YOUTUBE_CHANNEL_ID"),
+      ...integrations?.youtube,
+    },
+    obs: {
+      host: integrations?.obs?.host?.trim() || envTrim("OBS_WEBSOCKET_HOST") || "127.0.0.1",
+      port:
+        integrations?.obs?.port ??
+        Number(envTrim("OBS_WEBSOCKET_PORT") || "4455"),
+      password:
+        integrations?.obs?.password?.trim() ||
+        envTrim("OBS_WEBSOCKET_PASSWORD"),
+      ...integrations?.obs,
+    },
+    cloudflare: {
+      zoneId:
+        integrations?.cloudflare?.zoneId?.trim() ||
+        envTrim("CLOUDFLARE_ZONE_ID"),
+      ...integrations?.cloudflare,
+    },
   };
 }
 

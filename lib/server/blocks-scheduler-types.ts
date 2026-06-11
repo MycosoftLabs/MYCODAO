@@ -64,6 +64,165 @@ export interface SchedulerIntegrations {
   streamlabs?: StreamlabsIntegrationConfig;
   googleCalendar?: GoogleCalendarIntegrationConfig;
   scheduler?: SchedulerAutomationConfig;
+  notifications?: NotificationsIntegrationConfig;
+  youtube?: YoutubeIntegrationConfig;
+  obs?: ObsIntegrationConfig;
+  multistream?: MultistreamIntegrationConfig;
+  nasIngest?: NasIngestIntegrationConfig;
+  mas?: MasIntegrationConfig;
+  finnhub?: FinnhubSchedulerIntegrationConfig;
+  cloudflare?: CloudflareIntegrationConfig;
+  supabaseAudit?: SupabaseAuditIntegrationConfig;
+  webhookOut?: WebhookOutIntegrationConfig;
+  streamingOrigin?: StreamingOriginIntegrationConfig;
+}
+
+export interface NotificationsIntegrationConfig {
+  enabled?: boolean;
+  slackWebhookUrl?: string;
+  discordWebhookUrl?: string;
+  /** Generic HTTPS webhook (n8n, email gateway, etc.) */
+  genericWebhookUrl?: string;
+  /** Minutes before slot start to send reminder */
+  remindMinutesBefore?: number;
+  notifyOnSlotChange?: boolean;
+  notifyOnScheduleSave?: boolean;
+  lastNotifyAt?: string;
+  lastError?: string;
+}
+
+export interface YoutubeIntegrationConfig {
+  enabled?: boolean;
+  /** Primary YouTube channel id (UC…) for live status */
+  channelId?: string;
+  /** Extra channels to monitor */
+  channelIds?: string[];
+  /** Boost slot priority when channel is live */
+  boostLiveSlotPriority?: number;
+  lastCheckAt?: string;
+  lastError?: string;
+}
+
+export interface ObsIntegrationConfig {
+  enabled?: boolean;
+  host?: string;
+  port?: number;
+  password?: string;
+  autoSwitchOnSlotChange?: boolean;
+  /** Per slot id → OBS scene name */
+  sceneBySlotId?: Record<string, string>;
+  /** Per slot type → OBS scene name */
+  sceneBySlotType?: Record<string, string>;
+  lastConnectedAt?: string;
+  lastError?: string;
+}
+
+export interface MultistreamIntegrationConfig {
+  enabled?: boolean;
+  /** Restream API bearer token (env RESTREAM_API_TOKEN fallback) */
+  restreamToken?: string;
+  /** Read-only status labels for operator UI */
+  destinations?: string[];
+  lastCheckAt?: string;
+  lastError?: string;
+}
+
+export interface NasIngestIntegrationConfig {
+  enabled?: boolean;
+  autoCreateSlots?: boolean;
+  /** Categories to scan (default shows, commercials) */
+  categories?: string[];
+  /** Default slot duration minutes for new NAS slots */
+  defaultDurationMinutes?: number;
+  lastScanAt?: string;
+  lastImported?: number;
+  lastError?: string;
+}
+
+export interface MasIntegrationConfig {
+  enabled?: boolean;
+  webhookUrl?: string;
+  /** Include slot + program payload on events */
+  includeProgramState?: boolean;
+  lastNotifyAt?: string;
+  lastError?: string;
+}
+
+export interface FinnhubSchedulerIntegrationConfig {
+  enabled?: boolean;
+  /** Slot id or label substring to boost during US market hours */
+  marketsSlotMatch?: string;
+  priorityBoost?: number;
+  /** US market open 6:30 PT ≈ 13:30 UTC (simplified window) */
+  marketOpenHourPt?: number;
+  marketCloseHourPt?: number;
+  lastBoostAt?: string;
+}
+
+export interface CloudflareIntegrationConfig {
+  enabled?: boolean;
+  purgeOnScheduleSave?: boolean;
+  zoneId?: string;
+  lastPurgeAt?: string;
+  lastError?: string;
+}
+
+export interface SupabaseAuditIntegrationConfig {
+  enabled?: boolean;
+  tableName?: string;
+  lastAuditAt?: string;
+  lastError?: string;
+}
+
+export interface WebhookOutIntegrationConfig {
+  enabled?: boolean;
+  urls?: string[];
+  secret?: string;
+  events?: Array<"slot_active" | "schedule_saved" | "slot_reminder">;
+  lastEmitAt?: string;
+  lastError?: string;
+}
+
+/** Phase 3 playout origin (Cloudflare Stream Live / Mux) — config + health stub */
+export interface StreamingOriginIntegrationConfig {
+  enabled?: boolean;
+  provider?: "cloudflare_stream" | "mux" | "custom_hls";
+  livePlaybackUrl?: string;
+  ingestRtmpUrl?: string;
+  streamKeyEnvVar?: string;
+  lastHealthAt?: string;
+  lastError?: string;
+}
+
+export interface CommercialLibraryEntry {
+  id: string;
+  sponsor: string;
+  label: string;
+  nasPath: string;
+  durationSeconds: number;
+  clickThroughUrl?: string;
+  enabled: boolean;
+  tags?: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EpgEntry {
+  slotId: string;
+  label: string;
+  start: string;
+  end: string;
+  sourceType: string;
+  isLive: boolean;
+}
+
+export interface EpgNowNext {
+  channel: string;
+  timezone: string;
+  now: EpgEntry | null;
+  next: EpgEntry | null;
+  upcoming: EpgEntry[];
+  generatedAt: string;
 }
 
 export interface BlocksChannelSchedule extends NewsChannelSchedule {

@@ -1,0 +1,54 @@
+{
+  "name": "BLOCKS Scheduler Slot Reminder",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "minutes", "minutesInterval": 15 }]
+        }
+      },
+      "id": "cron",
+      "name": "Every 15 minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.BLOCKS_BASE_URL || 'http://192.168.0.198:3004'}}/api/news/epg",
+        "options": {}
+      },
+      "id": "fetch-epg",
+      "name": "Fetch EPG",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.BLOCKS_NOTIFY_WEBHOOK_URL}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { title: 'BLOCKS slot reminder', text: 'Next: ' + ($json.next?.label || 'none'), event: 'slot_reminder', at: new Date().toISOString() } }}"
+      },
+      "id": "notify",
+      "name": "Notify webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 300]
+    }
+  ],
+  "connections": {
+    "Every 15 minutes": {
+      "main": [[{ "node": "Fetch EPG", "type": "main", "index": 0 }]]
+    },
+    "Fetch EPG": {
+      "main": [[{ "node": "Notify webhook", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

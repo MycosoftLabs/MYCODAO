@@ -15,10 +15,10 @@
       }
     },
     "googleCalendar": {
-      "enabled": false,
-      "calendarId": "",
+      "enabled": true,
+      "calendarId": "blocks.live@mycodao.com",
       "icalUrl": "",
-      "autoImportEnabled": false,
+      "autoImportEnabled": true,
       "exportFeedToken": ""
     },
     "scheduler": {

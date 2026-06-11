@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import type { IntegrationsHubStatus } from "../components/SchedulerIntegrationsHub";
 import { pulseApiUrl } from "../lib/apiOrigin";
 
 export interface StreamlabsSceneInfo {
@@ -34,6 +35,9 @@ export function useSchedulerIntegrations(accessToken: string | null) {
   );
   const [calendarConfigured, setCalendarConfigured] = useState(false);
   const [exportFeedUrl, setExportFeedUrl] = useState<string | null>(null);
+  const [hubStatus, setHubStatus] = useState<IntegrationsHubStatus | null>(
+    null,
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -74,12 +78,70 @@ export function useSchedulerIntegrations(accessToken: string | null) {
     }
   }, []);
 
+  const reloadHub = useCallback(async () => {
+    const token = accessToken?.trim();
+    if (!token) {
+      setHubStatus(null);
+      return;
+    }
+    try {
+      const res = await fetch(
+        pulseApiUrl("/api/news/producer/integrations/hub"),
+        {
+          cache: "no-store",
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+      if (!res.ok) throw new Error(`hub ${res.status}`);
+      const data = (await res.json()) as IntegrationsHubStatus & {
+        epg?: IntegrationsHubStatus["epg"];
+        youtube?: IntegrationsHubStatus["youtube"];
+        obs?: IntegrationsHubStatus["obs"];
+        multistream?: IntegrationsHubStatus["multistream"];
+        nas?: IntegrationsHubStatus["nas"];
+        finnhub?: IntegrationsHubStatus["finnhub"];
+        commercials?: IntegrationsHubStatus["commercials"];
+        configured?: IntegrationsHubStatus["configured"];
+      };
+      setHubStatus(data);
+    } catch (e) {
+      setHubStatus(null);
+      setError(e instanceof Error ? e.message : "hub load failed");
+    }
+  }, [accessToken]);
+
+  const hubAction = useCallback(
+    async (action: string, extra?: Record<string, unknown>) => {
+      const token = accessToken?.trim();
+      if (!token) throw new Error("Producer sign-in required");
+      const res = await fetch(
+        pulseApiUrl("/api/news/producer/integrations/hub"),
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ action, ...extra }),
+        },
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(
+          (err as { error?: string }).error ?? `hub action ${res.status}`,
+        );
+      }
+      return res.json();
+    },
+    [accessToken],
+  );
+
   const reload = useCallback(async () => {
     setLoading(true);
     setError(null);
-    await Promise.all([reloadStreamlabs(), reloadCalendar()]);
+    await Promise.all([reloadStreamlabs(), reloadCalendar(), reloadHub()]);
     setLoading(false);
-  }, [reloadStreamlabs, reloadCalendar]);
+  }, [reloadStreamlabs, reloadCalendar, reloadHub]);
 
   useEffect(() => {
     void reload();
@@ -217,9 +279,12 @@ export function useSchedulerIntegrations(accessToken: string | null) {
     calendarEvents,
     calendarConfigured,
     exportFeedUrl,
+    hubStatus,
     loading,
     error,
     reload,
+    reloadHub,
+    hubAction,
     testStreamlabs,
     switchScene,
     importCalendar,

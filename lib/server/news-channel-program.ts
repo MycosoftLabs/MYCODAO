@@ -30,6 +30,8 @@ import {
 import { switchStreamlabsScene } from "@/lib/server/streamlabs-slobs-client";
 import { syncSchedulerSlotAutomation } from "@/lib/server/blocks-scheduler-auto-actions";
 import { mergeSchedulerIntegrationsFromEnv } from "@/lib/server/blocks-scheduler-env";
+import { onActiveSlotChanged, onScheduleSaved } from "@/lib/server/integrations/integration-events";
+import { applyFinnhubBoostToSlots } from "@/lib/server/integrations/finnhub-scheduler";
 
 export type ProgramSourceType =
   | "default"
@@ -132,11 +134,13 @@ export function readNewsChannelSchedule(): NewsChannelSchedule | null {
 
 export function writeNewsChannelSchedule(
   schedule: NewsChannelSchedule,
+  opts?: { actor?: string },
 ): NewsChannelSchedule {
   const filePath = scheduleFilePath();
   const dir = path.dirname(filePath);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(filePath, `${JSON.stringify(schedule, null, 2)}\n`, "utf8");
+  onScheduleSaved(schedule, opts?.actor);
   return schedule;
 }
 
@@ -335,8 +339,16 @@ function resolveScheduleProgramNow(
   const tz = schedule.timezone || "America/Los_Angeles";
   const { day, minutes } = localParts(now, tz);
 
-  const active = schedule.slots
-    .filter((s) => (s as SchedulerProgramSlot).enabled !== false)
+  let slotsForResolve = schedule.slots.filter(
+    (s) => (s as SchedulerProgramSlot).enabled !== false,
+  ) as SchedulerProgramSlot[];
+  slotsForResolve = applyFinnhubBoostToSlots(
+    slotsForResolve,
+    schedule.integrations?.finnhub,
+    now,
+  );
+
+  const active = slotsForResolve
     .filter((s) => slotActive(s, day, minutes))
     .filter((s) => sourceIsPlayable(s))
     .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
@@ -346,6 +358,7 @@ function resolveScheduleProgramNow(
 
   if (active[0]) {
     void maybeApplyStreamlabsForSlot(active[0], schedule.integrations);
+    onActiveSlotChanged(active[0] as SchedulerProgramSlot, schedule);
     syncSchedulerSlotAutomation(
       active[0] as SchedulerProgramSlot,
       schedule,

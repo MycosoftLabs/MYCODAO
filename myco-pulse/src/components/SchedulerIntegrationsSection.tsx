@@ -25,6 +25,50 @@ export interface SchedulerIntegrationsDraft {
     autoPushLiveOnSlotStart?: boolean;
     autoEndShowOnSlotEnd?: boolean;
   };
+  notifications?: {
+    enabled?: boolean;
+    slackWebhookUrl?: string;
+    discordWebhookUrl?: string;
+    genericWebhookUrl?: string;
+    remindMinutesBefore?: number;
+    notifyOnSlotChange?: boolean;
+    notifyOnScheduleSave?: boolean;
+  };
+  youtube?: {
+    enabled?: boolean;
+    channelId?: string;
+    channelIds?: string[];
+    boostLiveSlotPriority?: number;
+  };
+  obs?: {
+    enabled?: boolean;
+    host?: string;
+    port?: number;
+    password?: string;
+    autoSwitchOnSlotChange?: boolean;
+  };
+  multistream?: { enabled?: boolean; restreamToken?: string };
+  nasIngest?: {
+    enabled?: boolean;
+    autoCreateSlots?: boolean;
+    categories?: string[];
+    defaultDurationMinutes?: number;
+  };
+  mas?: { enabled?: boolean; webhookUrl?: string; includeProgramState?: boolean };
+  finnhub?: {
+    enabled?: boolean;
+    marketsSlotMatch?: string;
+    priorityBoost?: number;
+  };
+  cloudflare?: { enabled?: boolean; purgeOnScheduleSave?: boolean; zoneId?: string };
+  supabaseAudit?: { enabled?: boolean; tableName?: string };
+  webhookOut?: { enabled?: boolean; urls?: string[]; secret?: string };
+  streamingOrigin?: {
+    enabled?: boolean;
+    provider?: "cloudflare_stream" | "mux" | "custom_hls";
+    livePlaybackUrl?: string;
+    ingestRtmpUrl?: string;
+  };
 }
 
 interface SchedulerIntegrationsSectionProps {

@@ -19,10 +19,11 @@ export function resolveCalendarRef(
   schedule = readNewsChannelSchedule(),
 ): string | null {
   const gcal = schedule?.integrations?.googleCalendar;
+  // Prefer explicit iCal URLs (private secret feed) before calendarId (public basic.ics).
   return (
     gcal?.icalUrl?.trim() ||
-    gcal?.calendarId?.trim() ||
     process.env.GOOGLE_CALENDAR_ICAL_URL?.trim() ||
+    gcal?.calendarId?.trim() ||
     process.env.GOOGLE_CALENDAR_ID?.trim() ||
     null
   );

@@ -37,6 +37,7 @@ import { SchedulerDetailPanel } from "./SchedulerDetailPanel";
 import { SchedulerWeekTimeline } from "./SchedulerWeekTimeline";
 import { SchedulerCalendarStrip } from "./SchedulerCalendarStrip";
 import { SchedulerIntegrationsSection } from "./SchedulerIntegrationsSection";
+import { SchedulerIntegrationsHub } from "./SchedulerIntegrationsHub";
 import { useSchedulerIntegrations } from "../hooks/useSchedulerIntegrations";
 
 interface ProducerDashboardProps {
@@ -442,6 +443,44 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
         scheduler: {
           ...scheduleDraft.integrations?.scheduler,
           ...patch?.scheduler,
+        },
+        notifications: {
+          ...scheduleDraft.integrations?.notifications,
+          ...patch?.notifications,
+        },
+        youtube: {
+          ...scheduleDraft.integrations?.youtube,
+          ...patch?.youtube,
+        },
+        obs: { ...scheduleDraft.integrations?.obs, ...patch?.obs },
+        multistream: {
+          ...scheduleDraft.integrations?.multistream,
+          ...patch?.multistream,
+        },
+        nasIngest: {
+          ...scheduleDraft.integrations?.nasIngest,
+          ...patch?.nasIngest,
+        },
+        mas: { ...scheduleDraft.integrations?.mas, ...patch?.mas },
+        finnhub: {
+          ...scheduleDraft.integrations?.finnhub,
+          ...patch?.finnhub,
+        },
+        cloudflare: {
+          ...scheduleDraft.integrations?.cloudflare,
+          ...patch?.cloudflare,
+        },
+        supabaseAudit: {
+          ...scheduleDraft.integrations?.supabaseAudit,
+          ...patch?.supabaseAudit,
+        },
+        webhookOut: {
+          ...scheduleDraft.integrations?.webhookOut,
+          ...patch?.webhookOut,
+        },
+        streamingOrigin: {
+          ...scheduleDraft.integrations?.streamingOrigin,
+          ...patch?.streamingOrigin,
         },
       },
     });
@@ -1042,6 +1081,7 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
             </div>
 
             {showScheduleIntegrations ? (
+              <>
               <SchedulerIntegrationsSection
                 integrations={scheduleDraft.integrations ?? {}}
                 streamlabs={schedulerIntegrations.streamlabs}
@@ -1072,6 +1112,17 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
                   }
                 }}
               />
+              <SchedulerIntegrationsHub
+                integrations={scheduleDraft.integrations ?? {}}
+                hubStatus={schedulerIntegrations.hubStatus}
+                busy={busy || schedulerIntegrations.loading}
+                disabled={controlsLocked}
+                onChangeIntegrations={updateIntegrationsDraft}
+                onSave={saveScheduleDraft}
+                onHubAction={schedulerIntegrations.hubAction}
+                onReloadHub={schedulerIntegrations.reloadHub}
+              />
+              </>
             ) : null}
           </section>
         ) : null}

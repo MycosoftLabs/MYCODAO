@@ -6,6 +6,8 @@ export interface SchedulerRuntimeState {
   lastStreamlabsSwitchAt: string | null;
   lastScheduledActiveSlotId: string | null;
   lastCalendarCronAt: string | null;
+  lastIntegrationSlotId: string | null;
+  lastIntegrationAt: string | null;
   updatedAt: string;
 }
 
@@ -25,6 +27,8 @@ export function readSchedulerRuntime(): SchedulerRuntimeState {
       lastStreamlabsSwitchAt: null,
       lastScheduledActiveSlotId: null,
       lastCalendarCronAt: null,
+      lastIntegrationSlotId: null,
+      lastIntegrationAt: null,
       updatedAt: new Date().toISOString(),
     };
   }
