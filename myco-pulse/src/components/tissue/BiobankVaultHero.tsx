@@ -568,16 +568,31 @@ function Scene({
   const [hoveredCode, setHoveredCode] = useState<string | null>(null);
   const focusPos = selectedCode ? positions.get(selectedCode) ?? null : null;
   const pitch = CAB_D + ROW_GAP;
+  const defaultCam: [number, number, number] = [3.8, 1.4, 6.4];
+  const defaultTarget: [number, number, number] = [-0.6, -0.2, -2.6];
+  const camOffset: [number, number, number] = [
+    defaultCam[0] - defaultTarget[0],
+    defaultCam[1] - defaultTarget[1],
+    defaultCam[2] - defaultTarget[2],
+  ];
   const focus: CamFocus | null = focusPos
     ? {
         cam: [focusPos[0], focusPos[1] + 0.3, focusPos[2] + 2.6],
         target: [focusPos[0], focusPos[1], focusPos[2]],
       }
     : focusRow > 0
-      ? {
-          cam: [0, 0.6, -focusRow * pitch + 3.4],
-          target: [0, -0.1, -focusRow * pitch],
-        }
+      ? (() => {
+          const rowZ = -focusRow * pitch;
+          const target: [number, number, number] = [defaultTarget[0], defaultTarget[1], rowZ];
+          return {
+            cam: [
+              target[0] + camOffset[0],
+              target[1] + camOffset[1],
+              target[2] + camOffset[2],
+            ],
+            target,
+          };
+        })()
       : null;
   const roomZ = -((ROWS_DEEP - 1) * (CAB_D + ROW_GAP)) / 2;
 
