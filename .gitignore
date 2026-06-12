@@ -39,3 +39,6 @@ app/natureapp/MYCO-App/
 
 # myco-pulse dependencies
 /myco-pulse/node_modules/
+/tissue/
+data/blocks-nas-dev/
+myco-pulse/_news-current.png

@@ -13,6 +13,7 @@ import {
 import { cn } from "../lib/utils";
 import { pulseApiUrl } from "../lib/apiOrigin";
 import { useProducerAuth } from "../hooks/useProducerAuth";
+import { ProvisionPanel } from "./tissue/ProvisionPanel";
 import {
   attachTissueMedia,
   createTissueSample,
@@ -377,9 +378,11 @@ export function TissueCuratorPanel({ onExitCatalog }: TissueCuratorPanelProps) {
       </aside>
 
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+        <ProvisionPanel />
+
         <header>
           <h2 className="text-lg font-black uppercase text-white">
-            {selected ? `Edit ${selected.sampleId}` : "New tissue sample"}
+            {selected ? `Edit ${selected.sampleId}` : "New tissue sample (legacy)"}
           </h2>
           <p className="text-[10px] text-dim mt-1">
             NAS convention: BLOCKS/tissue/&lt;sampleId&gt;/cover.jpg, 01.jpg, 02.mp4

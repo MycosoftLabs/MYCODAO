@@ -1,42 +1,70 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
-  ChevronDown,
+  Boxes,
   Dna,
+  ExternalLink,
+  Layers,
   Loader2,
   Microscope,
   RefreshCw,
+  Repeat,
   Search,
-  Video,
 } from "lucide-react";
 import { cn } from "../lib/utils";
-import { pulseApiUrl } from "../lib/apiOrigin";
+import { useProducerAuth } from "../hooks/useProducerAuth";
 import {
-  fetchPublicTissueCatalog,
-  type TissueCategory,
-  type TissueSample,
+  fetchBiobankAccessions,
+  fetchPublicBiobankCatalog,
+  fetchReplatesDue,
+  scanPageUrl,
+  type BiobankAccession,
+  type PublicBiobankItem,
 } from "../lib/tissueApi";
 import { TissueCuratorPanel } from "./TissueCuratorPanel";
+import { AccessionsGrid } from "./tissue/AccessionsGrid";
+import { AccessionDetailDrawer } from "./tissue/AccessionDetailDrawer";
+import {
+  Chip,
+  FormIcon,
+  HealthChip,
+  hasWebGL,
+  healthHex,
+  mediaServeUrl,
+  prefersReducedMotion,
+  useTheme,
+} from "./tissue/biobankUi";
+import type { VaultTile } from "./tissue/BiobankVaultHero";
 
-type CategoryFilter = "all" | TissueCategory;
+const BiobankVaultHero = lazy(() => import("./tissue/BiobankVaultHero"));
 
-const CATEGORY_CHIPS: { id: CategoryFilter; label: string }[] = [
+type ViewId = "catalog" | "inventory" | "replates";
+
+const CATEGORY_CHIPS = [
   { id: "all", label: "All" },
   { id: "mushroom", label: "Mushrooms" },
+  { id: "lichen", label: "Lichen" },
   { id: "mold", label: "Mold" },
-  { id: "mildew", label: "Mildew" },
   { id: "yeast", label: "Yeast" },
+  { id: "other", label: "Other" },
 ];
 
-const RANK_ORDER = [
-  "kingdom",
-  "phylum",
-  "class",
-  "order",
-  "family",
-  "genus",
-  "species",
-] as const;
+const VIEWS: {
+  id: ViewId;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+}[] = [
+  { id: "catalog", label: "Catalog", icon: Microscope },
+  { id: "inventory", label: "Inventory", icon: Boxes },
+  { id: "replates", label: "Replates due", icon: Repeat },
+];
 
 function useCurateRoute(): boolean {
   const [curate, setCurate] = useState(false);
@@ -52,300 +80,541 @@ function useCurateRoute(): boolean {
   return curate;
 }
 
-function mediaServeUrl(url: string | null): string | null {
-  if (!url) return null;
-  return url.startsWith("http") ? url : pulseApiUrl(url);
+// ---------------------------------------------------------------------------
+// Error boundary so a WebGL/texture failure never blanks the hero
+// ---------------------------------------------------------------------------
+class HeroBoundary extends React.Component<
+  { fallback: React.ReactNode; children: React.ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch() {
+    /* swallow — fall back to CSS hero */
+  }
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
 }
 
-function TissueCard({
-  sample,
-  expanded,
-  onToggle,
+// ---------------------------------------------------------------------------
+// Hero — 3D glass fridge with CSS glass-grid fallback
+// ---------------------------------------------------------------------------
+function HeroShell({
+  tiles,
+  onSelect,
+  onDeselect,
+  selectedCode,
+  subtitle,
 }: {
-  sample: TissueSample;
-  expanded: boolean;
-  onToggle: () => void;
+  tiles: VaultTile[];
+  onSelect: (code: string) => void;
+  onDeselect: () => void;
+  selectedCode: string | null;
+  subtitle: string;
 }) {
-  const cover = mediaServeUrl(sample.coverServeUrl);
+  const theme = useTheme();
+  const reduced = prefersReducedMotion();
+  const use3D = useMemo(() => hasWebGL() && !reduced, [reduced]);
+  const [focusRow, setFocusRow] = useState(0);
+  const ROWS_DEEP = 5;
+
+  const fallback = <HeroFallback tiles={tiles} />;
 
   return (
-    <motion.article
-      layout
+    <div
       className={cn(
-        "glass-bento border-white/10 bg-black/50 overflow-hidden flex flex-col touch-manipulation",
-        expanded && "col-span-1 sm:col-span-2 lg:col-span-3",
+        "relative w-full shrink-0 overflow-hidden rounded-2xl border h-[300px] sm:h-[340px]",
+        theme === "light"
+          ? "border-black/10 bg-[#e9eef0]"
+          : "border-white/10 bg-[#060d0b]",
       )}
     >
-      <button
-        type="button"
-        onClick={onToggle}
-        className="text-left w-full group min-h-[44px]"
-        aria-expanded={expanded}
-      >
-        <div className="relative aspect-square overflow-hidden bg-black/80">
-          {cover ? (
-            <img
-              src={cover}
-              alt={sample.commonName}
-              className="absolute inset-0 w-full h-full object-cover opacity-90 group-hover:scale-[1.03] transition-transform duration-500"
+      {use3D && tiles.length ? (
+        <HeroBoundary fallback={fallback}>
+          <Suspense fallback={fallback}>
+            <BiobankVaultHero
+              tiles={tiles}
+              onSelect={onSelect}
+              onDeselect={onDeselect}
+              selectedCode={selectedCode}
+              focusRow={focusRow}
+              theme={theme}
+              reducedMotion={reduced}
             />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center text-dim">
-              <Microscope className="size-10 opacity-40" aria-hidden />
-            </div>
-          )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
-          <div className="absolute top-2 left-2 flex flex-wrap gap-1">
-            <span className="text-[8px] font-black uppercase tracking-widest px-2 py-1 bg-black/70 border border-myco-accent/40 text-myco-accent">
-              {sample.sampleId}
-            </span>
-            {sample.massLabel ? (
-              <span className="text-[8px] font-black uppercase tracking-widest px-2 py-1 bg-black/70 border border-white/20 text-white/80">
-                {sample.massLabel}
-              </span>
-            ) : null}
-          </div>
-          <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4">
-            <p className="text-sm sm:text-base font-black uppercase text-white leading-tight">
-              {sample.commonName}
-            </p>
-            <p className="text-[10px] sm:text-xs italic text-white/65 mt-0.5">
-              {sample.scientificName}
-            </p>
-          </div>
-          <span className="absolute top-2 right-2 p-2 text-white/70">
-            <ChevronDown
-              className={cn("size-4 transition-transform", expanded && "rotate-180")}
-              aria-hidden
-            />
+          </Suspense>
+        </HeroBoundary>
+      ) : (
+        fallback
+      )}
+
+      {/* row navigator — fly between the depth layers */}
+      {use3D && tiles.length ? (
+        <div className="absolute right-3 top-3 z-10 flex items-center gap-1 rounded-lg border border-white/15 bg-black/45 p-1 backdrop-blur-md">
+          <span className="px-1.5 text-[8px] font-bold uppercase tracking-widest text-white/50">
+            Row
           </span>
-        </div>
-      </button>
-
-      <AnimatePresence initial={false}>
-        {expanded ? (
-          <motion.div
-            key="detail"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25 }}
-            className="overflow-hidden border-t border-white/10"
-          >
-            <div className="p-4 space-y-4">
-              {sample.description ? (
-                <p className="text-xs text-white/70 leading-relaxed">
-                  {sample.description}
-                </p>
-              ) : null}
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px]">
-                {RANK_ORDER.map((rank) => {
-                  const value = sample.taxonomy[rank];
-                  if (!value) return null;
-                  return (
-                    <div
-                      key={rank}
-                      className="border border-white/10 bg-black/40 px-2 py-1.5"
-                    >
-                      <p className="text-[8px] uppercase text-dim tracking-widest">
-                        {rank}
-                      </p>
-                      <p className="text-white/85 font-medium truncate">{value}</p>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] text-white/65">
-                {sample.storageLocation ? (
-                  <div>
-                    <dt className="text-dim uppercase tracking-widest">Storage</dt>
-                    <dd>{sample.storageLocation}</dd>
-                  </div>
-                ) : null}
-                {sample.collectedAt ? (
-                  <div>
-                    <dt className="text-dim uppercase tracking-widest">Collected</dt>
-                    <dd>{new Date(sample.collectedAt).toLocaleString()}</dd>
-                  </div>
-                ) : null}
-                {sample.mindexTaxonId ? (
-                  <div>
-                    <dt className="text-dim uppercase tracking-widest">MINDEX</dt>
-                    <dd className="font-mono text-[9px]">{sample.mindexTaxonId}</dd>
-                  </div>
-                ) : null}
-              </dl>
-
-              {sample.media.length > 0 ? (
-                <div className="space-y-2">
-                  <p className="text-[9px] font-bold uppercase tracking-widest text-dim">
-                    Media
-                  </p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                    {sample.media.map((m) => {
-                      const src = mediaServeUrl(m.serveUrl);
-                      if (m.kind === "video" && src) {
-                        return (
-                          <video
-                            key={m.id}
-                            src={src}
-                            controls
-                            className="aspect-square w-full object-cover bg-black border border-white/10"
-                          />
-                        );
-                      }
-                      if (m.kind === "stream" && m.liveStreamUrl) {
-                        return (
-                          <a
-                            key={m.id}
-                            href={m.liveStreamUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="aspect-square flex flex-col items-center justify-center gap-1 border border-amber-400/40 bg-amber-400/10 text-amber-200 min-h-[44px] touch-manipulation"
-                          >
-                            <Video className="size-5" aria-hidden />
-                            <span className="text-[8px] font-bold uppercase">Live feed</span>
-                          </a>
-                        );
-                      }
-                      return src ? (
-                        <img
-                          key={m.id}
-                          src={src}
-                          alt=""
-                          className="aspect-square w-full object-cover border border-white/10"
-                        />
-                      ) : null;
-                    })}
-                  </div>
-                </div>
-              ) : (
-                <p className="text-[10px] text-dim italic">
-                  Live camera feeds will appear here when configured.
-                </p>
+          {Array.from({ length: ROWS_DEEP }).map((_, r) => (
+            <button
+              key={r}
+              type="button"
+              onClick={() => setFocusRow(r)}
+              className={cn(
+                "size-7 rounded text-[11px] font-bold tabular-nums touch-manipulation transition-colors",
+                focusRow === r
+                  ? "bg-myco-accent text-black"
+                  : "text-white/70 hover:bg-white/10",
               )}
-            </div>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
-    </motion.article>
+            >
+              {r + 1}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      <div
+        className={cn(
+          "pointer-events-none absolute inset-x-0 bottom-0 p-4 sm:p-6",
+          theme === "light"
+            ? "bg-gradient-to-t from-white/90 via-white/40 to-transparent"
+            : "bg-gradient-to-t from-[#060d0b] via-[#060d0b]/40 to-transparent",
+        )}
+      >
+        <p className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.25em] text-myco-accent">
+          <Dna className="size-4" aria-hidden />
+          MycoDAO Biobank · Digital Twin
+        </p>
+        <h1
+          className={cn(
+            "mt-1 text-2xl font-black uppercase sm:text-3xl",
+            theme === "light" ? "text-stone-900" : "text-white",
+          )}
+        >
+          Tissue Catalog
+        </h1>
+        <p
+          className={cn(
+            "mt-1 max-w-xl text-xs",
+            theme === "light" ? "text-stone-600" : "text-white/60",
+          )}
+        >
+          {subtitle}
+        </p>
+      </div>
+    </div>
   );
 }
 
+/** Glass-fridge look in pure CSS — used as fallback and when reduced-motion. */
+function HeroFallback({ tiles }: { tiles: VaultTile[] }) {
+  const theme = useTheme();
+  const shown = tiles.slice(0, 18);
+  return (
+    <div className="absolute inset-0 p-3 sm:p-4">
+      <div
+        className={cn(
+          "grid h-full grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-8",
+          "rounded-xl p-2 backdrop-blur-md",
+          theme === "light" ? "bg-white/40" : "bg-white/[0.04]",
+        )}
+        style={{
+          boxShadow:
+            theme === "light"
+              ? "inset 0 1px 0 rgba(255,255,255,0.6)"
+              : "inset 0 1px 0 rgba(255,255,255,0.08)",
+        }}
+      >
+        {shown.map((t) => (
+          <div
+            key={t.code}
+            className="relative overflow-hidden rounded-md"
+            style={{ boxShadow: `0 0 0 1px ${healthHex(t.health)}55` }}
+          >
+            {t.src ? (
+              <img
+                src={t.src}
+                alt={t.label ?? t.code}
+                loading="lazy"
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="h-full w-full bg-black/30" />
+            )}
+            <span
+              className="absolute inset-x-0 top-0 h-0.5"
+              style={{ backgroundColor: healthHex(t.health) }}
+            />
+          </div>
+        ))}
+        {shown.length === 0
+          ? Array.from({ length: 16 }).map((_, i) => (
+              <div
+                key={i}
+                className={cn(
+                  "rounded-md",
+                  theme === "light" ? "bg-black/5" : "bg-white/5",
+                )}
+              />
+            ))
+          : null}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Public species card (real biobank data)
+// ---------------------------------------------------------------------------
+function SpeciesCard({
+  item,
+  index,
+  theme,
+}: {
+  item: PublicBiobankItem;
+  index: number;
+  theme: "light" | "dark";
+}) {
+  const speciesImg = item.speciesImageUrl;
+  const labCover = mediaServeUrl(item.coverServeUrl);
+  const hero = speciesImg || labCover;
+  const accent = healthHex(item.health);
+  return (
+    <motion.a
+      href={scanPageUrl(item.accessionCode)}
+      target="_blank"
+      rel="noreferrer"
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, delay: Math.min(index * 0.03, 0.4) }}
+      className={cn(
+        "group relative flex flex-col overflow-hidden rounded-xl border backdrop-blur-md touch-manipulation transition-colors",
+        theme === "light"
+          ? "border-black/10 bg-white/60 hover:border-black/20"
+          : "border-white/10 bg-white/[0.04] hover:border-white/25",
+      )}
+    >
+      <div className="relative aspect-square overflow-hidden">
+        {hero ? (
+          <img
+            src={hero}
+            alt={item.commonName || item.accessionCode}
+            loading="lazy"
+            className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.06]"
+          />
+        ) : (
+          <div
+            className="absolute inset-0 flex items-center justify-center"
+            style={{ background: `radial-gradient(circle at 50% 40%, ${accent}22, transparent 70%)` }}
+          >
+            <FormIcon form={item.form} className="size-9 opacity-40" />
+          </div>
+        )}
+        <span className="absolute left-0 top-0 h-1 w-full" style={{ backgroundColor: accent }} />
+        {/* lab-sample thumbnail inset (what we physically hold) */}
+        {labCover && speciesImg ? (
+          <span className="absolute bottom-2 left-2 overflow-hidden rounded-md border-2 border-white/70 shadow-lg">
+            <img src={labCover} alt="lab sample" className="size-10 object-cover" />
+          </span>
+        ) : null}
+        {item.speciesImageAttribution ? (
+          <span className="absolute bottom-1 right-1 max-w-[70%] truncate rounded bg-black/55 px-1 text-[7px] text-white/70">
+            {item.speciesImageAttribution}
+          </span>
+        ) : item.mediaCount > 1 ? (
+          <span className="absolute bottom-2 right-2 rounded-full bg-black/70 px-2 py-0.5 text-[9px] font-medium text-white">
+            {item.mediaCount} photos
+          </span>
+        ) : null}
+        <span className="absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100">
+          <ExternalLink className="size-4 text-white drop-shadow" />
+        </span>
+      </div>
+      <div className="flex flex-1 flex-col gap-1 p-3">
+        <p
+          className={cn(
+            "text-sm font-black uppercase leading-tight",
+            theme === "light" ? "text-stone-900" : "text-white",
+          )}
+        >
+          {item.commonName || item.accessionCode}
+        </p>
+        <p
+          className={cn(
+            "text-[11px] italic",
+            theme === "light" ? "text-stone-500" : "text-white/55",
+          )}
+        >
+          {item.scientificName}
+        </p>
+        <div className="mt-auto flex items-center gap-1.5 pt-1">
+          <HealthChip health={item.health} />
+          <Chip>{item.category}</Chip>
+        </div>
+      </div>
+    </motion.a>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
 export function TissueView() {
   const curateMode = useCurateRoute();
-  const [samples, setSamples] = useState<TissueSample[]>([]);
-  const [loading, setLoading] = useState(true);
+  const auth = useProducerAuth();
+  const theme = useTheme();
+
+  const [view, setView] = useState<ViewId>("catalog");
+  const [catalog, setCatalog] = useState<PublicBiobankItem[]>([]);
+  const [catalogLoaded, setCatalogLoaded] = useState(false);
+  const [accessions, setAccessions] = useState<BiobankAccession[]>([]);
+  const [replates, setReplates] = useState<BiobankAccession[]>([]);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState<CategoryFilter>("all");
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [category, setCategory] = useState("all");
+  const [openCode, setOpenCode] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  // Public catalog: fetched once, drives the hero + Catalog view (stable, so
+  // the hero never empties/collapses on tab or filter changes).
+  const loadCatalog = useCallback(async () => {
+    try {
+      setCatalog(await fetchPublicBiobankCatalog());
+    } catch {
+      setCatalog([]);
+    } finally {
+      setCatalogLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!curateMode) void loadCatalog();
+  }, [curateMode, loadCatalog]);
+
+  const loadInventory = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const list = await fetchPublicTissueCatalog({
-        category,
-        search: search.trim() || undefined,
-      });
-      setSamples(list);
+      setAccessions(await fetchBiobankAccessions());
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load tissue catalog");
-      setSamples([]);
+      setError(e instanceof Error ? e.message : "Failed to load inventory");
+      setAccessions([]);
     } finally {
       setLoading(false);
     }
-  }, [category, search]);
+  }, []);
+
+  // species lookup so Inventory search matches common/scientific names too
+  const codeToSpecies = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of catalog) {
+      m.set(
+        c.accessionCode,
+        `${c.commonName} ${c.scientificName} ${c.category}`.toLowerCase(),
+      );
+    }
+    return m;
+  }, [catalog]);
+
+  const filterAccessions = useCallback(
+    (list: BiobankAccession[]) => {
+      const q = search.trim().toLowerCase();
+      if (!q) return list;
+      return list.filter(
+        (a) =>
+          a.accession_code.toLowerCase().includes(q) ||
+          (codeToSpecies.get(a.accession_code)?.includes(q) ?? false) ||
+          (a.description?.toLowerCase().includes(q) ?? false),
+      );
+    },
+    [search, codeToSpecies],
+  );
+
+  const loadReplates = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      setReplates(await fetchReplatesDue(7));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load replates");
+      setReplates([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    if (!curateMode) void load();
-  }, [curateMode, load]);
+    if (curateMode) return;
+    if (view === "inventory" && auth.isAuthenticated) void loadInventory();
+    if (view === "replates" && auth.isAuthenticated) void loadReplates();
+  }, [curateMode, view, auth.isAuthenticated, loadInventory, loadReplates]);
 
-  const countLabel = useMemo(() => {
-    if (loading) return "Loading…";
-    return `${samples.length} public sample${samples.length === 1 ? "" : "s"}`;
-  }, [loading, samples.length]);
+  const heroTiles: VaultTile[] = useMemo(
+    () =>
+      catalog
+        .filter((c) => c.coverServeUrl)
+        .map((c) => ({
+          code: c.accessionCode,
+          src: mediaServeUrl(c.coverServeUrl) ?? "",
+          label: c.commonName || c.scientificName,
+          health: c.health,
+          category: c.category,
+        })),
+    [catalog],
+  );
+
+  const filteredCatalog = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return catalog.filter((c) => {
+      if (category !== "all" && c.category !== category) return false;
+      if (!q) return true;
+      return (
+        c.commonName.toLowerCase().includes(q) ||
+        c.scientificName.toLowerCase().includes(q) ||
+        c.accessionCode.toLowerCase().includes(q)
+      );
+    });
+  }, [catalog, category, search]);
+
+  const reload = useCallback(() => {
+    void loadCatalog();
+    if (view === "inventory") void loadInventory();
+    if (view === "replates") void loadReplates();
+  }, [view, loadCatalog, loadInventory, loadReplates]);
 
   if (curateMode) {
-    return <TissueCuratorPanel onExitCatalog={() => {
-      const url = new URL(window.location.href);
-      url.searchParams.delete("curate");
-      window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
-      window.dispatchEvent(new PopStateEvent("popstate"));
-    }} />;
+    return (
+      <TissueCuratorPanel
+        onExitCatalog={() => {
+          const url = new URL(window.location.href);
+          url.searchParams.delete("curate");
+          window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+          window.dispatchEvent(new PopStateEvent("popstate"));
+        }}
+      />
+    );
   }
 
+  const subtitle =
+    view === "replates"
+      ? "Units due (or overdue) for replating and slant recycling."
+      : view === "inventory"
+        ? "Every physical unit (accession) — each jar, dish, slant, or pod is QR-addressable."
+        : "A living glass-vault mirror of the physical biobank. Click a specimen to open its live record.";
+
+  const invList = useMemo(() => filterAccessions(accessions), [filterAccessions, accessions]);
+  const replateList = useMemo(() => filterAccessions(replates), [filterAccessions, replates]);
+
+  const countLabel =
+    view === "catalog"
+      ? `${filteredCatalog.length} species`
+      : view === "inventory"
+        ? `${invList.length} unit${invList.length === 1 ? "" : "s"}`
+        : `${replateList.length} due`;
+
   return (
-    <div className="flex flex-col gap-4 sm:gap-6 p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto w-full min-h-0 flex-1 overflow-y-auto">
-      <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-myco-accent flex items-center gap-2">
-            <Dna className="size-4" aria-hidden />
-            MycoDAO Biobank
-          </p>
-          <h1 className="text-2xl sm:text-3xl font-black uppercase text-white mt-1">
-            Tissue Catalog
-          </h1>
-          <p className="text-xs text-dim mt-2 max-w-xl">
-            Stored fungal tissue — mushrooms, mold, mildew, and yeast — with taxonomy,
-            sample IDs, mass, and high-definition imagery from the NAS vault.
-          </p>
+    <div className="mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col gap-4 overflow-y-auto p-4 sm:gap-6 sm:p-6 lg:p-8">
+      <HeroShell
+        tiles={heroTiles}
+        onSelect={(c) => setOpenCode(c)}
+        onDeselect={() => setOpenCode(null)}
+        selectedCode={openCode}
+        subtitle={subtitle}
+      />
+
+      {/* view tabs + actions */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div
+          className={cn(
+            "flex flex-wrap gap-1 rounded-lg border p-1 backdrop-blur-md",
+            theme === "light" ? "border-black/10 bg-white/50" : "border-white/10 bg-black/40",
+          )}
+        >
+          {VIEWS.map((v) => (
+            <button
+              key={v.id}
+              type="button"
+              onClick={() => setView(v.id)}
+              className={cn(
+                "inline-flex min-h-[40px] items-center gap-2 rounded-md px-3 text-[10px] font-bold uppercase tracking-widest touch-manipulation transition-colors",
+                view === v.id
+                  ? "bg-myco-accent/15 text-myco-accent"
+                  : theme === "light"
+                    ? "text-stone-500 hover:text-stone-900"
+                    : "text-dim hover:text-white",
+              )}
+            >
+              <v.icon className="size-3.5" />
+              {v.label}
+            </button>
+          ))}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={() => void load()}
+            onClick={reload}
             disabled={loading}
-            className="min-h-[44px] px-4 border border-white/15 text-[10px] font-bold uppercase tracking-widest text-dim hover:text-white touch-manipulation disabled:opacity-50 inline-flex items-center gap-2"
+            className={cn(
+              "inline-flex min-h-[44px] items-center gap-2 border px-4 text-[10px] font-bold uppercase tracking-widest touch-manipulation disabled:opacity-50",
+              theme === "light"
+                ? "border-black/15 text-stone-600 hover:text-stone-900"
+                : "border-white/15 text-dim hover:text-white",
+            )}
           >
             <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
             Refresh
           </button>
           <a
             href="?curate=1"
-            className="min-h-[44px] px-4 border border-myco-accent/40 text-[10px] font-bold uppercase tracking-widest text-myco-accent hover:bg-myco-accent/10 touch-manipulation inline-flex items-center"
+            className="inline-flex min-h-[44px] items-center border border-myco-accent/40 px-4 text-[10px] font-bold uppercase tracking-widest text-myco-accent hover:bg-myco-accent/10 touch-manipulation"
           >
             Curator
           </a>
         </div>
-      </header>
+      </div>
 
-      <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-dim" />
+      {/* search + count */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative max-w-md flex-1">
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-dim" />
           <input
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search name, species, sample ID…"
-            className="w-full pl-10 pr-4 py-3 min-h-[44px] text-base bg-black/50 border border-white/10 text-white placeholder:text-dim"
+            placeholder="Search species, common name, code…"
+            className={cn(
+              "min-h-[44px] w-full border py-3 pl-10 pr-4 text-base placeholder:text-dim",
+              theme === "light"
+                ? "border-black/10 bg-white/70 text-stone-900"
+                : "border-white/10 bg-black/50 text-white",
+            )}
           />
         </div>
-        <p className="text-[10px] text-dim uppercase tracking-widest shrink-0">
-          {countLabel}
-        </p>
+        <p className="shrink-0 text-[10px] uppercase tracking-widest text-dim">{countLabel}</p>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {CATEGORY_CHIPS.map((chip) => (
-          <button
-            key={chip.id}
-            type="button"
-            onClick={() => setCategory(chip.id)}
-            className={cn(
-              "min-h-[44px] px-4 text-[10px] font-bold uppercase tracking-widest border touch-manipulation",
-              category === chip.id
-                ? "border-myco-accent bg-myco-accent/15 text-myco-accent"
-                : "border-white/15 text-dim hover:text-white",
-            )}
-          >
-            {chip.label}
-          </button>
-        ))}
-      </div>
+      {view === "catalog" ? (
+        <div className="flex flex-wrap gap-2">
+          {CATEGORY_CHIPS.map((chip) => (
+            <button
+              key={chip.id}
+              type="button"
+              onClick={() => setCategory(chip.id)}
+              className={cn(
+                "min-h-[44px] border px-4 text-[10px] font-bold uppercase tracking-widest touch-manipulation",
+                category === chip.id
+                  ? "border-myco-accent bg-myco-accent/15 text-myco-accent"
+                  : theme === "light"
+                    ? "border-black/15 text-stone-500 hover:text-stone-900"
+                    : "border-white/15 text-dim hover:text-white",
+              )}
+            >
+              {chip.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       {error ? (
         <div className="border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-200">
@@ -353,41 +622,91 @@ export function TissueView() {
         </div>
       ) : null}
 
-      {loading ? (
-        <div className="flex items-center justify-center py-24 text-dim gap-2">
-          <Loader2 className="size-5 animate-spin" />
-          <span className="text-xs uppercase tracking-widest">Loading catalog…</span>
-        </div>
-      ) : samples.length === 0 ? (
-        <div className="glass-bento border-white/10 p-8 sm:p-12 text-center">
-          <Microscope className="size-12 mx-auto text-dim/50 mb-4" aria-hidden />
-          <p className="text-lg font-bold text-white uppercase">No public samples yet</p>
-          <p className="text-sm text-dim mt-2 max-w-md mx-auto">
-            The tissue vault is empty for public visitors. Authorized curators can add
-            samples at{" "}
-            <a href="?curate=1" className="text-myco-accent underline">
-              ?curate=1
-            </a>
-            .
+      {/* CATALOG (public, real species) */}
+      {view === "catalog" ? (
+        !catalogLoaded ? (
+          <Loading label="Loading catalog…" />
+        ) : filteredCatalog.length === 0 ? (
+          <EmptyState
+            title={catalog.length === 0 ? "Catalog is being populated" : "No matches"}
+            body={
+              catalog.length === 0
+                ? "Public specimens will appear here as they are verified and published."
+                : "Try a different category or search."
+            }
+          />
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            {filteredCatalog.map((item, i) => (
+              <SpeciesCard key={item.accessionCode} item={item} index={i} theme={theme} />
+            ))}
+          </div>
+        )
+      ) : !auth.isAuthenticated ? (
+        <CuratorGate auth={auth} />
+      ) : view === "inventory" ? (
+        <>
+          <p className="text-[11px] text-dim">
+            <strong className="text-white/70">Accession</strong> = one physical unit (a jar,
+            petri dish, slant, or grow-pod). Code <span className="font-mono">SPECIES-VARIANT-####</span>{" "}
+            resolves to its QR record. The Catalog groups these by species.
           </p>
-        </div>
+          <AccessionsGrid accessions={invList} loading={loading} onOpen={setOpenCode} />
+        </>
       ) : (
-        <motion.div
-          layout
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4"
-        >
-          {samples.map((sample) => (
-            <TissueCard
-              key={sample.id}
-              sample={sample}
-              expanded={expandedId === sample.id}
-              onToggle={() =>
-                setExpandedId((id) => (id === sample.id ? null : sample.id))
-              }
-            />
-          ))}
-        </motion.div>
+        <AccessionsGrid
+          accessions={replateList}
+          loading={loading}
+          onOpen={setOpenCode}
+          emptyHint="Nothing due in the next 7 days. Replate ETAs roll automatically when you log a transfer."
+        />
       )}
+
+      <AccessionDetailDrawer code={openCode} onClose={() => setOpenCode(null)} onChanged={reload} />
+    </div>
+  );
+}
+
+function Loading({ label }: { label: string }) {
+  return (
+    <div className="flex items-center justify-center gap-2 py-24 text-dim">
+      <Loader2 className="size-5 animate-spin" />
+      <span className="text-xs uppercase tracking-widest">{label}</span>
+    </div>
+  );
+}
+
+function EmptyState({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-black/40 p-8 text-center sm:p-12">
+      <Microscope className="mx-auto mb-4 size-12 text-dim/50" aria-hidden />
+      <p className="text-lg font-bold uppercase text-white">{title}</p>
+      <p className="mx-auto mt-2 max-w-md text-sm text-dim">{body}</p>
+    </div>
+  );
+}
+
+function CuratorGate({
+  auth,
+}: {
+  auth: ReturnType<typeof useProducerAuth>;
+}) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-black/40 p-8 text-center sm:p-12">
+      <Layers className="mx-auto mb-4 size-12 text-dim/40" aria-hidden />
+      <p className="text-lg font-bold uppercase text-white">Curator access required</p>
+      <p className="mx-auto mt-2 max-w-md text-sm text-dim">
+        Sign in with an authorized account to view and manage the biobank inventory and
+        replate queue.
+      </p>
+      <button
+        type="button"
+        onClick={() => void auth.signInWithGoogle()}
+        disabled={auth.signingIn}
+        className="mx-auto mt-4 inline-flex min-h-[48px] items-center bg-myco-accent px-6 text-xs font-black uppercase tracking-widest text-black touch-manipulation disabled:opacity-50"
+      >
+        {auth.signingIn ? "Redirecting…" : "Sign in with Google"}
+      </button>
     </div>
   );
 }

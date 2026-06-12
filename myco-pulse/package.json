@@ -12,6 +12,9 @@
   },
   "dependencies": {
     "@phantom/react-sdk": "^2.0.2",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.6.1",
+    "@react-three/postprocessing": "^3.0.4",
     "@realms-today/spl-governance": "^0.3.33",
     "@solana/spl-governance": "^0.3.28",
     "@solana/wallet-adapter-base": "^0.9.27",
@@ -34,6 +37,7 @@
     "react-grid-layout": "^1.5.0",
     "recharts": "^3.8.1",
     "tailwind-merge": "^3.5.0",
+    "three": "^0.184.0",
     "vite": "^6.2.0"
   },
   "optionalDependencies": {
@@ -43,6 +47,7 @@
   "devDependencies": {
     "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
+    "@types/three": "^0.184.1",
     "autoprefixer": "^10.4.21",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",

@@ -28,7 +28,11 @@ export async function GET(req: Request) {
 
   try {
     const { searchParams } = new URL(req.url);
-    const sampleFolder = searchParams.get("sampleId")?.trim() ?? undefined;
+    const sampleFolder =
+      searchParams.get("folder")?.trim() ||
+      searchParams.get("code")?.trim() ||
+      searchParams.get("sampleId")?.trim() ||
+      undefined;
     const assets = scanTissueNasAssets(sampleFolder);
     return NextResponse.json(
       {
