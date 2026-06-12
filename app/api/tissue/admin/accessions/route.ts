@@ -66,7 +66,7 @@ export async function GET(req: Request) {
  *   scientificName* , commonName, category, kingdom
  *   variantKey (default "A"), strainLabel, origin
  *   form, container, agarMedium, substrate, replateIntervalDays
- *   visibility (default "internal"), quantity (default 1)
+ *   visibility (default "public"), quantity (default 1)
  *   enrichFromMindex (bool)
  */
 export async function POST(req: Request) {
@@ -91,7 +91,7 @@ export async function POST(req: Request) {
     );
     const visibility: Visibility = VISIBILITY.has(String(body.visibility))
       ? (String(body.visibility) as Visibility)
-      : "internal";
+      : "public";
 
     // Optional MINDEX taxonomy enrich.
     let taxonomy: Record<string, unknown> | undefined;

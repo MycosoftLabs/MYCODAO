@@ -11,7 +11,6 @@ import {
   Boxes,
   Dna,
   ExternalLink,
-  Layers,
   Loader2,
   Microscope,
   RefreshCw,
@@ -19,7 +18,7 @@ import {
   Search,
 } from "lucide-react";
 import { cn } from "../lib/utils";
-import { useProducerAuth } from "../hooks/useProducerAuth";
+import { useTissueCurator } from "../hooks/useTissueCurator";
 import {
   fetchBiobankAccessions,
   fetchPublicBiobankCatalog,
@@ -362,7 +361,7 @@ function SpeciesCard({
 // ---------------------------------------------------------------------------
 export function TissueView() {
   const curateMode = useCurateRoute();
-  const auth = useProducerAuth();
+  const { isCurator } = useTissueCurator();
   const theme = useTheme();
 
   const [view, setView] = useState<ViewId>("catalog");
@@ -446,9 +445,9 @@ export function TissueView() {
 
   useEffect(() => {
     if (curateMode) return;
-    if (view === "inventory" && auth.isAuthenticated) void loadInventory();
-    if (view === "replates" && auth.isAuthenticated) void loadReplates();
-  }, [curateMode, view, auth.isAuthenticated, loadInventory, loadReplates]);
+    if (view === "inventory") void loadInventory();
+    if (view === "replates") void loadReplates();
+  }, [curateMode, view, loadInventory, loadReplates]);
 
   const heroTiles: VaultTile[] = useMemo(
     () =>
@@ -642,8 +641,6 @@ export function TissueView() {
             ))}
           </div>
         )
-      ) : !auth.isAuthenticated ? (
-        <CuratorGate auth={auth} />
       ) : view === "inventory" ? (
         <>
           <p className="text-[11px] text-dim">
@@ -651,8 +648,14 @@ export function TissueView() {
             petri dish, slant, or grow-pod). Code <span className="font-mono">SPECIES-VARIANT-####</span>{" "}
             resolves to its QR record. The Catalog groups these by species.
           </p>
-          <AccessionsGrid accessions={invList} loading={loading} onOpen={setOpenCode} />
+          {loading ? (
+            <Loading label="Loading inventory…" />
+          ) : (
+            <AccessionsGrid accessions={invList} loading={loading} onOpen={setOpenCode} />
+          )}
         </>
+      ) : loading ? (
+        <Loading label="Loading replates…" />
       ) : (
         <AccessionsGrid
           accessions={replateList}
@@ -662,7 +665,12 @@ export function TissueView() {
         />
       )}
 
-      <AccessionDetailDrawer code={openCode} onClose={() => setOpenCode(null)} onChanged={reload} />
+      <AccessionDetailDrawer
+        code={openCode}
+        canEdit={isCurator}
+        onClose={() => setOpenCode(null)}
+        onChanged={reload}
+      />
     </div>
   );
 }
@@ -682,31 +690,6 @@ function EmptyState({ title, body }: { title: string; body: string }) {
       <Microscope className="mx-auto mb-4 size-12 text-dim/50" aria-hidden />
       <p className="text-lg font-bold uppercase text-white">{title}</p>
       <p className="mx-auto mt-2 max-w-md text-sm text-dim">{body}</p>
-    </div>
-  );
-}
-
-function CuratorGate({
-  auth,
-}: {
-  auth: ReturnType<typeof useProducerAuth>;
-}) {
-  return (
-    <div className="rounded-lg border border-white/10 bg-black/40 p-8 text-center sm:p-12">
-      <Layers className="mx-auto mb-4 size-12 text-dim/40" aria-hidden />
-      <p className="text-lg font-bold uppercase text-white">Curator access required</p>
-      <p className="mx-auto mt-2 max-w-md text-sm text-dim">
-        Sign in with an authorized account to view and manage the biobank inventory and
-        replate queue.
-      </p>
-      <button
-        type="button"
-        onClick={() => void auth.signInWithGoogle()}
-        disabled={auth.signingIn}
-        className="mx-auto mt-4 inline-flex min-h-[48px] items-center bg-myco-accent px-6 text-xs font-black uppercase tracking-widest text-black touch-manipulation disabled:opacity-50"
-      >
-        {auth.signingIn ? "Redirecting…" : "Sign in with Google"}
-      </button>
     </div>
   );
 }

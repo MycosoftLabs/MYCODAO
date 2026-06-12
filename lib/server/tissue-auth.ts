@@ -4,12 +4,8 @@ import {
   type ProducerAuthResult,
 } from "@/lib/server/producer-auth";
 
-const DEFAULT_ALLOWED_EMAILS = [
-  "morgan@mycosoft.org",
-  "morgan@mycodao.com",
-  "abelardo@mycosoft.org",
-  "abelardo@mycodao.com",
-];
+/** Fallback when env allowlists are unset — Morgan only; extend via NEWS_PRODUCER_ALLOWED_EMAILS. */
+const DEFAULT_ALLOWED_EMAILS = ["morgan@mycosoft.org"];
 
 function tissueCuratorAllowlist(): Set<string> {
   const raw =

@@ -462,8 +462,8 @@ export async function fetchBiobankAccessions(opts?: {
   if (opts?.search?.trim()) p.set("search", opts.search.trim());
   const qs = p.toString();
   const res = await fetch(
-    pulseApiUrl(`/api/tissue/admin/accessions${qs ? `?${qs}` : ""}`),
-    { headers: await curatorHeaders(), cache: "no-store" },
+    pulseApiUrl(`/api/tissue/accessions${qs ? `?${qs}` : ""}`),
+    { cache: "no-store" },
   );
   if (!res.ok) {
     const b = (await res.json().catch(() => ({}))) as { error?: string };
@@ -477,14 +477,25 @@ export async function fetchAccessionDetail(
   code: string,
 ): Promise<AccessionDetail> {
   const res = await fetch(
-    pulseApiUrl(`/api/tissue/admin/accessions/${encodeURIComponent(code)}`),
-    { headers: await curatorHeaders(), cache: "no-store" },
+    pulseApiUrl(`/api/tissue/accessions/${encodeURIComponent(code)}`),
+    { cache: "no-store" },
   );
   if (!res.ok) {
     const b = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(b.error ?? `accession ${res.status}`);
   }
   return (await res.json()) as AccessionDetail;
+}
+
+/** True when the signed-in user may edit tissue catalog (curator allowlist). */
+export async function verifyTissueCurator(): Promise<boolean> {
+  const res = await fetch(pulseApiUrl("/api/tissue/admin/verify"), {
+    method: "POST",
+    headers: await curatorHeaders(),
+  });
+  if (!res.ok) return false;
+  const data = (await res.json()) as { ok?: boolean };
+  return data.ok === true;
 }
 
 export async function patchAccession(
@@ -640,8 +651,8 @@ export async function fetchReplatesDue(
   withinDays = 7,
 ): Promise<BiobankAccession[]> {
   const res = await fetch(
-    pulseApiUrl(`/api/tissue/admin/replates?withinDays=${withinDays}`),
-    { headers: await curatorHeaders(), cache: "no-store" },
+    pulseApiUrl(`/api/tissue/replates?withinDays=${withinDays}`),
+    { cache: "no-store" },
   );
   if (!res.ok) {
     const b = (await res.json().catch(() => ({}))) as { error?: string };

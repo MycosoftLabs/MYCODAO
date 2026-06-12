@@ -47,6 +47,7 @@ import {
 
 interface AccessionDetailDrawerProps {
   code: string | null;
+  canEdit?: boolean;
   onClose: () => void;
   onChanged?: () => void;
 }
@@ -99,6 +100,7 @@ function jsonEntries(obj: Record<string, unknown> | null | undefined) {
 
 export function AccessionDetailDrawer({
   code,
+  canEdit = false,
   onClose,
   onChanged,
 }: AccessionDetailDrawerProps) {
@@ -261,6 +263,7 @@ export function AccessionDetailDrawer({
                           key={m.id}
                           media={m}
                           busy={busy}
+                          canEdit={canEdit}
                           onView={() => setLightbox(mediaServeUrl(m.serveUrl))}
                           onCover={() =>
                             void run(() => setAccessionCover(acc.accession_code, m.id))
@@ -271,9 +274,13 @@ export function AccessionDetailDrawer({
                         />
                       ))}
                     </div>
-                  ) : (
+                  ) : canEdit ? (
                     <p className="rounded border border-dashed border-white/15 p-4 text-center text-[11px] text-dim">
                       No media yet. Attach NAS photos/video below.
+                    </p>
+                  ) : (
+                    <p className="rounded border border-dashed border-white/15 p-4 text-center text-[11px] text-dim">
+                      No media attached to this accession yet.
                     </p>
                   )}
 
@@ -294,67 +301,67 @@ export function AccessionDetailDrawer({
                     </Section>
                   ) : null}
 
-                  {/* quick actions */}
-                  <Section icon={Activity} title="Quick actions">
-                    <div className="flex flex-wrap gap-2">
-                      <ActionButton
-                        icon={Eye}
-                        label="Observe"
-                        disabled={busy}
-                        onClick={() =>
-                          void run(() =>
-                            logAccessionEvent({
-                              accessionCode: acc.accession_code,
-                              eventType: "observed",
-                              summary: "Observed (healthy check)",
-                            }),
-                          )
-                        }
-                      />
-                      <ActionButton
-                        icon={Repeat}
-                        label="Replate now"
-                        disabled={busy}
-                        onClick={() =>
-                          void run(() =>
-                            recordTransfer({
-                              sourceCode: acc.accession_code,
-                              transferType: "replate",
-                              medium: acc.agar_medium ?? undefined,
-                              etaDays: acc.replate_interval_days ?? 90,
-                            }),
-                          )
-                        }
-                      />
-                      <ActionButton
-                        icon={AlertTriangle}
-                        label="Flag contam."
-                        tone="danger"
-                        disabled={busy}
-                        onClick={() => {
-                          const contaminant =
-                            window.prompt("Contaminant (e.g. trichoderma)") || "";
-                          if (!contaminant) return;
-                          void run(() =>
-                            recordContamination({
-                              accessionCode: acc.accession_code,
-                              contaminant,
-                              severity: "moderate",
-                            }),
-                          );
-                        }}
-                      />
-                      <ActionButton
-                        icon={ImagePlus}
-                        label={nasOpen ? "Hide NAS" : "Attach media"}
-                        onClick={() => void browseNas()}
-                        disabled={busy}
-                      />
-                    </div>
-                  </Section>
+                  {canEdit ? (
+                    <Section icon={Activity} title="Quick actions">
+                      <div className="flex flex-wrap gap-2">
+                        <ActionButton
+                          icon={Eye}
+                          label="Observe"
+                          disabled={busy}
+                          onClick={() =>
+                            void run(() =>
+                              logAccessionEvent({
+                                accessionCode: acc.accession_code,
+                                eventType: "observed",
+                                summary: "Observed (healthy check)",
+                              }),
+                            )
+                          }
+                        />
+                        <ActionButton
+                          icon={Repeat}
+                          label="Replate now"
+                          disabled={busy}
+                          onClick={() =>
+                            void run(() =>
+                              recordTransfer({
+                                sourceCode: acc.accession_code,
+                                transferType: "replate",
+                                medium: acc.agar_medium ?? undefined,
+                                etaDays: acc.replate_interval_days ?? 90,
+                              }),
+                            )
+                          }
+                        />
+                        <ActionButton
+                          icon={AlertTriangle}
+                          label="Flag contam."
+                          tone="danger"
+                          disabled={busy}
+                          onClick={() => {
+                            const contaminant =
+                              window.prompt("Contaminant (e.g. trichoderma)") || "";
+                            if (!contaminant) return;
+                            void run(() =>
+                              recordContamination({
+                                accessionCode: acc.accession_code,
+                                contaminant,
+                                severity: "moderate",
+                              }),
+                            );
+                          }}
+                        />
+                        <ActionButton
+                          icon={ImagePlus}
+                          label={nasOpen ? "Hide NAS" : "Attach media"}
+                          onClick={() => void browseNas()}
+                          disabled={busy}
+                        />
+                      </div>
+                    </Section>
+                  ) : null}
 
-                  {/* NAS browser */}
-                  {nasOpen ? (
+                  {canEdit && nasOpen ? (
                     <div className="rounded-lg border border-white/10 bg-black/40 p-3">
                       <p className="mb-2 text-[10px] uppercase tracking-widest text-dim">
                         NAS · tissue/{acc.accession_code}/
@@ -403,37 +410,45 @@ export function AccessionDetailDrawer({
 
                   {/* state controls */}
                   <Section icon={FlaskConical} title="State">
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                      <SelectField
-                        label="Status"
-                        value={acc.status}
-                        options={STATUS_OPTIONS}
-                        disabled={busy}
-                        onChange={(v) =>
-                          void run(() => patchAccession(acc.accession_code, { status: v }))
-                        }
-                      />
-                      <SelectField
-                        label="Health"
-                        value={acc.health}
-                        options={HEALTH_OPTIONS}
-                        disabled={busy}
-                        onChange={(v) =>
-                          void run(() => patchAccession(acc.accession_code, { health: v }))
-                        }
-                      />
-                      <SelectField
-                        label="Visibility"
-                        value={acc.visibility}
-                        options={VISIBILITY_OPTIONS}
-                        disabled={busy}
-                        onChange={(v) =>
-                          void run(() =>
-                            patchAccession(acc.accession_code, { visibility: v }),
-                          )
-                        }
-                      />
-                    </div>
+                    {canEdit ? (
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                        <SelectField
+                          label="Status"
+                          value={acc.status}
+                          options={STATUS_OPTIONS}
+                          disabled={busy}
+                          onChange={(v) =>
+                            void run(() => patchAccession(acc.accession_code, { status: v }))
+                          }
+                        />
+                        <SelectField
+                          label="Health"
+                          value={acc.health}
+                          options={HEALTH_OPTIONS}
+                          disabled={busy}
+                          onChange={(v) =>
+                            void run(() => patchAccession(acc.accession_code, { health: v }))
+                          }
+                        />
+                        <SelectField
+                          label="Visibility"
+                          value={acc.visibility}
+                          options={VISIBILITY_OPTIONS}
+                          disabled={busy}
+                          onChange={(v) =>
+                            void run(() =>
+                              patchAccession(acc.accession_code, { visibility: v }),
+                            )
+                          }
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        <StatusChip status={acc.status} />
+                        <HealthChip health={acc.health} />
+                        <Chip>{acc.visibility}</Chip>
+                      </div>
+                    )}
                     <dl className="grid grid-cols-2 gap-2 text-[11px] text-white/70 sm:grid-cols-3">
                       <Field label="Replate" value={<span className={replate.tone}>{replate.label}</span>} />
                       <Field label="Passage" value={`#${acc.passage_number}`} />
@@ -506,14 +521,16 @@ export function AccessionDetailDrawer({
                   {/* QR */}
                   <Section icon={QrCode} title="QR / identity">
                     <div className="flex flex-wrap gap-2">
-                      <a
-                        href={biobankLabelSheetUrl([acc.accession_code], "jar")}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex min-h-[44px] items-center gap-2 rounded border border-myco-accent/40 px-4 text-[10px] font-bold uppercase tracking-widest text-myco-accent hover:bg-myco-accent/10 touch-manipulation"
-                      >
-                        <Printer className="size-4" /> Print label
-                      </a>
+                      {canEdit ? (
+                        <a
+                          href={biobankLabelSheetUrl([acc.accession_code], "jar")}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex min-h-[44px] items-center gap-2 rounded border border-myco-accent/40 px-4 text-[10px] font-bold uppercase tracking-widest text-myco-accent hover:bg-myco-accent/10 touch-manipulation"
+                        >
+                          <Printer className="size-4" /> Print label
+                        </a>
+                      ) : null}
                       <a
                         href={scanPageUrl(acc.accession_code)}
                         target="_blank"
@@ -557,12 +574,14 @@ export function AccessionDetailDrawer({
 function MediaTile({
   media,
   busy,
+  canEdit,
   onView,
   onCover,
   onDelete,
 }: {
   media: BiobankMedia;
   busy: boolean;
+  canEdit?: boolean;
   onView: () => void;
   onCover: () => void;
   onDelete: () => void;
@@ -582,26 +601,28 @@ function MediaTile({
           Cover
         </span>
       ) : null}
-      <div className="absolute inset-x-0 bottom-0 flex justify-end gap-0.5 bg-gradient-to-t from-black/80 to-transparent p-1 opacity-0 transition-opacity group-hover:opacity-100">
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onCover}
-          className="rounded p-1 text-white/80 hover:text-myco-accent"
-          aria-label="Set cover"
-        >
-          <Star className="size-3.5" />
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onDelete}
-          className="rounded p-1 text-white/80 hover:text-red-400"
-          aria-label="Delete"
-        >
-          <Trash2 className="size-3.5" />
-        </button>
-      </div>
+      {canEdit ? (
+        <div className="absolute inset-x-0 bottom-0 flex justify-end gap-0.5 bg-gradient-to-t from-black/80 to-transparent p-1 opacity-0 transition-opacity group-hover:opacity-100">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onCover}
+            className="rounded p-1 text-white/80 hover:text-myco-accent"
+            aria-label="Set cover"
+          >
+            <Star className="size-3.5" />
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onDelete}
+            className="rounded p-1 text-white/80 hover:text-red-400"
+            aria-label="Delete"
+          >
+            <Trash2 className="size-3.5" />
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

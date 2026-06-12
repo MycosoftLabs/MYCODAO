@@ -5,7 +5,7 @@
  * Plus events (touch log), transfers (clone/replate/slant ETA), contaminations,
  * interactions, experiments. Media binaries live on NAS; we store paths.
  *
- * Public reads honor RLS (visibility='public'); writes use the service role.
+ * Public reads expose all non-hidden tissue (service role); writes require curator auth.
  */
 import { buildServeUrl } from "@/lib/server/blocks-nas-media";
 import { fetchInatImage } from "@/lib/adapters/inaturalist-image";
@@ -198,44 +198,35 @@ export async function resolveAccessionForScan(
 ): Promise<ScanResult> {
   const raw = (codeOrUrl || "").trim();
   const code = (raw.split("/").pop() || raw).toUpperCase();
-  const sb = anon();
+  const sb = admin();
 
-  const { data: accs, error } = await sb
+  const { data: acc, error } = await sb
     .from("tissue_accessions")
     .select("*")
     .eq("accession_code", code)
-    .limit(1);
+    .maybeSingle();
   if (error) throw new Error(error.message);
 
-  const acc = (accs?.[0] as AccessionRow | undefined) ?? null;
   if (!acc) {
-    // Distinguish "exists but private" from "unknown" using the service role.
-    const svc = getSupabaseServiceRole();
-    if (svc) {
-      const { data: priv } = await svc
-        .from("tissue_accessions")
-        .select("accession_code")
-        .eq("accession_code", code)
-        .limit(1);
-      if (priv && priv.length) {
-        return { found: true, restricted: true, accession: null };
-      }
-    }
     return { found: false, restricted: false, accession: null };
+  }
+  const row = acc as AccessionRow;
+  if (row.visibility === "hidden") {
+    return { found: true, restricted: true, accession: null };
   }
 
   let strain: StrainRow | null = null;
-  if (acc.strain_id) {
+  if (row.strain_id) {
     const { data } = await sb
       .from("tissue_strains")
       .select("*")
-      .eq("id", acc.strain_id)
+      .eq("id", row.strain_id)
       .maybeSingle();
     strain = (data as StrainRow) ?? null;
   }
 
   let taxon: TaxonRow | null = null;
-  const taxonId = acc.taxon_id ?? strain?.taxon_id ?? null;
+  const taxonId = row.taxon_id ?? strain?.taxon_id ?? null;
   if (taxonId) {
     const { data } = await sb
       .from("tissue_taxa")
@@ -248,20 +239,20 @@ export async function resolveAccessionForScan(
   const { data: mediaRows } = await sb
     .from("tissue_media")
     .select("*")
-    .eq("accession_id", acc.id)
-    .eq("visibility", "public");
+    .eq("accession_id", row.id)
+    .neq("visibility", "hidden");
 
   const media = toScanMedia((mediaRows as MediaRow[]) ?? []);
   const cover =
     media.find((m) => m.isCover) ?? media.find((m) => m.serveUrl) ?? null;
 
   const view: ScanView = {
-    accessionCode: acc.accession_code,
-    checkChar: computeCheckChar(acc.accession_code),
-    scanUrl: buildScanUrl(acc.accession_code),
-    form: acc.form,
-    status: acc.status,
-    health: acc.health,
+    accessionCode: row.accession_code,
+    checkChar: computeCheckChar(row.accession_code),
+    scanUrl: buildScanUrl(row.accession_code),
+    form: row.form,
+    status: row.status,
+    health: row.health,
     strain: strain
       ? {
           code: strain.strain_code,
@@ -280,8 +271,8 @@ export async function resolveAccessionForScan(
           mindexTaxonId: taxon.mindex_taxon_id,
         }
       : null,
-    description: acc.description,
-    dateIn: acc.date_in,
+    description: row.description,
+    dateIn: row.date_in,
     coverServeUrl: cover?.serveUrl ?? null,
     media,
   };
@@ -324,6 +315,17 @@ export async function getAccessionFull(code: string) {
       ...m,
       serveUrl: m.kind === "stream" ? null : buildServeUrl(m.nas_path),
     })),
+  };
+}
+
+/** Public detail — all non-hidden accessions; media excludes hidden rows. */
+export async function getAccessionFullPublic(code: string) {
+  const full = await getAccessionFull(code);
+  if (!full) return null;
+  if (full.accession.visibility === "hidden") return null;
+  return {
+    ...full,
+    media: full.media.filter((m) => m.visibility !== "hidden"),
   };
 }
 
@@ -380,7 +382,7 @@ export async function ensureTaxon(input: {
       reference_image_thumb_url: img?.thumbUrl ?? null,
       reference_image_attribution: img?.attribution ?? null,
       reference_image_source: img?.source ?? null,
-      visibility: input.visibility ?? "internal",
+      visibility: input.visibility ?? "public",
       created_by: input.createdBy ?? null,
     })
     .select("*")
@@ -416,7 +418,7 @@ export async function createStrain(input: {
       strain_label: input.strainLabel?.trim() ?? "",
       variant_key: input.variantKey.toUpperCase(),
       origin: input.origin ?? null,
-      visibility: input.visibility ?? "internal",
+      visibility: input.visibility ?? "public",
       created_by: input.createdBy ?? null,
     })
     .select("*")
@@ -480,7 +482,7 @@ export async function createAccession(input: {
       replate_interval_days: input.replateIntervalDays ?? null,
       replate_due_at: replateDue,
       qr_url: buildScanUrl(accessionCode),
-      visibility: input.visibility ?? "internal",
+      visibility: input.visibility ?? "public",
       description: input.description ?? null,
       created_by: input.createdBy ?? null,
     })
@@ -670,7 +672,7 @@ export async function listAccessionsAdmin(opts?: {
   search?: string;
   limit?: number;
 }): Promise<AccessionWithCover[]> {
-  const sb = anon();
+  const sb = admin();
   let q = sb
     .from("tissue_accessions")
     .select("*")
@@ -687,9 +689,33 @@ export async function listAccessionsAdmin(opts?: {
   return attachCovers(rows);
 }
 
+/** Public inventory list — everything except hidden accessions. */
+export async function listAccessionsPublic(opts?: {
+  status?: string;
+  search?: string;
+  limit?: number;
+}): Promise<AccessionWithCover[]> {
+  const sb = admin();
+  let q = sb
+    .from("tissue_accessions")
+    .select("*")
+    .neq("visibility", "hidden")
+    .order("updated_at", { ascending: false })
+    .limit(opts?.limit ?? 500);
+  if (opts?.status) q = q.eq("status", opts.status);
+  if (opts?.search?.trim()) {
+    const s = `%${opts.search.trim()}%`;
+    q = q.or(`accession_code.ilike.${s},description.ilike.${s}`);
+  }
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  const rows = (data as AccessionRow[]) ?? [];
+  return attachCovers(rows);
+}
+
 /** Resolve cover serve URLs for a batch of accessions in one query. */
 async function attachCovers(rows: AccessionRow[]): Promise<AccessionWithCover[]> {
-  const sb = anon();
+  const sb = admin();
   const coverIds = rows.map((r) => r.cover_media_id).filter(Boolean) as string[];
   const accIds = rows.map((r) => r.id);
   const coverByMediaId = new Map<string, string>();
@@ -733,7 +759,7 @@ async function attachCovers(rows: AccessionRow[]): Promise<AccessionWithCover[]>
 
 // ---------------------------------------------------------------------------
 // Public biobank catalog — real species/units anyone can see (no auth).
-// Anon RLS returns only visibility='public' rows.
+// Includes public + internal visibility; only `hidden` is excluded.
 // ---------------------------------------------------------------------------
 export interface PublicCatalogItem {
   accessionCode: string;
@@ -754,11 +780,11 @@ export interface PublicCatalogItem {
 }
 
 export async function getPublicBiobankCatalog(): Promise<PublicCatalogItem[]> {
-  const sb = anon();
+  const sb = admin();
   const { data: accs, error } = await sb
     .from("tissue_accessions")
     .select("*")
-    .eq("visibility", "public")
+    .neq("visibility", "hidden")
     .order("updated_at", { ascending: false })
     .limit(500);
   if (error) throw new Error(error.message);
@@ -792,7 +818,7 @@ export async function getPublicBiobankCatalog(): Promise<PublicCatalogItem[]> {
       .from("tissue_media")
       .select("accession_id, nas_path, kind, is_cover, sort_order")
       .in("accession_id", accIds)
-      .eq("visibility", "public")
+      .neq("visibility", "hidden")
       .neq("kind", "stream")
       .order("is_cover", { ascending: false })
       .order("sort_order", { ascending: true });
@@ -829,7 +855,7 @@ export async function getPublicBiobankCatalog(): Promise<PublicCatalogItem[]> {
 
 /** Units due (or overdue) for replating/slant recycling. */
 export async function listReplatesDue(withinDays = 7) {
-  const sb = anon();
+  const sb = admin();
   const cutoff = new Date(Date.now() + withinDays * 86_400_000).toISOString();
   const { data, error } = await sb
     .from("tissue_accessions")
@@ -837,6 +863,7 @@ export async function listReplatesDue(withinDays = 7) {
     .not("replate_due_at", "is", null)
     .lte("replate_due_at", cutoff)
     .neq("status", "discarded")
+    .neq("visibility", "hidden")
     .order("replate_due_at", { ascending: true });
   if (error) throw new Error(error.message);
   return attachCovers((data as AccessionRow[]) ?? []);
@@ -970,7 +997,7 @@ export async function attachAccessionMedia(input: {
       caption: input.caption ?? null,
       is_cover: input.isCover ?? false,
       sort_order: input.sortOrder ?? 0,
-      visibility: input.visibility ?? "internal",
+      visibility: input.visibility ?? "public",
     })
     .select("*")
     .single();
@@ -1164,11 +1191,55 @@ export async function createExperiment(input: {
       protocol: input.protocol ?? null,
       status: input.status ?? "planned",
       lead_scientist: input.leadScientist ?? null,
-      visibility: input.visibility ?? "internal",
+      visibility: input.visibility ?? "public",
       created_by: input.createdBy ?? null,
     })
     .select("*")
     .single();
   if (error) throw new Error(error.message);
   return data;
+}
+
+/** One-shot: set internal → public on taxa, strains, accessions, media (never un-hides hidden). */
+export async function publishInternalTissueCatalog(): Promise<{
+  taxa: number;
+  strains: number;
+  accessions: number;
+  media: number;
+}> {
+  const sb = admin();
+  const counts = { taxa: 0, strains: 0, accessions: 0, media: 0 };
+  const { data: taxa, error: e1 } = await sb
+    .from("tissue_taxa")
+    .update({ visibility: "public" })
+    .eq("visibility", "internal")
+    .select("id");
+  if (e1) throw new Error(e1.message);
+  counts.taxa = taxa?.length ?? 0;
+
+  const { data: strains, error: e2 } = await sb
+    .from("tissue_strains")
+    .update({ visibility: "public" })
+    .eq("visibility", "internal")
+    .select("id");
+  if (e2) throw new Error(e2.message);
+  counts.strains = strains?.length ?? 0;
+
+  const { data: accessions, error: e3 } = await sb
+    .from("tissue_accessions")
+    .update({ visibility: "public" })
+    .eq("visibility", "internal")
+    .select("id");
+  if (e3) throw new Error(e3.message);
+  counts.accessions = accessions?.length ?? 0;
+
+  const { data: media, error: e4 } = await sb
+    .from("tissue_media")
+    .update({ visibility: "public" })
+    .eq("visibility", "internal")
+    .select("id");
+  if (e4) throw new Error(e4.message);
+  counts.media = media?.length ?? 0;
+
+  return counts;
 }
