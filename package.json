@@ -22,6 +22,9 @@
     "test:blocks-smoke:prod": "node scripts/pulse-smoke-local.mjs https://blocks.mycodao.com",
     "docs:pdf": "node scripts/generate-report-pdf.js",
     "figma:export": "node scripts/export-figma-assets.mjs",
+    "seed:biobank-catalog": "node scripts/seed-biobank-catalog-expanded.mjs",
+    "fix:biobank-inventory": "node scripts/fix-biobank-inventory-linkage-jun12-2026.mjs",
+    "backfill:species-images": "node scripts/backfill-species-reference-images.mjs",
     "mount:nas": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/mount-blocks-nas.ps1"
   },
   "dependencies": {

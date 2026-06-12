@@ -10,7 +10,6 @@ import { AnimatePresence, motion } from "motion/react";
 import {
   Boxes,
   Dna,
-  ExternalLink,
   Loader2,
   Microscope,
   RefreshCw,
@@ -23,7 +22,6 @@ import {
   fetchBiobankAccessions,
   fetchPublicBiobankCatalog,
   fetchReplatesDue,
-  scanPageUrl,
   type BiobankAccession,
   type PublicBiobankItem,
 } from "../lib/tissueApi";
@@ -102,13 +100,14 @@ class HeroBoundary extends React.Component<
 // Hero — 3D glass fridge with CSS glass-grid fallback
 // ---------------------------------------------------------------------------
 function HeroShell({
-  tiles,
+  inventoryTiles,
   onSelect,
   onDeselect,
   selectedCode,
   subtitle,
 }: {
-  tiles: VaultTile[];
+  /** Physical units with lab cover media — not catalog-only / reserved species. */
+  inventoryTiles: VaultTile[];
   onSelect: (code: string) => void;
   onDeselect: () => void;
   selectedCode: string | null;
@@ -120,7 +119,16 @@ function HeroShell({
   const [focusRow, setFocusRow] = useState(0);
   const ROWS_DEEP = 5;
 
-  const fallback = <HeroFallback tiles={tiles} />;
+  const fallback = (
+    <div className="absolute inset-0">
+      <HeroFallback />
+      <div className="absolute inset-0 flex items-center justify-center">
+        <p className="rounded-lg bg-black/50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white/70">
+          Loading vault…
+        </p>
+      </div>
+    </div>
+  );
 
   return (
     <div
@@ -131,11 +139,11 @@ function HeroShell({
           : "border-white/10 bg-[#060d0b]",
       )}
     >
-      {use3D && tiles.length ? (
+      {use3D ? (
         <HeroBoundary fallback={fallback}>
           <Suspense fallback={fallback}>
             <BiobankVaultHero
-              tiles={tiles}
+              tiles={inventoryTiles}
               onSelect={onSelect}
               onDeselect={onDeselect}
               selectedCode={selectedCode}
@@ -150,7 +158,7 @@ function HeroShell({
       )}
 
       {/* row navigator — fly between the depth layers */}
-      {use3D && tiles.length ? (
+      {use3D ? (
         <div className="absolute right-3 top-3 z-10 flex items-center gap-1 rounded-lg border border-white/15 bg-black/45 p-1 backdrop-blur-md">
           <span className="px-1.5 text-[8px] font-bold uppercase tracking-widest text-white/50">
             Row
@@ -206,15 +214,14 @@ function HeroShell({
   );
 }
 
-/** Glass-fridge look in pure CSS — used as fallback and when reduced-motion. */
-function HeroFallback({ tiles }: { tiles: VaultTile[] }) {
+/** Glass-fridge look in pure CSS — used when WebGL is unavailable or reduced-motion. */
+function HeroFallback() {
   const theme = useTheme();
-  const shown = tiles.slice(0, 18);
   return (
     <div className="absolute inset-0 p-3 sm:p-4">
       <div
         className={cn(
-          "grid h-full grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-8",
+          "grid h-full grid-cols-5 gap-2",
           "rounded-xl p-2 backdrop-blur-md",
           theme === "light" ? "bg-white/40" : "bg-white/[0.04]",
         )}
@@ -225,39 +232,17 @@ function HeroFallback({ tiles }: { tiles: VaultTile[] }) {
               : "inset 0 1px 0 rgba(255,255,255,0.08)",
         }}
       >
-        {shown.map((t) => (
+        {Array.from({ length: 20 }).map((_, i) => (
           <div
-            key={t.code}
-            className="relative overflow-hidden rounded-md"
-            style={{ boxShadow: `0 0 0 1px ${healthHex(t.health)}55` }}
-          >
-            {t.src ? (
-              <img
-                src={t.src}
-                alt={t.label ?? t.code}
-                loading="lazy"
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="h-full w-full bg-black/30" />
+            key={i}
+            className={cn(
+              "rounded-md border",
+              theme === "light"
+                ? "border-black/8 bg-black/[0.04]"
+                : "border-white/10 bg-white/[0.06]",
             )}
-            <span
-              className="absolute inset-x-0 top-0 h-0.5"
-              style={{ backgroundColor: healthHex(t.health) }}
-            />
-          </div>
+          />
         ))}
-        {shown.length === 0
-          ? Array.from({ length: 16 }).map((_, i) => (
-              <div
-                key={i}
-                className={cn(
-                  "rounded-md",
-                  theme === "light" ? "bg-black/5" : "bg-white/5",
-                )}
-              />
-            ))
-          : null}
       </div>
     </div>
   );
@@ -270,30 +255,31 @@ function SpeciesCard({
   item,
   index,
   theme,
+  onOpenSample,
 }: {
   item: PublicBiobankItem;
   index: number;
   theme: "light" | "dark";
+  onOpenSample: (code: string) => void;
 }) {
   const speciesImg = item.speciesImageUrl;
   const labCover = mediaServeUrl(item.coverServeUrl);
-  const hero = speciesImg || labCover;
+  /** Catalog hero = species reference only; lab jar never replaces it. */
+  const hero = speciesImg;
+  const hasPhysicalSample =
+    item.status === "stored" && Boolean(item.coverServeUrl);
   const accent = healthHex(item.health);
-  return (
-    <motion.a
-      href={scanPageUrl(item.accessionCode)}
-      target="_blank"
-      rel="noreferrer"
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay: Math.min(index * 0.03, 0.4) }}
-      className={cn(
-        "group relative flex flex-col overflow-hidden rounded-xl border backdrop-blur-md touch-manipulation transition-colors",
-        theme === "light"
-          ? "border-black/10 bg-white/60 hover:border-black/20"
-          : "border-white/10 bg-white/[0.04] hover:border-white/25",
-      )}
-    >
+
+  const cardClass = cn(
+    "group relative flex flex-col overflow-hidden rounded-xl border backdrop-blur-md touch-manipulation transition-colors text-left w-full",
+    theme === "light"
+      ? "border-black/10 bg-white/60 hover:border-black/20"
+      : "border-white/10 bg-white/[0.04] hover:border-white/25",
+    hasPhysicalSample ? "cursor-pointer" : "cursor-default",
+  );
+
+  const inner = (
+    <>
       <div className="relative aspect-square overflow-hidden">
         {hero ? (
           <img
@@ -312,9 +298,24 @@ function SpeciesCard({
         )}
         <span className="absolute left-0 top-0 h-1 w-full" style={{ backgroundColor: accent }} />
         {/* lab-sample thumbnail inset (what we physically hold) */}
-        {labCover && speciesImg ? (
+        {labCover && hasPhysicalSample ? (
           <span className="absolute bottom-2 left-2 overflow-hidden rounded-md border-2 border-white/70 shadow-lg">
             <img src={labCover} alt="lab sample" className="size-10 object-cover" />
+          </span>
+        ) : speciesImg && !hasPhysicalSample ? (
+          <span
+            className={cn(
+              "absolute bottom-2 left-2 flex size-10 flex-col items-center justify-center rounded-md border-2 border-dashed px-0.5 text-center shadow-lg",
+              theme === "light"
+                ? "border-stone-400/80 bg-white/90 text-stone-500"
+                : "border-white/35 bg-black/75 text-white/55",
+            )}
+            title="No physical sample in biobank yet"
+          >
+            <FormIcon form={item.form} className="size-3.5 opacity-70" />
+            <span className="text-[6px] font-bold uppercase leading-tight tracking-wide">
+              No sample
+            </span>
           </span>
         ) : null}
         {item.speciesImageAttribution ? (
@@ -326,9 +327,11 @@ function SpeciesCard({
             {item.mediaCount} photos
           </span>
         ) : null}
-        <span className="absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100">
-          <ExternalLink className="size-4 text-white drop-shadow" />
-        </span>
+        {hasPhysicalSample ? (
+          <span className="absolute right-2 top-2 rounded bg-black/55 px-1.5 py-0.5 text-[7px] font-bold uppercase tracking-wide text-white/90 opacity-0 transition-opacity group-hover:opacity-100">
+            View sample
+          </span>
+        ) : null}
       </div>
       <div className="flex flex-1 flex-col gap-1 p-3">
         <p
@@ -352,7 +355,28 @@ function SpeciesCard({
           <Chip>{item.category}</Chip>
         </div>
       </div>
-    </motion.a>
+    </>
+  );
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, delay: Math.min(index * 0.03, 0.4) }}
+      className={cardClass}
+    >
+      {hasPhysicalSample ? (
+        <button
+          type="button"
+          onClick={() => onOpenSample(item.accessionCode)}
+          className="flex min-h-[44px] flex-1 flex-col text-left"
+        >
+          {inner}
+        </button>
+      ) : (
+        inner
+      )}
+    </motion.div>
   );
 }
 
@@ -390,6 +414,14 @@ export function TissueView() {
   useEffect(() => {
     if (!curateMode) void loadCatalog();
   }, [curateMode, loadCatalog]);
+
+  // Warm the 3D hero chunk while catalog loads so the fridge appears faster.
+  useEffect(() => {
+    if (curateMode) return;
+    if (hasWebGL() && !prefersReducedMotion()) {
+      void import("./tissue/BiobankVaultHero");
+    }
+  }, [curateMode]);
 
   const loadInventory = useCallback(async () => {
     setLoading(true);
@@ -449,10 +481,16 @@ export function TissueView() {
     if (view === "replates") void loadReplates();
   }, [curateMode, view, loadInventory, loadReplates]);
 
-  const heroTiles: VaultTile[] = useMemo(
+  /** Hero fridge: physical lab samples only (NAS cover photo), never catalog-only species. */
+  const heroInventoryTiles: VaultTile[] = useMemo(
     () =>
       catalog
-        .filter((c) => c.coverServeUrl)
+        .filter(
+          (c) =>
+            Boolean(c.coverServeUrl) &&
+            c.status !== "reserved" &&
+            c.status !== "archived",
+        )
         .map((c) => ({
           code: c.accessionCode,
           src: mediaServeUrl(c.coverServeUrl) ?? "",
@@ -465,15 +503,28 @@ export function TissueView() {
 
   const filteredCatalog = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return catalog.filter((c) => {
-      if (category !== "all" && c.category !== category) return false;
-      if (!q) return true;
-      return (
-        c.commonName.toLowerCase().includes(q) ||
-        c.scientificName.toLowerCase().includes(q) ||
-        c.accessionCode.toLowerCase().includes(q)
-      );
-    });
+    const rank = (c: PublicBiobankItem) => {
+      if (c.coverServeUrl && c.status === "stored") return 0;
+      if (c.status === "stored") return 1;
+      if (c.status === "reserved") return 2;
+      return 3;
+    };
+    return catalog
+      .filter((c) => {
+        if (category !== "all" && c.category !== category) return false;
+        if (!q) return true;
+        return (
+          c.commonName.toLowerCase().includes(q) ||
+          c.scientificName.toLowerCase().includes(q) ||
+          c.accessionCode.toLowerCase().includes(q)
+        );
+      })
+      .sort((a, b) => {
+        const ra = rank(a);
+        const rb = rank(b);
+        if (ra !== rb) return ra - rb;
+        return a.commonName.localeCompare(b.commonName, undefined, { sensitivity: "base" });
+      });
   }, [catalog, category, search]);
 
   const reload = useCallback(() => {
@@ -515,7 +566,7 @@ export function TissueView() {
   return (
     <div className="mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col gap-4 overflow-y-auto p-4 sm:gap-6 sm:p-6 lg:p-8">
       <HeroShell
-        tiles={heroTiles}
+        inventoryTiles={heroInventoryTiles}
         onSelect={(c) => setOpenCode(c)}
         onDeselect={() => setOpenCode(null)}
         selectedCode={openCode}
@@ -637,7 +688,13 @@ export function TissueView() {
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {filteredCatalog.map((item, i) => (
-              <SpeciesCard key={item.accessionCode} item={item} index={i} theme={theme} />
+              <SpeciesCard
+                key={item.accessionCode}
+                item={item}
+                index={i}
+                theme={theme}
+                onOpenSample={setOpenCode}
+              />
             ))}
           </div>
         )

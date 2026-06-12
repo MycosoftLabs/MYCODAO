@@ -830,7 +830,7 @@ export async function getPublicBiobankCatalog(): Promise<PublicCatalogItem[]> {
   }
 
   const withCovers = await attachCovers(rows);
-  return withCovers.map((a) => {
+  const items = withCovers.map((a) => {
     const t = a.taxon_id ? taxaById.get(a.taxon_id) : null;
     const gallery = galleryByAcc.get(a.id) ?? [];
     return {
@@ -851,6 +851,21 @@ export async function getPublicBiobankCatalog(): Promise<PublicCatalogItem[]> {
       speciesImageAttribution: t?.reference_image_attribution ?? null,
     };
   });
+
+  /** Physical samples with lab photos first, then stored, then catalog-only. */
+  const catalogRank = (item: PublicCatalogItem) => {
+    if (item.coverServeUrl && item.status === "stored") return 0;
+    if (item.status === "stored") return 1;
+    if (item.status === "reserved") return 2;
+    return 3;
+  };
+  items.sort((a, b) => {
+    const ra = catalogRank(a);
+    const rb = catalogRank(b);
+    if (ra !== rb) return ra - rb;
+    return a.commonName.localeCompare(b.commonName, undefined, { sensitivity: "base" });
+  });
+  return items;
 }
 
 /** Units due (or overdue) for replating/slant recycling. */
