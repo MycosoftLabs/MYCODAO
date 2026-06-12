@@ -22,6 +22,7 @@ import {
   fetchTissueNasAssets,
   patchTissueMedia,
   updateTissueSample,
+  verifyTissueCurator,
   type TissueCategory,
   type TissueNasAsset,
   type TissueSample,
@@ -96,15 +97,15 @@ export function TissueCuratorPanel({ onExitCatalog }: TissueCuratorPanelProps) {
 
   useEffect(() => {
     if (!auth.loading && auth.isAuthenticated) {
-      void auth.verifySession().then((r) => {
-        setAuthChecked(r.ok);
-        if (r.ok) void loadSamples();
-        else setError(r.message);
+      void verifyTissueCurator().then((ok) => {
+        setAuthChecked(ok);
+        if (ok) void loadSamples();
+        else setError("This account is read-only. Tissue edits require curator access.");
       });
     } else if (!auth.loading && !auth.isAuthenticated) {
       setAuthChecked(false);
     }
-  }, [auth.loading, auth.isAuthenticated, auth, loadSamples]);
+  }, [auth.loading, auth.isAuthenticated, loadSamples]);
 
   useEffect(() => {
     if (selected) {
@@ -282,7 +283,7 @@ export function TissueCuratorPanel({ onExitCatalog }: TissueCuratorPanelProps) {
     );
   }
 
-  if (!auth.isAuthenticated || !authChecked) {
+  if (!auth.isAuthenticated) {
     return (
       <div className="max-w-lg mx-auto p-8 space-y-6">
         <button
@@ -297,7 +298,7 @@ export function TissueCuratorPanel({ onExitCatalog }: TissueCuratorPanelProps) {
           <h2 className="text-xl font-black uppercase text-white">Tissue Curator</h2>
           <p className="text-sm text-dim">
             Sign in with an allowlisted Google account to manage tissue samples and NAS
-            media.
+            media. Everyone else can browse the catalog in read-only mode.
           </p>
           {auth.error ? (
             <p className="text-sm text-red-300">{auth.error}</p>
@@ -310,6 +311,36 @@ export function TissueCuratorPanel({ onExitCatalog }: TissueCuratorPanelProps) {
             className="w-full min-h-[48px] bg-myco-accent text-black font-black uppercase text-xs tracking-widest touch-manipulation disabled:opacity-50"
           >
             {auth.signingIn ? "Redirecting…" : "Sign in with Google"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!authChecked) {
+    return (
+      <div className="max-w-lg mx-auto p-8 space-y-6">
+        <button
+          type="button"
+          onClick={onExitCatalog}
+          className="inline-flex items-center gap-2 text-[10px] font-bold uppercase text-dim hover:text-white min-h-[44px] touch-manipulation"
+        >
+          <ArrowLeft className="size-4" /> Back to catalog
+        </button>
+        <div className="glass-bento border-white/10 p-8 text-center space-y-4">
+          <Microscope className="size-10 mx-auto text-myco-accent" />
+          <h2 className="text-xl font-black uppercase text-white">Read-only access</h2>
+          <p className="text-sm text-dim">
+            Signed in as {auth.userEmail ?? "your account"}. Status, health, and visibility
+            can only be changed by an authorized tissue curator.
+          </p>
+          {error ? <p className="text-sm text-amber-200">{error}</p> : null}
+          <button
+            type="button"
+            onClick={() => void auth.signOut()}
+            className="w-full min-h-[48px] border border-white/20 text-white font-black uppercase text-xs tracking-widest touch-manipulation"
+          >
+            Sign out
           </button>
         </div>
       </div>

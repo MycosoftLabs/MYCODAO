@@ -533,17 +533,25 @@ export function TissueView() {
     if (view === "replates") void loadReplates();
   }, [view, loadCatalog, loadInventory, loadReplates]);
 
+  const invList = useMemo(() => filterAccessions(accessions), [filterAccessions, accessions]);
+  const replateList = useMemo(() => filterAccessions(replates), [filterAccessions, replates]);
+
+  const exitCuratorMode = useCallback(() => {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("curate");
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  }, []);
+
+  const enterCuratorMode = useCallback(() => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("curate", "1");
+    window.history.pushState({}, "", `${url.pathname}${url.search}${url.hash}`);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  }, []);
+
   if (curateMode) {
-    return (
-      <TissueCuratorPanel
-        onExitCatalog={() => {
-          const url = new URL(window.location.href);
-          url.searchParams.delete("curate");
-          window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
-          window.dispatchEvent(new PopStateEvent("popstate"));
-        }}
-      />
-    );
+    return <TissueCuratorPanel onExitCatalog={exitCuratorMode} />;
   }
 
   const subtitle =
@@ -552,9 +560,6 @@ export function TissueView() {
       : view === "inventory"
         ? "Every physical unit (accession) — each jar, dish, slant, or pod is QR-addressable."
         : "A living glass-vault mirror of the physical biobank. Click a specimen to open its live record.";
-
-  const invList = useMemo(() => filterAccessions(accessions), [filterAccessions, accessions]);
-  const replateList = useMemo(() => filterAccessions(replates), [filterAccessions, replates]);
 
   const countLabel =
     view === "catalog"
@@ -615,12 +620,13 @@ export function TissueView() {
             <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
             Refresh
           </button>
-          <a
-            href="?curate=1"
+          <button
+            type="button"
+            onClick={enterCuratorMode}
             className="inline-flex min-h-[44px] items-center border border-myco-accent/40 px-4 text-[10px] font-bold uppercase tracking-widest text-myco-accent hover:bg-myco-accent/10 touch-manipulation"
           >
             Curator
-          </a>
+          </button>
         </div>
       </div>
 
