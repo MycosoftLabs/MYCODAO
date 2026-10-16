@@ -7,9 +7,9 @@
 
 | Repo | Branch | Commit / evidence |
 | --- | --- | --- |
-| MycoDAO | `cursor/mindex-fungi-blocks-oct15` | Cherry-pick of `edd70e4` → `580dfdb` + fungi integration commit |
+| MycoDAO | `cursor/mindex-fungi-blocks-oct15` | `edd70e4` → `580dfdb`; integration `d5f8d78` |
 | Worktree | `D:/Users/admin2/Desktop/MYCOSOFT/CODE/_wt/mycodao-fungi-blocks-oct15` | owned |
-| MINDEX export | `cursor/mindex-mycodao-fungi-export-oct15` | base `e56daa9` + fungi export router |
+| MINDEX export | `cursor/mindex-mycodao-fungi-export-oct15` | export commit `be186e6` (base `e56daa9`) |
 | MINDEX worktree | `D:/Users/admin2/Desktop/MYCOSOFT/CODE/_wt/mindex-mycodao-fungi-export-oct15` | owned |
 | Applied artifact | ZIP SHA-256 `e1cf9cd4…da72d` / commit `edd70e4` once | verified |
 
