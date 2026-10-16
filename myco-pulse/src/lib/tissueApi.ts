@@ -739,6 +739,44 @@ export interface FungalLibraryDetail extends FungalLibraryItem {
   ancestryUrl: string | null;
 }
 
+export interface FungalOverview {
+  availability: FungalLibraryAvailability;
+  reason?: string;
+  libraryTaxaTotal: number | null;
+  tokenAssociatedTotal: number | null;
+  fungipFgLinkedTotal: number | null;
+  physicalBridgedTotal: number | null;
+  snapshotId: string | null;
+  lastSyncAt: string | null;
+  ancestryBaseUrl: string;
+  mycoAppProjectUrl: string;
+  speciesTokensPath: string;
+}
+
+export async function fetchFungalOverview(): Promise<FungalOverview> {
+  const res = await fetch(pulseApiUrl("/api/tissue/fungi/overview"), {
+    cache: "no-store",
+  });
+  const data = (await res.json().catch(() => ({}))) as Partial<FungalOverview>;
+  return {
+    availability:
+      data.availability ??
+      (res.ok ? "available" : "unavailable"),
+    reason: data.reason,
+    libraryTaxaTotal: data.libraryTaxaTotal ?? null,
+    tokenAssociatedTotal: data.tokenAssociatedTotal ?? null,
+    fungipFgLinkedTotal: data.fungipFgLinkedTotal ?? null,
+    physicalBridgedTotal: data.physicalBridgedTotal ?? null,
+    snapshotId: data.snapshotId ?? null,
+    lastSyncAt: data.lastSyncAt ?? null,
+    ancestryBaseUrl: data.ancestryBaseUrl ?? "https://mycosoft.com",
+    mycoAppProjectUrl:
+      data.mycoAppProjectUrl ??
+      "https://www.mycodao.com/projects/myco-app-mycodex",
+    speciesTokensPath: data.speciesTokensPath ?? "/species-tokens",
+  };
+}
+
 /** Licensed fungal reference library (taxon-first). Not physical tissue. */
 export async function fetchFungalLibrary(opts?: {
   cursor?: string | null;
