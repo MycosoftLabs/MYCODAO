@@ -8,6 +8,9 @@ export default function HomePage() {
         <p className="text-stone-600 mt-2">Community-driven platform for governance, biobank incentives, and research.</p>
       </header>
       <div className="flex flex-wrap gap-3">
+        <Link href="/species-tokens" className="inline-flex items-center gap-2 rounded-lg bg-emerald-800 text-white px-4 py-2 text-sm font-medium hover:bg-emerald-700">
+          Species tokens and rewards
+        </Link>
         <Link
           href="/blocks"
           className="inline-flex items-center gap-2 rounded-lg bg-stone-900 text-stone-100 px-4 py-2 text-sm font-medium hover:bg-stone-800"

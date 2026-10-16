@@ -1,0 +1,31 @@
+services:
+  api:
+    build: .
+    env_file: .env
+    environment:
+      TOKENIZATION_HOST: 0.0.0.0
+      TOKENIZATION_DATABASE_PATH: /data/species.sqlite
+    ports: ["127.0.0.1:8095:8095"]
+    volumes: ["species-data:/data"]
+    read_only: true
+    tmpfs: [/tmp]
+    init: true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8095/v1/status').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  worker:
+    build: .
+    command: ["npm", "run", "worker"]
+    env_file: .env
+    environment:
+      TOKENIZATION_DATABASE_PATH: /data/species.sqlite
+    volumes: ["species-data:/data"]
+    read_only: true
+    tmpfs: [/tmp]
+    init: true
+    restart: unless-stopped
+volumes:
+  species-data:

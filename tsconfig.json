@@ -18,5 +18,5 @@
     "paths": { "@/*": ["./*"] }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "app/natureapp/MYCO-App", "myco-pulse"]
+  "exclude": ["node_modules", "app/natureapp/MYCO-App", "myco-pulse", "services/species-tokenization", "artifacts/species-ui-verification"]
 }

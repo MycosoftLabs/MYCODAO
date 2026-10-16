@@ -1,0 +1,31 @@
+name: Species tokenization contracts
+on:
+  pull_request:
+    paths:
+      - 'services/species-tokenization/**'
+      - 'app/species-tokens/**'
+      - 'app/api/species-tokens/**'
+      - 'components/species-tokens/**'
+      - 'lib/server/species-token-proxy.ts'
+      - '.github/workflows/species-tokenization.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  local-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            services/species-tokenization/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm ci --prefix services/species-tokenization --no-audit --no-fund
+      - run: npm run typecheck --prefix services/species-tokenization
+      - run: npm test --prefix services/species-tokenization
+      - run: npm run demo --prefix services/species-tokenization
+      - run: npm run test:species-tokens

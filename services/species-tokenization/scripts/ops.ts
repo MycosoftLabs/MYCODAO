@@ -1,0 +1,14 @@
+import { readFile } from 'node:fs/promises';
+const routes:Record<string,string>={license:'licenses',species:'species',funding:'funding',allocate:'allocations',policy:'policy',metadata:'metadata',sync:'sync',import:'tokens/import',hold:'holds',reconciliation:'legacy-reconciliation',pause:'pause',recheck:'jobs/recheck'};
+const [action,file]=process.argv.slice(2);const read=action==='jobs'||action==='ledger';
+if(!action || (!read && !routes[action] && action!=='review'))throw new Error('Usage: npm run ops -- license|species|funding|allocate|policy|metadata|sync|import|hold|reconciliation|pause|recheck|review <input.json>, or jobs|ledger');
+const key=action==='review'?process.env.TOKENIZATION_REVIEWER_KEY:process.env.TOKENIZATION_ADMIN_KEY;
+if(!key || key.length<32)throw new Error('Configure the corresponding service key in .env');
+const port=process.env.TOKENIZATION_PORT??'8095';
+const base=process.env.TOKENIZATION_OPS_URL??`http://127.0.0.1:${port}`;
+const url=new URL(base);if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw new Error('Invalid operations URL');
+const path=action==='review'?'/v1/review':`/v1/admin/${read?action:routes[action]}`;
+const payload=read?undefined:file?await readFile(file,'utf8'):'{}';if(payload)JSON.parse(payload);
+const response=await fetch(`${base.replace(/\/$/,'')}${path}`,{method:read?'GET':'POST',redirect:'error',headers:{authorization:`Bearer ${key}`,'content-type':'application/json'},body:payload,signal:AbortSignal.timeout(300000)});
+if(!response.ok)throw new Error(`Operation failed (${response.status}): ${(await response.text()).slice(0,500)}`);
+console.log(JSON.stringify(await response.json(),null,2));

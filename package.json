@@ -15,6 +15,7 @@
     "lint": "next lint",
     "check:backends": "node scripts/check-pulse-backends.mjs",
     "test:pulse-smoke": "node scripts/pulse-smoke-local.mjs",
+    "test:species-tokens": "node --test components/species-tokens/proxy.test.mjs",
     "test:producer-side-panel": "node scripts/test-producer-side-panel.mjs",
     "test:producer-patch": "npx --yes tsx scripts/test-producer-patch-direct.ts",
     "test:scheduler-integrations": "node scripts/test-scheduler-integrations-local.mjs",

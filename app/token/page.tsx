@@ -16,6 +16,9 @@ export default function TokenPage() {
         MYCO is the governance and funding token for the MycoDAO ecosystem. It serves as a transactional tool for grants, biobank incentives, and industry partnerships.
       </p>
       <section className="mt-6 space-y-4">
+        <Link href="/species-tokens" className="inline-block rounded-lg bg-emerald-800 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">
+          Explore species tokens and contribute observations →
+        </Link>
         <h2 className="text-lg font-semibold text-stone-800">Tokenomics</h2>
         <ul className="list-disc pl-6 text-stone-600 space-y-1">
           <li>Total supply: 210,000,000 MYCO</li>

@@ -151,6 +151,10 @@ export function PulseSidebarNav({
               onClick={() => setActiveTab(tab.id)}
             />
           ))}
+          <a href="/species-tokens" className="w-full flex items-center gap-3 px-4 py-2.5 min-h-[44px] border-l-2 border-transparent text-dim hover:text-white hover:bg-white/5">
+            <Microscope className="w-4 h-4 shrink-0" aria-hidden />
+            <span className="text-xs uppercase tracking-widest leading-none">Species rewards ↗</span>
+          </a>
         </nav>
         <div className="p-2 border-t border-white/5 shrink-0">
           <PulseNavItem
@@ -254,6 +258,10 @@ export function PulseBottomNav({
             variant="bottom"
           />
         ))}
+        <a href="/species-tokens" className="flex flex-col items-center justify-center gap-0.5 shrink-0 min-w-[4.1rem] sm:min-w-[4.5rem] h-14 px-1 text-dim hover:text-white hover:bg-white/5" aria-label="Species library and rewards">
+          <Microscope className="size-4 shrink-0" aria-hidden />
+          <span className="text-[7px] sm:text-[8px] font-bold uppercase tracking-wide leading-none">Species ↗</span>
+        </a>
       </div>
     </nav>
   );
