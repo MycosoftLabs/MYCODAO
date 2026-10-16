@@ -685,9 +685,138 @@ export async function fetchPublicBiobankCatalog(): Promise<PublicBiobankItem[]> 
   const res = await fetch(pulseApiUrl("/api/tissue/biobank"), {
     cache: "no-store",
   });
-  if (!res.ok) throw new Error(`biobank ${res.status}`);
-  const data = (await res.json()) as { items?: PublicBiobankItem[] };
+  const data = (await res.json().catch(() => ({}))) as {
+    availability?: string;
+    items?: PublicBiobankItem[];
+    error?: string;
+  };
+  if (!res.ok || data.availability === "unavailable") {
+    throw new Error(data.error ?? `biobank ${res.status}`);
+  }
   return data.items ?? [];
+}
+
+export type FungalLibraryAvailability =
+  | "available"
+  | "empty"
+  | "partial"
+  | "unavailable";
+
+export interface FungalLibraryItem {
+  mindexTaxonUuid: string;
+  scientificName: string;
+  commonName: string;
+  rank: string;
+  category: string;
+  kingdom: string;
+  family: string | null;
+  description: string | null;
+  referenceImageUrl: string | null;
+  referenceImageAttribution: string | null;
+  referenceImageLicense: string | null;
+  tokenEligible: boolean;
+  tokenStatus: string | null;
+  tokenMint: string | null;
+  fungipFgId: string | null;
+  physicalHoldingsCount: number;
+  hasPhysicalHoldings: boolean;
+  snapshotId: string | null;
+  sourceRevision: string | null;
+}
+
+export interface FungalLibraryDetail extends FungalLibraryItem {
+  lineage: unknown[];
+  externalIds: Record<string, unknown>;
+  provenance: Record<string, unknown>;
+  tokenEligibilityHold: string | null;
+  accessions: Array<{
+    accessionCode: string;
+    status: string;
+    health: string;
+    form: string;
+    coverServeUrl: string | null;
+  }>;
+  ancestryUrl: string | null;
+}
+
+/** Licensed fungal reference library (taxon-first). Not physical tissue. */
+export async function fetchFungalLibrary(opts?: {
+  cursor?: string | null;
+  limit?: number;
+  q?: string;
+  category?: string;
+  hasPhysicalHoldings?: boolean | null;
+}): Promise<{
+  availability: FungalLibraryAvailability;
+  items: FungalLibraryItem[];
+  nextCursor: string | null;
+  total: number | null;
+  snapshotId: string | null;
+  lastSyncAt: string | null;
+  reason?: string;
+}> {
+  const params = new URLSearchParams();
+  if (opts?.cursor) params.set("cursor", opts.cursor);
+  if (opts?.limit) params.set("limit", String(opts.limit));
+  if (opts?.q?.trim()) params.set("q", opts.q.trim());
+  if (opts?.category && opts.category !== "all") {
+    params.set("category", opts.category);
+  }
+  if (opts?.hasPhysicalHoldings === true) {
+    params.set("hasPhysicalHoldings", "true");
+  } else if (opts?.hasPhysicalHoldings === false) {
+    params.set("hasPhysicalHoldings", "false");
+  }
+  const qs = params.toString();
+  const res = await fetch(
+    pulseApiUrl(`/api/tissue/fungi${qs ? `?${qs}` : ""}`),
+    { cache: "no-store" },
+  );
+  const data = (await res.json().catch(() => ({}))) as {
+    availability?: FungalLibraryAvailability;
+    items?: FungalLibraryItem[];
+    nextCursor?: string | null;
+    total?: number | null;
+    snapshotId?: string | null;
+    lastSyncAt?: string | null;
+    reason?: string;
+  };
+  if (!res.ok || data.availability === "unavailable") {
+    return {
+      availability: "unavailable",
+      items: [],
+      nextCursor: null,
+      total: null,
+      snapshotId: data.snapshotId ?? null,
+      lastSyncAt: data.lastSyncAt ?? null,
+      reason: data.reason ?? `fungi ${res.status}`,
+    };
+  }
+  return {
+    availability: data.availability ?? "available",
+    items: data.items ?? [],
+    nextCursor: data.nextCursor ?? null,
+    total: data.total ?? null,
+    snapshotId: data.snapshotId ?? null,
+    lastSyncAt: data.lastSyncAt ?? null,
+  };
+}
+
+export async function fetchFungalTaxonDetail(
+  mindexTaxonUuid: string,
+): Promise<FungalLibraryDetail | null> {
+  const res = await fetch(
+    pulseApiUrl(`/api/tissue/fungi/${encodeURIComponent(mindexTaxonUuid)}`),
+    { cache: "no-store" },
+  );
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`fungi detail ${res.status}`);
+  const data = (await res.json()) as {
+    availability?: string;
+    item?: FungalLibraryDetail;
+  };
+  if (data.availability !== "available" || !data.item) return null;
+  return data.item;
 }
 
 /** Browse a NAS folder (e.g. an accession code) for media to attach. */

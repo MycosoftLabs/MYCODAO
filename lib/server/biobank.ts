@@ -5,7 +5,8 @@
  * Plus events (touch log), transfers (clone/replate/slant ETA), contaminations,
  * interactions, experiments. Media binaries live on NAS; we store paths.
  *
- * Public reads expose all non-hidden tissue (service role); writes require curator auth.
+ * Public reads expose visibility='public' only (service role still allowlists fields);
+ * writes require curator auth. Never treat internal rows as public.
  */
 import { buildServeUrl } from "@/lib/server/blocks-nas-media";
 import { fetchInatImage } from "@/lib/adapters/inaturalist-image";
@@ -759,7 +760,7 @@ async function attachCovers(rows: AccessionRow[]): Promise<AccessionWithCover[]>
 
 // ---------------------------------------------------------------------------
 // Public biobank catalog — real species/units anyone can see (no auth).
-// Includes public + internal visibility; only `hidden` is excluded.
+// Enforce visibility='public' on every linked relation (service-role bypasses RLS).
 // ---------------------------------------------------------------------------
 export interface PublicCatalogItem {
   accessionCode: string;
@@ -784,7 +785,7 @@ export async function getPublicBiobankCatalog(): Promise<PublicCatalogItem[]> {
   const { data: accs, error } = await sb
     .from("tissue_accessions")
     .select("*")
-    .neq("visibility", "hidden")
+    .eq("visibility", "public")
     .order("updated_at", { ascending: false })
     .limit(500);
   if (error) throw new Error(error.message);
@@ -797,28 +798,33 @@ export async function getPublicBiobankCatalog(): Promise<PublicCatalogItem[]> {
 
   const taxaById = new Map<string, TaxonRow>();
   if (taxonIds.length) {
-    const { data } = await sb.from("tissue_taxa").select("*").in("id", taxonIds);
+    const { data } = await sb
+      .from("tissue_taxa")
+      .select("*")
+      .in("id", taxonIds)
+      .eq("visibility", "public");
     for (const t of (data as TaxonRow[]) ?? []) taxaById.set(t.id, t);
   }
   const strainCodeById = new Map<string, string>();
   if (strainIds.length) {
     const { data } = await sb
       .from("tissue_strains")
-      .select("id, strain_code")
-      .in("id", strainIds);
+      .select("id, strain_code, visibility")
+      .in("id", strainIds)
+      .eq("visibility", "public");
     for (const s of (data as { id: string; strain_code: string }[]) ?? []) {
       strainCodeById.set(s.id, s.strain_code);
     }
   }
 
-  // public media per accession (ordered)
+  // public media per accession (ordered) — public only
   const galleryByAcc = new Map<string, string[]>();
   if (accIds.length) {
     const { data } = await sb
       .from("tissue_media")
       .select("accession_id, nas_path, kind, is_cover, sort_order")
       .in("accession_id", accIds)
-      .neq("visibility", "hidden")
+      .eq("visibility", "public")
       .neq("kind", "stream")
       .order("is_cover", { ascending: false })
       .order("sort_order", { ascending: true });
@@ -829,7 +835,14 @@ export async function getPublicBiobankCatalog(): Promise<PublicCatalogItem[]> {
     }
   }
 
-  const withCovers = await attachCovers(rows);
+  // Drop accessions whose parent taxon/strain is not public (no internal leakage).
+  const publicRows = rows.filter((a) => {
+    if (a.taxon_id && !taxaById.has(a.taxon_id)) return false;
+    if (a.strain_id && !strainCodeById.has(a.strain_id)) return false;
+    return true;
+  });
+
+  const withCovers = await attachCovers(publicRows);
   const items = withCovers.map((a) => {
     const t = a.taxon_id ? taxaById.get(a.taxon_id) : null;
     const gallery = galleryByAcc.get(a.id) ?? [];

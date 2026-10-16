@@ -20,14 +20,17 @@ import { cn } from "../lib/utils";
 import { useTissueCurator } from "../hooks/useTissueCurator";
 import {
   fetchBiobankAccessions,
+  fetchFungalLibrary,
   fetchPublicBiobankCatalog,
   fetchReplatesDue,
   type BiobankAccession,
+  type FungalLibraryItem,
   type PublicBiobankItem,
 } from "../lib/tissueApi";
 import { TissueCuratorPanel } from "./TissueCuratorPanel";
 import { AccessionsGrid } from "./tissue/AccessionsGrid";
 import { AccessionDetailDrawer } from "./tissue/AccessionDetailDrawer";
+import { TaxonDetailDrawer } from "./tissue/TaxonDetailDrawer";
 import {
   Chip,
   FormIcon,
@@ -43,6 +46,7 @@ import type { VaultTile } from "./tissue/BiobankVaultHero";
 const BiobankVaultHero = lazy(() => import("./tissue/BiobankVaultHero"));
 
 type ViewId = "catalog" | "inventory" | "replates";
+type CatalogScope = "physical" | "library";
 
 const CATEGORY_CHIPS = [
   { id: "all", label: "All" },
@@ -389,31 +393,92 @@ export function TissueView() {
   const theme = useTheme();
 
   const [view, setView] = useState<ViewId>("catalog");
+  const [catalogScope, setCatalogScope] = useState<CatalogScope>("library");
   const [catalog, setCatalog] = useState<PublicBiobankItem[]>([]);
+  const [library, setLibrary] = useState<FungalLibraryItem[]>([]);
+  const [libraryMeta, setLibraryMeta] = useState<{
+    availability: string;
+    total: number | null;
+    reason?: string;
+    lastSyncAt: string | null;
+  }>({ availability: "empty", total: null, lastSyncAt: null });
   const [catalogLoaded, setCatalogLoaded] = useState(false);
+  const [libraryLoaded, setLibraryLoaded] = useState(false);
   const [accessions, setAccessions] = useState<BiobankAccession[]>([]);
   const [replates, setReplates] = useState<BiobankAccession[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
+  const [holdingsFilter, setHoldingsFilter] = useState<"all" | "held" | "reference">(
+    "all",
+  );
   const [openCode, setOpenCode] = useState<string | null>(null);
+  const [openTaxonUuid, setOpenTaxonUuid] = useState<string | null>(null);
 
-  // Public catalog: fetched once, drives the hero + Catalog view (stable, so
-  // the hero never empties/collapses on tab or filter changes).
+  // Physical accession catalog: drives 3D hero (physical jars only).
   const loadCatalog = useCallback(async () => {
     try {
       setCatalog(await fetchPublicBiobankCatalog());
-    } catch {
+      setError(null);
+    } catch (e) {
       setCatalog([]);
+      setError(
+        e instanceof Error
+          ? e.message
+          : "Physical biobank catalog unavailable",
+      );
     } finally {
       setCatalogLoaded(true);
     }
   }, []);
 
+  const loadLibrary = useCallback(async () => {
+    try {
+      const result = await fetchFungalLibrary({
+        limit: 96,
+        q: search.trim() || undefined,
+        category: category !== "all" ? category : undefined,
+        hasPhysicalHoldings:
+          holdingsFilter === "held"
+            ? true
+            : holdingsFilter === "reference"
+              ? false
+              : null,
+      });
+      setLibrary(result.items);
+      setLibraryMeta({
+        availability: result.availability,
+        total: result.total,
+        reason: result.reason,
+        lastSyncAt: result.lastSyncAt,
+      });
+      if (result.availability === "unavailable") {
+        setError(result.reason ?? "Fungal reference library unavailable");
+      }
+    } catch (e) {
+      setLibrary([]);
+      setLibraryMeta({
+        availability: "unavailable",
+        total: null,
+        reason: e instanceof Error ? e.message : "library_failed",
+        lastSyncAt: null,
+      });
+      setError(e instanceof Error ? e.message : "Fungal library unavailable");
+    } finally {
+      setLibraryLoaded(true);
+    }
+  }, [search, category, holdingsFilter]);
+
   useEffect(() => {
     if (!curateMode) void loadCatalog();
   }, [curateMode, loadCatalog]);
+
+  useEffect(() => {
+    if (!curateMode && catalogScope === "library" && view === "catalog") {
+      void loadLibrary();
+    }
+  }, [curateMode, catalogScope, view, loadLibrary]);
 
   // Warm the 3D hero chunk while catalog loads so the fridge appears faster.
   useEffect(() => {
@@ -527,11 +592,36 @@ export function TissueView() {
       });
   }, [catalog, category, search]);
 
+  const filteredLibrary = useMemo(() => {
+    // Server already applies q/category/holdings; keep light client filter for snappy chips.
+    return library.filter((c) => {
+      if (category !== "all" && c.category !== category) return false;
+      return true;
+    });
+  }, [library, category]);
+
+  /** Bounded reference tiles for companion browsing — distinct IDs from accession codes. */
+  const referenceHeroTiles: VaultTile[] = useMemo(
+    () =>
+      filteredLibrary
+        .filter((t) => Boolean(t.referenceImageUrl))
+        .slice(0, 40)
+        .map((t) => ({
+          code: `taxon:${t.mindexTaxonUuid}`,
+          src: t.referenceImageUrl ?? "",
+          label: t.commonName || t.scientificName,
+          health: t.hasPhysicalHoldings ? "healthy" : "unknown",
+          category: t.category,
+        })),
+    [filteredLibrary],
+  );
+
   const reload = useCallback(() => {
     void loadCatalog();
+    if (catalogScope === "library") void loadLibrary();
     if (view === "inventory") void loadInventory();
     if (view === "replates") void loadReplates();
-  }, [view, loadCatalog, loadInventory, loadReplates]);
+  }, [view, catalogScope, loadCatalog, loadLibrary, loadInventory, loadReplates]);
 
   const invList = useMemo(() => filterAccessions(accessions), [filterAccessions, accessions]);
   const replateList = useMemo(() => filterAccessions(replates), [filterAccessions, replates]);
@@ -559,22 +649,44 @@ export function TissueView() {
       ? "Units due (or overdue) for replating and slant recycling."
       : view === "inventory"
         ? "Every physical unit (accession) — each jar, dish, slant, or pod is QR-addressable."
-        : "A living glass-vault mirror of the physical biobank. Click a specimen to open its live record.";
+        : catalogScope === "library"
+          ? "Licensed MINDEX fungal reference library. Reference tiles are not stored tissue."
+          : "A living glass-vault mirror of the physical biobank. Click a specimen to open its live record.";
 
   const countLabel =
     view === "catalog"
-      ? `${filteredCatalog.length} species`
+      ? catalogScope === "library"
+        ? `${filteredLibrary.length} taxa${libraryMeta.total != null ? ` / ${libraryMeta.total}` : ""}`
+        : `${filteredCatalog.length} holdings`
       : view === "inventory"
         ? `${invList.length} unit${invList.length === 1 ? "" : "s"}`
         : `${replateList.length} due`;
 
+  const heroTiles =
+    view === "catalog" && catalogScope === "library"
+      ? referenceHeroTiles
+      : heroInventoryTiles;
+
   return (
     <div className="mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col gap-4 overflow-y-auto p-4 sm:gap-6 sm:p-6 lg:p-8">
       <HeroShell
-        inventoryTiles={heroInventoryTiles}
-        onSelect={(c) => setOpenCode(c)}
-        onDeselect={() => setOpenCode(null)}
-        selectedCode={openCode}
+        inventoryTiles={heroTiles}
+        onSelect={(c) => {
+          if (c.startsWith("taxon:")) {
+            setOpenTaxonUuid(c.slice("taxon:".length));
+            setOpenCode(null);
+            return;
+          }
+          setOpenCode(c);
+          setOpenTaxonUuid(null);
+        }}
+        onDeselect={() => {
+          setOpenCode(null);
+          setOpenTaxonUuid(null);
+        }}
+        selectedCode={
+          openTaxonUuid ? `taxon:${openTaxonUuid}` : openCode
+        }
         subtitle={subtitle}
       />
 
@@ -651,24 +763,80 @@ export function TissueView() {
       </div>
 
       {view === "catalog" ? (
-        <div className="flex flex-wrap gap-2">
-          {CATEGORY_CHIPS.map((chip) => (
-            <button
-              key={chip.id}
-              type="button"
-              onClick={() => setCategory(chip.id)}
-              className={cn(
-                "min-h-[44px] border px-4 text-[10px] font-bold uppercase tracking-widest touch-manipulation",
-                category === chip.id
-                  ? "border-myco-accent bg-myco-accent/15 text-myco-accent"
-                  : theme === "light"
-                    ? "border-black/15 text-stone-500 hover:text-stone-900"
-                    : "border-white/15 text-dim hover:text-white",
-              )}
-            >
-              {chip.label}
-            </button>
-          ))}
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                { id: "library" as const, label: "Fungal library" },
+                { id: "physical" as const, label: "Physical holdings" },
+              ] as const
+            ).map((scope) => (
+              <button
+                key={scope.id}
+                type="button"
+                onClick={() => setCatalogScope(scope.id)}
+                className={cn(
+                  "min-h-[44px] border px-4 text-[10px] font-bold uppercase tracking-widest touch-manipulation",
+                  catalogScope === scope.id
+                    ? "border-myco-accent bg-myco-accent/15 text-myco-accent"
+                    : theme === "light"
+                      ? "border-black/15 text-stone-500 hover:text-stone-900"
+                      : "border-white/15 text-dim hover:text-white",
+                )}
+              >
+                {scope.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {CATEGORY_CHIPS.map((chip) => (
+              <button
+                key={chip.id}
+                type="button"
+                onClick={() => setCategory(chip.id)}
+                className={cn(
+                  "min-h-[44px] border px-4 text-[10px] font-bold uppercase tracking-widest touch-manipulation",
+                  category === chip.id
+                    ? "border-myco-accent bg-myco-accent/15 text-myco-accent"
+                    : theme === "light"
+                      ? "border-black/15 text-stone-500 hover:text-stone-900"
+                      : "border-white/15 text-dim hover:text-white",
+                )}
+              >
+                {chip.label}
+              </button>
+            ))}
+            {catalogScope === "library"
+              ? (
+                  [
+                    { id: "all" as const, label: "All" },
+                    { id: "held" as const, label: "With holdings" },
+                    { id: "reference" as const, label: "Reference only" },
+                  ] as const
+                ).map((chip) => (
+                  <button
+                    key={chip.id}
+                    type="button"
+                    onClick={() => setHoldingsFilter(chip.id)}
+                    className={cn(
+                      "min-h-[44px] border px-4 text-[10px] font-bold uppercase tracking-widest touch-manipulation",
+                      holdingsFilter === chip.id
+                        ? "border-emerald-400/50 bg-emerald-400/10 text-emerald-300"
+                        : theme === "light"
+                          ? "border-black/15 text-stone-500 hover:text-stone-900"
+                          : "border-white/15 text-dim hover:text-white",
+                    )}
+                  >
+                    {chip.label}
+                  </button>
+                ))
+              : null}
+          </div>
+          {catalogScope === "library" && libraryMeta.lastSyncAt ? (
+            <p className="text-[10px] uppercase tracking-widest text-dim">
+              Last published sync {new Date(libraryMeta.lastSyncAt).toLocaleString()}
+            </p>
+          ) : null}
         </div>
       ) : null}
 
@@ -678,16 +846,53 @@ export function TissueView() {
         </div>
       ) : null}
 
-      {/* CATALOG (public, real species) */}
+      {/* CATALOG — library (taxon-first) or physical holdings */}
       {view === "catalog" ? (
-        !catalogLoaded ? (
+        catalogScope === "library" ? (
+          !libraryLoaded ? (
+            <Loading label="Loading fungal library…" />
+          ) : libraryMeta.availability === "unavailable" ? (
+            <EmptyState
+              title="Fungal library unavailable"
+              body={
+                libraryMeta.reason ??
+                "The licensed reference replica is not reachable. This is not an empty catalog."
+              }
+            />
+          ) : filteredLibrary.length === 0 ? (
+            <EmptyState
+              title={
+                libraryMeta.availability === "empty"
+                  ? "Library awaiting licensed import"
+                  : "No matches"
+              }
+              body={
+                libraryMeta.availability === "empty"
+                  ? "Run a curator sync after the MINDEX data agreement and export credentials are configured. Reference taxa will appear here without inventing physical jars."
+                  : "Try a different category, holdings filter, or search."
+              }
+            />
+          ) : (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+              {filteredLibrary.map((item, i) => (
+                <LibraryTaxonCard
+                  key={item.mindexTaxonUuid}
+                  item={item}
+                  index={i}
+                  theme={theme}
+                  onOpen={() => setOpenTaxonUuid(item.mindexTaxonUuid)}
+                />
+              ))}
+            </div>
+          )
+        ) : !catalogLoaded ? (
           <Loading label="Loading catalog…" />
         ) : filteredCatalog.length === 0 ? (
           <EmptyState
-            title={catalog.length === 0 ? "Catalog is being populated" : "No matches"}
+            title={catalog.length === 0 ? "No public physical holdings" : "No matches"}
             body={
               catalog.length === 0
-                ? "Public specimens will appear here as they are verified and published."
+                ? "Public specimens will appear here as they are verified and published. Browse the Fungal library for reference taxa."
                 : "Try a different category or search."
             }
           />
@@ -734,7 +939,103 @@ export function TissueView() {
         onClose={() => setOpenCode(null)}
         onChanged={reload}
       />
+      <TaxonDetailDrawer
+        mindexTaxonUuid={openTaxonUuid}
+        onClose={() => setOpenTaxonUuid(null)}
+        onOpenAccession={(code) => {
+          setOpenTaxonUuid(null);
+          setOpenCode(code);
+        }}
+      />
     </div>
+  );
+}
+
+function LibraryTaxonCard({
+  item,
+  index,
+  theme,
+  onOpen,
+}: {
+  item: FungalLibraryItem;
+  index: number;
+  theme: "light" | "dark";
+  onOpen: () => void;
+}) {
+  const hero = item.referenceImageUrl;
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, delay: Math.min(index * 0.03, 0.4) }}
+      className={cn(
+        "group relative flex flex-col overflow-hidden rounded-xl border backdrop-blur-md",
+        theme === "light"
+          ? "border-black/10 bg-white/60 hover:border-black/20"
+          : "border-white/10 bg-white/[0.04] hover:border-white/25",
+      )}
+    >
+      <button
+        type="button"
+        onClick={onOpen}
+        className="flex min-h-[44px] flex-1 flex-col text-left touch-manipulation"
+      >
+        <div className="relative aspect-square overflow-hidden">
+          {hero ? (
+            <img
+              src={hero}
+              alt={item.commonName || item.scientificName}
+              loading="lazy"
+              className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.06]"
+            />
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-emerald-500/10 to-transparent">
+              <Dna className="size-9 opacity-40" />
+            </div>
+          )}
+          <span className="absolute left-2 top-2 rounded bg-black/60 px-1.5 py-0.5 text-[7px] font-bold uppercase tracking-wide text-white/90">
+            Reference
+          </span>
+          {item.hasPhysicalHoldings ? (
+            <span className="absolute right-2 top-2 rounded bg-emerald-600/80 px-1.5 py-0.5 text-[7px] font-bold uppercase tracking-wide text-white">
+              {item.physicalHoldingsCount} held
+            </span>
+          ) : (
+            <span className="absolute right-2 top-2 rounded bg-black/55 px-1.5 py-0.5 text-[7px] font-bold uppercase tracking-wide text-white/70">
+              No sample
+            </span>
+          )}
+          {item.referenceImageAttribution ? (
+            <span className="absolute bottom-1 right-1 max-w-[70%] truncate rounded bg-black/55 px-1 text-[7px] text-white/70">
+              {item.referenceImageAttribution}
+            </span>
+          ) : null}
+        </div>
+        <div className="flex flex-1 flex-col gap-1 p-3">
+          <p
+            className={cn(
+              "text-sm font-black uppercase leading-tight",
+              theme === "light" ? "text-stone-900" : "text-white",
+            )}
+          >
+            {item.commonName || item.scientificName}
+          </p>
+          <p
+            className={cn(
+              "text-[11px] italic",
+              theme === "light" ? "text-stone-500" : "text-white/55",
+            )}
+          >
+            {item.scientificName}
+          </p>
+          <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1">
+            <Chip>{item.category}</Chip>
+            {item.tokenStatus ? <Chip>{item.tokenStatus}</Chip> : null}
+            {item.fungipFgId ? <Chip>{item.fungipFgId}</Chip> : null}
+          </div>
+        </div>
+      </button>
+    </motion.div>
   );
 }
 
