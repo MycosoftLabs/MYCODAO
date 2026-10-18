@@ -2,6 +2,21 @@
 
 **Status:** Built and browser-tested locally. Not committed, not deployed. Plan: `C:\Users\Owner1\.cursor\plans\mycodao_v2_blocks_site_mindex_oct17_2026.plan.md`. Review inputs: `MycoDAO_Product_Review_2026-10-17` (tasks M01–M36).
 
+## Live test server (Oct 17, 2026, 20:07 PDT) — separate from v1
+
+| Item | Value |
+|---|---|
+| URL | `https://blocks-v2.mycodao.com/v2` and `https://blocks-v2.mycodao.com/site-v2` |
+| Image | ECR `mycosoft/mycodao-blocks:v2-887cd71` (v1 stays on `:latest`) |
+| ECS | cluster `mycosoft-website`, service `mycodao-blocks-v2`, task def `mycodao-blocks-v2:1` |
+| ALB | existing `mycodao-blocks` ALB, host rules `blocks-v2.mycodao.com` → target group `mycodao-blocks-v2` (:80, :443) |
+| DNS | Cloudflare CNAME `blocks-v2` → ALB (proxied, zone SSL Full) |
+| v1 | `mycodao-blocks` unchanged (task def `mycodao-blocks:1`, `https://blocks.mycodao.com/blocks/` 200) |
+| v2 env overrides | `MINDEX_API_URL=http://mindex-internal.mycosoft.com:8000`, `BLOCKS_PUBLIC_BASE_URL=https://blocks-v2.mycodao.com`, `BLOCKS_CALENDAR_AUTO_IMPORT=0` |
+| Scripts | `scripts/deploy_blocks_v2_aws.py <tag>`, `scripts/cloudflare_blocks_v2_dns.py` |
+
+Remove the preview: set `mycodao-blocks-v2` desired count to 0 (or delete the service, host rules and CNAME). v1 is unaffected either way.
+
 ## Local URLs (worktree `_wt/mycodao-fungi-blocks-oct15`, `next dev` on 3020)
 
 - Blocks v2: `http://127.0.0.1:3020/v2` (Pulse, markets, MYCO, catalog, projects, community, FungIP, rewards)
