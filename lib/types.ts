@@ -244,6 +244,7 @@ export type ResearchItem = {
   summary: string;
   category: "ecosystem" | "funding" | "biobank" | "science";
   publishedAt: string;
+  url?: string;
 };
 
 /** Large on-chain or curated crypto transfer (Whale Alert API or supplemental feeds). */

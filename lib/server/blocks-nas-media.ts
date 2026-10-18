@@ -63,10 +63,10 @@ function blocksNasRootCandidates(): string[] {
     push("/mnt/nas/mycodao/BLOCKS");
   }
 
-  if (process.env.NODE_ENV !== "production") {
-    push(process.env.BLOCKS_NAS_DEV_MIRROR);
-    push(path.join(process.cwd(), "data", "blocks-nas-dev"));
-  }
+  // Always allow a local/dev mirror as fallback. `next start` sets NODE_ENV=production
+  // even on the laptop; without this, tissue covers 404 when the UniFi NAS is offline.
+  push(process.env.BLOCKS_NAS_DEV_MIRROR);
+  push(path.join(process.cwd(), "data", "blocks-nas-dev"));
 
   return [...new Set(out)];
 }

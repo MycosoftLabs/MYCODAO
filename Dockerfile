@@ -31,6 +31,11 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/config/blocks-producer ./config/blocks-producer
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# Lab tissue covers (local biobank photos) — served via blocks-nas-media DEV_MIRROR fallback
+COPY --from=builder --chown=nextjs:nodejs /app/data/blocks-nas-dev ./data/blocks-nas-dev
+# mycodao/v1 local mirror (served when MINDEX is unreachable) and Learn modules
+COPY --from=builder --chown=nextjs:nodejs /app/content/mycodao-v1 ./content/mycodao-v1
+COPY --from=builder --chown=nextjs:nodejs /app/data/learn-modules.json ./data/learn-modules.json
 
 USER nextjs
 EXPOSE 3004

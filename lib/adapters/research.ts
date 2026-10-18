@@ -44,6 +44,7 @@ function mapPaperToResearchItem(
     summary,
     category: cat,
     publishedAt: pub,
+    url: paper.url || paper.open_access_url || (/^W\d+$/.test(paper.id) ? `https://openalex.org/${paper.id}` : undefined),
   };
 }
 

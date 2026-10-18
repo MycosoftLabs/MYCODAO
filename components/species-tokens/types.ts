@@ -17,6 +17,21 @@ export type CatalogItem = {
     reason?: string;
   };
   licenseId?: string;
+  rank?: string;
+  family?: string;
+  collectionId?: string;
+  observations?: number;
+  source?: string;
+  ancestry?: {
+    kingdom?: string | null;
+    phylum?: string | null;
+    className?: string | null;
+    order?: string | null;
+    family?: string | null;
+    genus?: string | null;
+    rankPath?: string | null;
+    url?: string;
+  };
 };
 export type Catalog = { state: "available" | "empty" | "unavailable"; cluster: string; items: CatalogItem[]; total: number; disclaimer?: string; error?: string };
 export type ServiceStatus = { state: string; cluster: string; executionMode: string; pendingJobs: number; finalizedJobs: number; blockedJobs: number; paused?: boolean };
@@ -43,7 +58,11 @@ export function explorerUrl(kind: "address" | "tx", value: string, cluster: stri
   return `https://explorer.solana.com/${kind}/${value}${cluster === "devnet" || cluster === "testnet" ? `?cluster=${cluster}` : ""}`;
 }
 
-export async function readApi<T>(path: string, accessToken?: string, body?: Record<string, string>): Promise<T> {
+export async function readApi<T>(
+  path: string,
+  accessToken?: string,
+  body?: Record<string, string | number | boolean | null | Record<string, string>>,
+): Promise<T> {
   const response = await fetch(`/api/species-tokens/${path}`, {
     method: body ? "POST" : "GET",
     headers: { ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}), ...(body ? { "Content-Type": "application/json" } : {}) },

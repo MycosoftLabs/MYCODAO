@@ -2,11 +2,11 @@ import { NextResponse } from "next/server";
 import {
   applyProducerPatch,
   buildProducerPublicView,
-  readProducerPresets,
   readProgramShowConfigs,
   type ProgramShowConfig,
   type ProducerTitleContext,
 } from "@/lib/server/news-producer";
+import { loadProducerCatalog, saveLiveDataPicks } from "@/lib/server/producer-catalog-store";
 import { resolveNewsProgramNow } from "@/lib/server/news-channel-program";
 import {
   producerAuthErrorMessage,
@@ -28,9 +28,9 @@ function producerTitleContext(): ProducerTitleContext {
 }
 
 /** Full producer payload — GET and PATCH must return the same shape (includes presets). */
-function buildProducerApiPayload(ctx?: ProducerTitleContext) {
+async function buildProducerApiPayload(ctx?: ProducerTitleContext) {
   const view = buildProducerPublicView(ctx ?? producerTitleContext());
-  const presets = readProducerPresets();
+  const presets = await loadProducerCatalog();
   return {
     ...view,
     presets: {
@@ -65,7 +65,7 @@ function buildProducerApiPayload(ctx?: ProducerTitleContext) {
 
 export async function GET() {
   try {
-    return NextResponse.json(buildProducerApiPayload(), {
+    return NextResponse.json(await buildProducerApiPayload(), {
       headers: { "Cache-Control": "no-store, max-age=0" },
     });
   } catch (e) {
@@ -220,7 +220,16 @@ export async function PATCH(req: Request) {
         typeof body.updatedBy === "string" ? body.updatedBy : auth.email,
     });
 
-    const view = buildProducerApiPayload();
+    if (Array.isArray(body.liveStreamDataAssetIds) || body.liveStreamDataAssetIds === null) {
+      await saveLiveDataPicks(
+        Array.isArray(body.liveStreamDataAssetIds)
+          ? (body.liveStreamDataAssetIds as string[])
+          : [],
+        auth.email,
+      );
+    }
+
+    const view = await buildProducerApiPayload();
     return NextResponse.json({ ok: true, state, view });
   } catch (e) {
     console.error("news/producer PATCH:", e);

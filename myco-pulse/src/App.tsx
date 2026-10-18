@@ -9,7 +9,6 @@ import {
 } from './data/mycopodShow';
 import { 
   BarChart3, 
-  BookOpen, 
   Globe, 
   LayoutDashboard, 
   Mic2, 
@@ -42,7 +41,6 @@ import {
   PieChart,
   Wifi,
   Radio,
-  Share2,
   Users,
   ExternalLink,
   Wallet,
@@ -51,7 +49,6 @@ import {
   Minus,
   Video,
   Compass,
-  ExternalLink as LinkIcon,
   Bell,
   Bot,
   Rss,
@@ -110,13 +107,13 @@ import type {
 } from './lib/pulseApi';
 import { buildOracleSyncInsight } from './lib/oracleSyncInsight';
 import { formatGlobalMarketSessionSummary } from './lib/marketSessions';
-import { mergeTickerGroupsWithStudio } from './data/studioPresets';
 import { PulseBottomNav, PulseSidebarNav, PulseMobileBrandPair, type PulseTabId } from './components/PulseShellNav';
 import { handleMobileNewsPointerDown } from './lib/mobileNewsGestureUnlock';
 import { FundingView } from './components/FundingView';
 import { ResearchView } from './components/ResearchView';
 import { TissueView } from './components/TissueView';
 import { useMediaQuery } from './hooks/useMediaQuery';
+import { useDaoWallet } from './hooks/useDaoWallet';
 
 // Handle RGL ESM/CJS interop
 const Grid = (RGL as any).default || RGL;
@@ -479,7 +476,6 @@ const PulseDashboard = ({
                     </p>
                  </div>
               </div>
-              <button className="px-4 py-2 border border-myco-accent text-myco-accent text-[9px] font-black uppercase hover:bg-myco-accent hover:text-black">Run Diagnostics</button>
            </div>
         </div>
       </div>
@@ -557,11 +553,7 @@ const PulseDashboard = ({
                   <div className="h-full flex flex-col justify-between py-1">
                     <div className="space-y-1">
                         <span className="text-[8px] font-bold text-dim uppercase tracking-[0.2em] block">Sessions: {exchangeSessionSummary} // Feed {globalMarket.status}</span>
-                        <p className="text-xs font-bold leading-tight uppercase text-white/90">BTC at {globalMarket.BTC}, SOL at ${globalMarket.SOL}. Market sync stable.</p>
-                    </div>
-                    <div className="flex items-center gap-1 mt-2">
-                        <button className="flex-1 py-1 px-2 glass-bento border-white/10 text-[9px] font-bold uppercase hover:bg-myco-accent hover:text-black">Indexes</button>
-                        <button className="flex-1 py-1 px-2 glass-bento border-white/10 text-[9px] font-bold uppercase hover:bg-myco-accent hover:text-black">Sentiment</button>
+                        <p className="text-xs font-bold leading-tight uppercase text-white/90">BTC at {globalMarket.BTC}, SOL at ${globalMarket.SOL}.</p>
                     </div>
                   </div>
                 )}
@@ -753,17 +745,13 @@ const PulseDashboard = ({
              <WidgetWrapper title="— REALM TREASURY —" id="funding" onToggleFull={toggleFull} isFull={fullWidget === 'funding'}>
                 <div className="flex flex-col gap-1.5 h-full overflow-hidden">
                    <div className="flex flex-col gap-4 mb-4">
-                      <div className="flex justify-between items-end border-b border-white/5 pb-2">
-                         <span className="text-[10px] font-bold text-dim uppercase">Governance State</span>
-                         <span className="text-xs font-mono text-myco-accent">SYNCHRONIZED</span>
-                      </div>
                       <a href="https://v2.realms.today/dao/At93fiCMzEkZWBAHxSNjfk7zUHnF3JcxyCyPjZELjK9Y/treasury" target="_blank" rel="noreferrer" className="w-full py-3 bg-white/5 border border-white/10 text-[9px] font-black uppercase tracking-widest text-white hover:bg-myco-accent hover:text-black text-center">
                          View Realm Treasury
                       </a>
                    </div>
                    <div className="space-y-1.5 overflow-y-auto no-scrollbar">
                       {[
-                         { l: 'DAO Mint', v: 'EzYEwn...vUF3' },
+                         { l: 'MYCO mint', v: 'EzYEwn...vUF3' },
                          { l: 'Network', v: 'Solana Mainnet' },
                          { l: 'Realm ID', v: 'At93fi...K9Y' },
                       ].map((f, i) => (
@@ -977,7 +965,7 @@ const MarketView = ({ assets = [] }: any) => {
                     className="overflow-hidden bg-black/40 border-t border-white/5"
                   >
                     <div className="p-8 grid grid-cols-12 gap-8">
-                      <div className="col-span-12 lg:col-span-4 space-y-6">
+                      <div className="col-span-12 lg:col-span-6 space-y-6">
                          <div className="flex flex-col gap-1">
                             <span className="text-[10px] font-bold text-dim uppercase tracking-widest">Available Exchanges & Pools</span>
                             <div className="flex flex-wrap gap-2 mt-2">
@@ -999,17 +987,9 @@ const MarketView = ({ assets = [] }: any) => {
                                <span className="text-sm font-bold font-mono">{a.liq}</span>
                             </div>
                          </div>
-                         <div className="flex flex-col gap-2">
-                            <button className="w-full py-3 bg-myco-accent text-black font-black uppercase text-xs tracking-widest flex items-center justify-center gap-2 hover:shadow-[0_0_15px_rgba(0,255,136,0.3)] transition-all">
-                               <Zap className="size-3 fill-black" /> Initiate Trade Protocol
-                            </button>
-                            <button className="w-full py-3 border border-white/10 text-white font-black uppercase text-xs tracking-widest hover:bg-white/5">
-                               Initiate Staking
-                            </button>
-                         </div>
                       </div>
                       
-                      <div className="col-span-12 lg:col-span-4 space-y-4">
+                      <div className="col-span-12 lg:col-span-6 space-y-4">
                          <h4 className="text-[10px] font-bold text-dim uppercase tracking-widest">Network Verification Links</h4>
                          <div className="grid grid-cols-1 gap-2">
                             {a.explorer && (
@@ -1036,16 +1016,6 @@ const MarketView = ({ assets = [] }: any) => {
                                  <ExternalLink className="size-3 text-dim group-hover:text-myco-accent" />
                               </a>
                             )}
-                         </div>
-                      </div>
-
-                      <div className="col-span-12 lg:col-span-4">
-                         <h4 className="text-[10px] font-bold text-dim uppercase tracking-widest mb-4">Neural Analytics Walkthrough</h4>
-                         <div className="p-6 bg-myco-accent/5 border border-myco-accent/20 rounded-sm">
-                            <p className="text-xs italic leading-relaxed text-myco-accent/80">"Analyzing {a.symbol} liquidity depth across {a.exchanges?.length} exchanges. Sell pressure is currently diminishing, reflecting high accumulation in the DeSci sector. Protocol suggests potential for breakout."</p>
-                            <button className="mt-6 flex items-center gap-2 text-[10px] font-bold text-myco-accent border-b border-myco-accent border-dashed pb-0.5 hover:opacity-80 transition-opacity">
-                               <BookOpen className="size-3" /> Access GitBook Research File
-                            </button>
                          </div>
                       </div>
                     </div>
@@ -1086,7 +1056,7 @@ const TradeView = ({ prices, chartData, whales }: any) => {
             </div>
             <div className="flex items-center gap-2 mt-1">
                <div className="size-1.5 bg-myco-accent rounded-full animate-pulse shadow-[0_0_8px_rgba(30,255,188,0.5)]" />
-               <span className="text-[10px] font-bold text-dim uppercase tracking-[0.4em]">L3 Protocol Verified</span>
+               <span className="text-[10px] font-bold text-dim uppercase tracking-[0.4em]">Swap</span>
             </div>
          </div>
          <WalletDisplay />
@@ -1138,7 +1108,7 @@ const TradeView = ({ prices, chartData, whales }: any) => {
                   <div className="flex flex-col">
                     <div className="flex items-center gap-3 mb-1">
                       <div className="size-2 bg-red-500 rounded-full animate-pulse" />
-                      <h2 className="text-xl font-black tracking-tighter uppercase text-white">Neural Surveillance</h2>
+                      <h2 className="text-xl font-black tracking-tighter uppercase text-white">Large transfers</h2>
                     </div>
                     <p className="text-[9px] text-dim uppercase tracking-[0.2em] font-bold">On-chain Ledger Analysis</p>
                   </div>
@@ -1392,8 +1362,8 @@ const LearnView = ({ learnModules = [] as PulseLearnModule[] }: { learnModules?:
        {/* Sidebar Navigation */}
        <div className="w-full lg:w-80 shrink-0 border-b lg:border-b-0 lg:border-r border-white/5 bg-black/40 flex flex-col overflow-x-auto lg:overflow-x-visible lg:overflow-y-auto no-scrollbar max-h-[40vh] lg:max-h-none">
           <div className="p-4 md:p-6 lg:p-8 border-b border-white/5 shrink-0">
-             <h2 className="text-lg md:text-xl font-bold tracking-tighter uppercase mb-2">Protocol Academy</h2>
-             <p className="text-[10px] text-dim font-bold uppercase tracking-[0.2em]">Ascension through decentralized knowledge.</p>
+             <h2 className="text-lg md:text-xl font-bold tracking-tighter uppercase mb-2">Learn</h2>
+             <p className="text-[10px] text-dim font-bold uppercase tracking-[0.2em]">Short guides to fungi, records, and MYCO</p>
           </div>
           <div className="flex-1 py-4">
              {modules.map((m, i) => (
@@ -1418,23 +1388,13 @@ const LearnView = ({ learnModules = [] as PulseLearnModule[] }: { learnModules?:
        {/* Module Content */}
        <div className="flex-1 overflow-y-auto no-scrollbar p-4 md:p-8 lg:p-12 bg-black/20 min-h-0">
           <div className="max-w-4xl space-y-12">
-             <div className="flex justify-between items-start">
-                <div className="space-y-4 max-w-2xl">
-                   <div className="flex items-center gap-3">
-                      <span className="px-2 py-0.5 bg-myco-accent/10 border border-myco-accent/20 text-[9px] font-bold text-myco-accent uppercase tracking-[0.2em]">{activeModule.level}</span>
-                      <span className="text-dim text-[10px] uppercase font-bold tracking-widest">{activeModule.readingTimeMin} min read</span>
-                   </div>
-                   <h1 className="text-2xl md:text-4xl lg:text-5xl font-black tracking-tighter uppercase leading-none">{activeModule.title}</h1>
-                   <p className="text-lg text-dim leading-relaxed">{activeModule.summary}</p>
+             <div className="space-y-4 max-w-2xl">
+                <div className="flex items-center gap-3">
+                   <span className="px-2 py-0.5 bg-myco-accent/10 border border-myco-accent/20 text-[9px] font-bold text-myco-accent uppercase tracking-[0.2em]">{activeModule.level}</span>
+                   <span className="text-dim text-[10px] uppercase font-bold tracking-widest">{activeModule.readingTimeMin} min read</span>
                 </div>
-                <div className="flex gap-2">
-                   <button className="size-10 glass-bento flex items-center justify-center hover:bg-white/5 transition-all">
-                      <Share2 className="size-4" />
-                   </button>
-                   <button className="size-10 glass-bento flex items-center justify-center hover:bg-white/5 transition-all text-myco-accent">
-                      <LinkIcon className="size-4" />
-                   </button>
-                </div>
+                <h1 className="text-2xl md:text-4xl lg:text-5xl font-black tracking-tighter uppercase leading-none">{activeModule.title}</h1>
+                <p className="text-lg text-dim leading-relaxed">{activeModule.summary}</p>
              </div>
 
              {activeModule.contentMd ? (
@@ -1471,242 +1431,36 @@ const LearnView = ({ learnModules = [] as PulseLearnModule[] }: { learnModules?:
   );
 };
 
-const TokenomicsView = ({ setActiveTab }: { setActiveTab: (tab: string) => void }) => {
-  const [metrics, setMetrics] = useState<any>(null);
-
-  useEffect(() => {
-    import('./services/apiService').then(({ fetchLiveMycoTokenMetrics }) => {
-       fetchLiveMycoTokenMetrics().then(data => setMetrics(data));
-    });
-  }, []);
-
-  return (
-    <div className="flex-1 p-6 overflow-y-auto no-scrollbar mb-20">
-    <div className="max-w-7xl mx-auto space-y-8 pb-32">
-       {/* Small Banner Header */}
-       <div className="p-8 glass-bento bg-black border-white/5 relative overflow-hidden flex justify-between items-center">
-          <div className="space-y-2 relative z-10">
-             <h2 className="text-[10px] font-black text-myco-accent uppercase tracking-[0.4em] mb-1 flex items-center gap-2">
-                <div className="size-2 bg-myco-accent rounded-full animate-pulse" /> PROTOCOL INTELLIGENCE // MYCODAO
-             </h2>
-             <h3 className="text-4xl font-black tracking-tighter uppercase leading-none text-white">Biological Sovereignty Network</h3>
-             <p className="text-xs text-dim uppercase font-bold tracking-widest mt-1">
-               Token: $MYCO // Supply: 1,000,000,000 // FDV: {metrics ? `$${(metrics.fdv/1000000).toFixed(1)}M` : '$120.4M'} // LIVE PRICE: {metrics ? `$${parseFloat(metrics.price).toFixed(4)}` : '...'}
-             </p>
-          </div>
-          <div className="flex gap-4">
-             <button className="px-6 py-3 bg-myco-accent text-black text-[10px] font-black uppercase tracking-widest transition-all hover:shadow-[0_0_20px_rgba(0,255,136,0.2)]">Buy $MYCO</button>
-             <button className="px-6 py-3 border border-white/10 text-white text-[10px] font-black uppercase tracking-widest hover:bg-white/5">Governance</button>
-          </div>
-       </div>
-
-       <div className="grid grid-cols-12 gap-6">
-          {/* Main Content Column */}
-          <div className="col-span-12 lg:col-span-8 space-y-6">
-             <div className="grid grid-cols-3 gap-6">
-                {[
-                  { l: 'Treasury Value', v: metrics ? `$${((metrics.fdv * 0.35)/1000000).toFixed(1)}M` : '$42.1M', d: 'SOL + USDC + BIO-IP' },
-                  { l: 'Active Agents', v: '142 Units', d: 'Autonomous Research' },
-                  { l: 'Science DAO Cap', v: metrics ? `$${(metrics.liq/1000000).toFixed(1)}M` : '$12.4M', d: 'Liquidity available' }
-                ].map((s, i) => (
-                  <div key={i} className="glass-bento p-6 border-white/5 bg-black/40">
-                     <span className="text-[9px] font-black text-dim uppercase tracking-[0.2em] block mb-2">{s.l}</span>
-                     <span className="text-xl font-bold tracking-tight text-white block mb-1">{s.v}</span>
-                     <span className="text-[8px] font-bold text-myco-accent/60 uppercase">{s.d}</span>
-                  </div>
-                ))}
-             </div>
-
-             <div className="glass-bento p-8 border-white/5 bg-black/40">
-                <div className="flex justify-between items-center mb-8 pb-4 border-b border-white/5">
-                   <h3 className="text-xs font-black uppercase tracking-[0.3em] text-white">Active Bio-Experiments & Graph Data</h3>
-                   <span className="text-[9px] font-mono text-dim">REF_ID: LAB_SYNC_77</span>
-                </div>
-                <div className="h-64 mb-8">
-                   <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={EMPTY_CHART_DATA}>
-                         <defs>
-                            <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                               <stop offset="5%" stopColor="#00ff88" stopOpacity={0.3}/>
-                               <stop offset="95%" stopColor="#00ff88" stopOpacity={0}/>
-                            </linearGradient>
-                         </defs>
-                         <Area type="monotone" dataKey="price" stroke="#00ff88" fillOpacity={1} fill="url(#colorValue)" strokeWidth={2} />
-                         <XAxis dataKey="time" hide />
-                         <YAxis hide />
-                      </AreaChart>
-                   </ResponsiveContainer>
-                </div>
-                <div className="grid grid-cols-2 gap-8">
-                   <div className="space-y-4">
-                      <h4 className="text-[10px] font-black uppercase text-myco-accent">Biological Sequence Growth</h4>
-                      <p className="text-xs text-dim leading-relaxed font-medium">Monitoring the ingestion rate of unique fungal species into the MINDEX protocol via Nature App nodes globally.</p>
-                      <div className="flex gap-4">
-                         <div className="flex flex-col">
-                            <span className="text-xl font-black text-white">1,242</span>
-                            <span className="text-[8px] font-bold text-dim uppercase">Inscribed</span>
-                         </div>
-                         <div className="flex flex-col border-l border-white/10 pl-4">
-                            <span className="text-xl font-black text-white">+84%</span>
-                            <span className="text-[8px] font-bold text-dim uppercase">Weekly Δ</span>
-                         </div>
-                      </div>
-                   </div>
-                   <div className="p-4 bg-myco-accent/5 border border-myco-accent/10 space-y-4">
-                      <div className="flex justify-between items-center">
-                         <span className="text-[9px] font-black text-myco-accent uppercase tracking-widest">Active Hypothesis</span>
-                         <FlaskConical className="size-4 text-myco-accent" />
-                      </div>
-                      <p className="text-xs font-bold leading-tight uppercase">HYP-042: Mycelium-Based Storage Density at Scale</p>
-                      <div className="h-1 bg-white/10 rounded-full overflow-hidden">
-                         <div className="h-full bg-myco-accent w-2/3" />
-                      </div>
-                      <span className="text-[8px] font-mono text-dim tracking-widest block">TESTING IN SECTOR 4...</span>
-                   </div>
-                </div>
-             </div>
-
-             <div className="glass-bento p-8 border-white/5 bg-black/40">
-                <h3 className="text-xs font-black uppercase tracking-[0.3em] text-white mb-8 border-b border-white/5 pb-4">Agent Network Activity</h3>
-                <div className="space-y-4">
-                   {[
-                     { a: 'AGENT_SIGMA', t: 'SEQUENCING', target: 'MINDEX POOL', status: '82% COMPLETED', color: 'text-myco-accent' },
-                     { a: 'AGENT_VOX', t: 'NEWS_GEN', target: 'PROTOCOL FEED', status: 'SYNCHRONIZED', color: 'text-blue-400' },
-                     { a: 'AGENT_RISK', t: 'TREASURY_SWAP', target: 'SOL/USDC', status: 'PENDING_DAO_VOTE', color: 'text-yellow-400' },
-                   ].map((item, i) => (
-                     <div key={i} className="flex items-center justify-between p-4 bg-white/[0.02] border border-white/10 hover:bg-white/[0.05] transition-all group">
-                        <div className="flex items-center gap-4">
-                           <div className="size-1 group-hover:scale-150 transition-transform bg-current rounded-full" style={{ color: item.color.includes('myco') ? '#00ff88' : item.color.includes('blue') ? '#60a5fa' : '#fbbf24' }} />
-                           <div className="flex flex-col">
-                              <span className="text-[10px] font-bold text-white uppercase">{item.a}</span>
-                              <span className="text-[8px] text-dim uppercase font-bold tracking-widest">{item.t} → {item.target}</span>
-                           </div>
-                        </div>
-                        <span className={cn("text-[9px] font-black uppercase tracking-tighter", item.color)}>{item.status}</span>
-                     </div>
-                   ))}
-                </div>
-             </div>
-          </div>
-
-          {/* Right Column Column */}
-          <div className="col-span-12 lg:col-span-4 space-y-6">
-             <div className="glass-bento p-8 bg-black/60 border-white/5">
-                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-dim mb-6">Company News & Updates</h3>
-                <div className="space-y-6">
-                   {[
-                     { t: 'PARTNERSHIP', m: 'RealmDAO x MycoDAO inter-governance sync active.', r: '1h ago' },
-                     { t: 'TECHNOLOGY', m: 'MINDEX v2.4 Release: IP-NFT sub-licensing logic integrated.', r: '4h ago' },
-                     { t: 'SCIENCE', m: 'Field trial "LAB-IN-A-BOX" results show 92% yield increase.', r: '1d ago' },
-                     { t: 'FUNDING', m: 'Mycosoft Seed B round closes with $24M leadership.', r: '2d ago' },
-                   ].map((n, i) => (
-                     <div key={i} className="space-y-1 group cursor-pointer border-b border-white/5 pb-4 last:border-0 last:pb-0">
-                        <div className="flex justify-between items-center mb-1">
-                           <span className="text-[8px] font-black text-myco-accent uppercase tracking-widest">{n.t}</span>
-                           <span className="text-[8px] font-bold text-dim">{n.r}</span>
-                        </div>
-                        <h4 className="text-[13px] font-bold text-white leading-tight group-hover:text-myco-accent transition-colors uppercase tracking-tight">{n.m}</h4>
-                     </div>
-                   ))}
-                </div>
-             </div>
-
-             <div className="glass-bento p-8 bg-myco-accent/5 border-myco-accent/20">
-                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-myco-accent mb-6">Proposal Submission</h3>
-                <p className="text-xs text-dim leading-relaxed mb-6 font-bold uppercase">Ready to contribute to the mycological revolution? Submit a proposal for funding or protocol updates.</p>
-                <div className="space-y-4">
-                   <div className="p-4 border border-white/10 bg-black/40 space-y-1">
-                      <span className="text-[8px] font-bold text-dim uppercase">Grant Category</span>
-                      <p className="text-xs font-black text-white uppercase">Scientific Research [BIO]</p>
-                   </div>
-                   <button className="w-full py-4 bg-white text-black text-[10px] font-black uppercase tracking-widest hover:bg-myco-accent transition-all">Submit MIP</button>
-                </div>
-             </div>
-
-             <div className="glass-bento p-8 bg-black/40 border-white/5 overflow-hidden">
-                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-dim mb-6">Live Token Metrics</h3>
-                <div className="space-y-4">
-                   {[
-                     { l: 'Liquidity (USD)', v: metrics ? `$${(metrics.liq/1000).toFixed(1)}k` : '...' },
-                     { l: '24h Price Change', v: metrics ? `${metrics.priceChange24h}%` : '...' },
-                     { l: 'Total Market Cap', v: metrics ? `$${(metrics.marketCap/1000000).toFixed(1)}M` : '...' },
-                     { l: 'Network Protocol', v: 'Solana SPL' },
-                   ].map((m, i) => (
-                     <div key={i} className="flex justify-between items-center border-b border-white/5 pb-3 last:border-0 last:pb-0">
-                        <span className="text-[9px] font-bold text-dim uppercase tracking-widest">{m.l}</span>
-                        <span className="text-sm font-black text-white font-mono">{m.v}</span>
-                     </div>
-                   ))}
-                </div>
-             </div>
-          </div>
-       </div>
-    </div>
-  </div>
-  );
-};
-
 const DAOView = () => <RealmsDaoHub />;
 
 const SettingsView = ({ isDarkMode, setIsDarkMode }: any) => (
   <div className="flex-1 p-6 flex items-center justify-center">
-    <div className="w-full max-w-3xl glass-bento grid grid-cols-1 md:grid-cols-12 overflow-hidden overflow-y-auto no-scrollbar">
-      <div className="md:col-span-4 bg-black/40 border-r border-myco-border p-8 flex flex-col gap-8">
-         <div className="flex flex-col gap-1">
-            <h3 className="text-xs font-bold uppercase tracking-[0.3em] text-myco-accent">Configuration</h3>
-            <p className="text-[10px] text-dim">Customize the neural protocol interface to your specifications.</p>
-         </div>
-         <nav className="flex flex-col gap-2">
-            {['DISPLAY', 'DATA', 'SECURITY', 'NETWORKS', 'EXPERIMENTAL'].map((n, i) => (
-              <button key={n} className={cn("text-left px-4 py-3 text-[10px] font-bold tracking-[0.2em] transition-all", i === 0 ? "bg-myco-accent text-black" : "text-dim hover:text-white bg-white/5")}>
-                {n}
-              </button>
-            ))}
-         </nav>
+    <div className="w-full max-w-xl glass-bento overflow-hidden overflow-y-auto no-scrollbar p-8 md:p-10 space-y-8">
+      <div className="flex flex-col gap-1">
+        <h3 className="text-xs font-bold uppercase tracking-[0.3em] text-myco-accent">Settings</h3>
+        <p className="text-[10px] text-dim">Display preferences for this browser.</p>
       </div>
-      <div className="md:col-span-8 p-10 space-y-12">
-         <section className="space-y-6">
-           <h4 className="text-[10px] font-bold text-dim uppercase tracking-[0.4em] mb-4">Neural Feedback (Theme)</h4>
-           <div className="flex gap-4">
-             <button 
-               onClick={() => setIsDarkMode(true)}
-               className={cn("flex-1 p-6 glass-bento flex flex-col items-center gap-3 transition-all", isDarkMode ? "border-myco-accent ring-1 ring-myco-accent/20 bg-myco-accent/5" : "opacity-40 grayscale")}
-             >
-               <Moon className="w-8 h-8" />
-               <span className="text-[10px] font-bold uppercase tracking-widest">Neural / Dark</span>
-             </button>
-             <button 
-               onClick={() => setIsDarkMode(false)}
-               className={cn("flex-1 p-6 glass-bento flex flex-col items-center gap-3 transition-all", !isDarkMode ? "border-myco-accent ring-1 ring-myco-accent/20 bg-myco-accent/5" : "opacity-40 grayscale")}
-             >
-               <Sun className="w-8 h-8" />
-               <span className="text-[10px] font-bold uppercase tracking-widest">Prismatic / Light</span>
-             </button>
-           </div>
-         </section>
-         <section className="space-y-6">
-           <h4 className="text-[10px] font-bold text-dim uppercase tracking-[0.4em] mb-4">Oracle Sensitivity</h4>
-           <div className="flex flex-col gap-2">
-              {[
-                { l: 'MINIMAL', d: 'Condensed systematic protocol bulletins.' },
-                { l: 'SYSTEMATIC', d: 'Standard deep-dive intelligence summaries.' },
-                { l: 'VIBRANT', d: 'Full sensory textual data output with heavy lore.' }
-              ].map((lvl, i) => (
-                <div key={i} className="flex items-center justify-between p-4 glass-bento hover:bg-white/5 transition-all group cursor-pointer">
-                  <div>
-                    <span className="text-[10px] font-bold uppercase group-hover:text-myco-accent transition-colors">{lvl.l}</span>
-                    <p className="text-[10px] text-dim">{lvl.d}</p>
-                  </div>
-                  <div className={cn("size-3 rounded-full border-2 border-myco-accent", i === 1 ? "bg-myco-accent" : "")} />
-                </div>
-              ))}
-           </div>
-         </section>
-         <section className="pt-12 border-t border-myco-border text-center">
-            <p className="text-[10px] text-dim uppercase font-bold tracking-[0.2em] mb-4">Pulse Matrix Alpha Phase</p>
-            <span className="px-4 py-2 border border-red-500/30 text-red-500/60 text-[9px] font-bold uppercase tracking-widest block hover:bg-red-500 hover:text-white transition-all cursor-pointer">Purge Matrix Cache</span>
-         </section>
-      </div>
+      <section className="space-y-6">
+        <h4 className="text-[10px] font-bold text-dim uppercase tracking-[0.4em] mb-4">Theme</h4>
+        <div className="flex gap-4">
+          <button
+            type="button"
+            onClick={() => setIsDarkMode(true)}
+            className={cn("flex-1 p-6 min-h-[44px] glass-bento flex flex-col items-center gap-3 transition-all", isDarkMode ? "border-myco-accent ring-1 ring-myco-accent/20 bg-myco-accent/5" : "opacity-40 grayscale")}
+          >
+            <Moon className="w-8 h-8" />
+            <span className="text-[10px] font-bold uppercase tracking-widest">Dark</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsDarkMode(false)}
+            className={cn("flex-1 p-6 min-h-[44px] glass-bento flex flex-col items-center gap-3 transition-all", !isDarkMode ? "border-myco-accent ring-1 ring-myco-accent/20 bg-myco-accent/5" : "opacity-40 grayscale")}
+          >
+            <Sun className="w-8 h-8" />
+            <span className="text-[10px] font-bold uppercase tracking-widest">Light</span>
+          </button>
+        </div>
+      </section>
     </div>
   </div>
 );
@@ -1749,6 +1503,17 @@ function useProducerRoute(): boolean {
 export default function App() {
   const producerMode = useProducerRoute();
   const [activeTab, setActiveTab] = useState<PulseTabId>('News');
+
+  useEffect(() => {
+    const tab = new URLSearchParams(window.location.search).get('tab');
+    const allowed: PulseTabId[] = [
+      'News', 'Pulse', 'Podcasts', 'DAO', 'Funding', 'Research',
+      'Markets', 'Trade', 'FungIP', 'Tissue', 'Learn', 'MYCO', 'Settings',
+    ];
+    if (tab && allowed.includes(tab as PulseTabId)) {
+      setActiveTab(tab as PulseTabId);
+    }
+  }, []);
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [layouts, setLayouts] = useState<any>(initialLayouts);
   
@@ -1768,10 +1533,11 @@ export default function App() {
     loading,
   } = useRealTimeData();
   const { stats: chainStats } = useChainStats();
+  const daoWallet = useDaoWallet();
 
   const assetTickers = useMemo(() => tickers.map(tickerToAssetRow), [tickers]);
   const tickerGroups = useMemo(
-    () => mergeTickerGroupsWithStudio(buildTickerGroups(tickers)),
+    () => buildTickerGroups(tickers),
     [tickers]
   );
 
@@ -1863,7 +1629,7 @@ export default function App() {
       case 'FungIP': return <FungIPView setActiveTab={setActiveTab} />;
       case 'Tissue': return <TissueView />;
       case 'Learn': return <LearnView learnModules={learnModules} />;
-      case 'MYCO': return <MycoTerminalView setActiveTab={setActiveTab} />;
+      case 'MYCO': return <MycoTerminalView setActiveTab={(tab) => setActiveTab(tab as PulseTabId)} />;
       case 'Settings': return <SettingsView isDarkMode={isDarkMode} setIsDarkMode={setIsDarkMode} />;
       default: return null;
     }
@@ -1965,8 +1731,18 @@ export default function App() {
                  </span>
               </a>
               
-              <button type="button" className="px-3 sm:px-5 min-h-[44px] border border-myco-accent bg-myco-accent/10 text-myco-accent font-bold uppercase tracking-widest text-[9px] sm:text-[10px] hover:bg-myco-accent hover:text-black transition-all whitespace-nowrap touch-manipulation">
-                <span className="hidden sm:inline">Phantom </span>Connected
+              <button
+                type="button"
+                onClick={daoWallet.isConnected ? () => void daoWallet.disconnect() : daoWallet.connect}
+                disabled={daoWallet.isConnecting}
+                title={daoWallet.isConnected ? 'Disconnect wallet' : undefined}
+                className="px-3 sm:px-5 min-h-[44px] border border-myco-accent bg-myco-accent/10 text-myco-accent font-bold uppercase tracking-widest text-[9px] sm:text-[10px] hover:bg-myco-accent hover:text-black transition-all whitespace-nowrap touch-manipulation"
+              >
+                {daoWallet.isConnected && daoWallet.label ? (
+                  <span className="font-mono normal-case">{daoWallet.label}</span>
+                ) : (
+                  'Connect wallet'
+                )}
               </button>
 
               <div className="flex gap-1 sm:gap-2 border-l border-white/5 pl-2 sm:pl-4">

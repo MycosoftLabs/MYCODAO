@@ -4,6 +4,10 @@ import {
   mimeForBlocksFile,
   resolveBlocksMediaFile,
 } from "@/lib/server/blocks-nas-media";
+import {
+  isCloudMediaPath,
+  readCloudMedia,
+} from "@/lib/server/blocks-cloud-media";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +17,20 @@ export async function GET(req: Request) {
     const relPath = url.searchParams.get("path")?.trim();
     if (!relPath) {
       return NextResponse.json({ error: "missing_path" }, { status: 400 });
+    }
+
+    if (isCloudMediaPath(relPath)) {
+      const cloud = await readCloudMedia(relPath);
+      if (!cloud) {
+        return NextResponse.json({ error: "not_found" }, { status: 404 });
+      }
+      return new NextResponse(Buffer.from(cloud.body), {
+        headers: {
+          "Content-Type": cloud.contentType,
+          "Content-Length": String(cloud.size),
+          "Cache-Control": "private, max-age=300",
+        },
+      });
     }
 
     const abs = resolveBlocksMediaFile(relPath);

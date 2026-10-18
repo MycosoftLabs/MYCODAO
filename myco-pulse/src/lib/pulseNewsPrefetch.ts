@@ -14,8 +14,6 @@ import {
 
   enrichBroadcastLinesWithSummaries,
 
-  mergeNewsWithStudio,
-
   pulseNewsToBroadcastLines,
 
   type BroadcastNewsLine,
@@ -328,7 +326,7 @@ async function loadBundle(): Promise<PulseNewsBundle> {
   const cnbcPromise = fetchPulseCnbcMarkets();
 
   void newsPromise.then((newsRows) => {
-    const merged = mergeNewsWithStudio(newsRows);
+    const merged = newsRows;
     const lines = enrichBroadcastLinesWithSummaries(
       pulseNewsToBroadcastLines(merged),
       merged,
@@ -366,7 +364,7 @@ async function loadBundle(): Promise<PulseNewsBundle> {
   cache = withTickers;
   emit(withTickers);
 
-  const merged = mergeNewsWithStudio(newsRows);
+  const merged = newsRows;
 
   const complete: PulseNewsBundle = {
 

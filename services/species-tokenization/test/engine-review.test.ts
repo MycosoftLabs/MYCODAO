@@ -269,3 +269,42 @@ test('review: prepared estimate above per-job cap blocks all broadcasts and reta
   assert.equal(f.store.get('SELECT spent FROM allocations WHERE id=?', allocation.id).spent, 0);
   assert.equal(f.engine.schedule().queued, 0);
 });
+
+test('review: known untokenized taxon queues create then first-observer reward after mint', async t => {
+  const f = await fixture(); t.after(() => f.store.close());
+  f.allocate('creation');
+  const rewards = f.allocate('rewards');
+  f.engine.setPolicy({
+    id: randomUUID(), version: 1, existingSpeciesUnits: '5', firstObserverUnits: '500000',
+    rareMycoUnits: '10', newMycoUnits: '20', mycoMint: pk(30), dailyUserLimit: 3,
+  }, 'fixture-operator');
+  const userId = randomUUID();
+  const keys = generateKeyPairSync('ed25519');
+  const publicBytes = keys.publicKey.export({ type: 'spki', format: 'der' }).subarray(-32);
+  const wallet = bs58.encode(publicBytes);
+  const challenge = f.engine.challenge(userId, wallet);
+  f.engine.verifyWallet(userId, {
+    wallet, nonce: challenge.nonce,
+    signatureBase64: sign(null, Buffer.from(challenge.message), keys.privateKey).toString('base64'),
+  });
+  const finding = f.engine.submitFinding(userId, {
+    taxonId: f.taxonId, source: 'specimen', sourceRecordId: 'FO-1',
+    evidenceUri: 'https://evidence.example/fo', evidenceSha256: digest('fo-evidence'),
+  });
+  const reviewed = await f.engine.reviewFinding({
+    findingId: finding.id, decision: 'approved', classification: 'existing',
+    reviewerId: 'independent-reviewer', evidenceUri: 'https://evidence.example/review',
+    notes: 'Known taxon without a mint; first-observer path.', allocationId: rewards.id,
+  }, 'reviewer');
+  assert.equal(reviewed.status, 'approved_pending_mint');
+  assert.equal(f.store.get("SELECT status FROM discoveries WHERE id=?", finding.id).status, 'approved_pending_mint');
+  assert.ok(f.store.get("SELECT 1 FROM jobs WHERE kind='create' AND taxon_id=?", f.taxonId));
+  f.chain.reconcileHook = async (plan) => ({ state: 'finalized', actualLamports: '100' });
+  for (let i = 0; i < 8; i++) {
+    f.store.run('UPDATE jobs SET lease_until=0');
+    await new Worker(f.engine).tick();
+  }
+  assert.ok(f.store.get('SELECT 1 FROM tokens WHERE taxon_id=?', f.taxonId), 'mint must finalize');
+  assert.equal(f.store.get("SELECT status FROM discoveries WHERE id=?", finding.id).status, 'approved');
+  assert.ok(f.store.get("SELECT 1 FROM rewards WHERE discovery_id=? AND kind='species'", finding.id), 'first-observer reward queued');
+});

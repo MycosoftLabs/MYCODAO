@@ -52,10 +52,10 @@ export function SchedulerWeekTimeline({
   const dayDates = useMemo(() => weekDayDates(timezone), [timezone]);
 
   return (
-    <div className="border border-white/10 bg-black/30 overflow-x-auto">
-      <div className="min-w-[640px] p-3 space-y-2">
-        <p className="text-[9px] font-bold uppercase tracking-widest text-white/45">
-          Week grid · {timezone} · recurring lineup (not a dated month calendar)
+    <div className="overflow-x-auto rounded-2xl bg-white/[0.03]">
+      <div className="min-w-[640px] space-y-2 p-3">
+        <p className="text-xs text-white/50">
+          This week · {timezone}
         </p>
         <div className="grid grid-cols-7 gap-1">
           {DAY_LABELS.map((label, dayIndex) => (
@@ -68,7 +68,7 @@ export function SchedulerWeekTimeline({
                   </span>
                 ) : null}
               </p>
-              <div className="min-h-[120px] border border-white/10 bg-black/40 p-1 space-y-1">
+              <div className="min-h-[140px] space-y-1 rounded-xl bg-black/40 p-1">
                 {activeSlots
                   .filter((s) => !s.days?.length || s.days.includes(dayIndex))
                   .map((slot) => {
@@ -86,12 +86,12 @@ export function SchedulerWeekTimeline({
                         type="button"
                         onClick={() => onSelectSlot(slot.id)}
                         className={cn(
-                          "w-full text-left px-2 py-1.5 min-h-[44px] border text-[9px] font-bold uppercase touch-manipulation",
+                          "w-full rounded-xl px-2 py-2 text-left text-[11px] font-medium touch-manipulation",
                           isNow
-                            ? "border-emerald-400 bg-emerald-400/15"
+                            ? "bg-emerald-400/20 text-emerald-100"
                             : isSelected
-                              ? "border-[#5eb3ff] bg-[#5eb3ff]/15"
-                              : "border-white/15 hover:bg-white/5",
+                              ? "bg-[#5eb3ff]/20"
+                              : "bg-white/5 hover:bg-white/10",
                         )}
                         style={
                           slot.color

@@ -171,7 +171,19 @@ export class Engine {
     });
   }
   submitFinding(userId:string,input:unknown) {
-    uuid.parse(userId);const v=z.object({taxonId:uuid,source:z.enum(['inaturalist','fundis','mindex','specimen']),sourceRecordId:z.string().trim().regex(/^[a-zA-Z0-9_:.\/-]{1,200}$/),evidenceUri:reference,evidenceSha256:hash}).strict().parse(input);
+    uuid.parse(userId);const v=z.object({
+      taxonId:uuid,
+      source:z.enum(['inaturalist','fundis','mindex','specimen']),
+      sourceRecordId:z.string().trim().regex(/^[a-zA-Z0-9_:.\/-]{1,200}$/),
+      evidenceUri:reference,
+      evidenceSha256:hash,
+      determination:z.object({
+        substrate:z.string().trim().min(8).max(240),
+        habit:z.string().trim().min(12).max(400),
+        locality:z.string().trim().min(4).max(160),
+        confidence:z.enum(['tentative','supported','confirmed']),
+      }).strict().optional(),
+    }).strict().parse(input);
     const s=this.species(v.taxonId);requireThat(this.entitled(s,'reward'),'reward_license_required');
     const wallet=this.store.get('SELECT wallet FROM wallets WHERE user_id=? ORDER BY verified_at DESC LIMIT 1',userId);requireThat(wallet,'verified_wallet_required');
     const key=`${v.source}:${v.sourceRecordId}`;
@@ -195,9 +207,20 @@ export class Engine {
     const a=this.store.get('SELECT body FROM allocations WHERE id=?',v.allocationId);requireThat(a && JSON.parse(a.body).purpose==='rewards','reward_allocation_required');
     const tokenRow=this.store.get('SELECT body FROM tokens WHERE taxon_id=?',s.taxonId);const token:TokenRecord|undefined=tokenRow?JSON.parse(tokenRow.body):undefined;
     const awards:{kind:'species'|'myco';mint:string;amount:string}[]=[];
+    const knownUntokenized=!token && v.classification==='existing';
     if(token)awards.push({kind:'species',mint:token.mint,amount:policy.existingSpeciesUnits});
-    else requireThat(v.classification!=='existing','canonical_species_token_required');
+    else if(!knownUntokenized) requireThat(v.classification!=='existing','canonical_species_token_required');
     if(v.classification!=='existing')awards.push({kind:'myco',mint:policy.mycoMint,amount:v.classification==='rare'?policy.rareMycoUnits:policy.newMycoUnits});
+    if(knownUntokenized){
+      // Known taxon without a mint yet: queue create now; first-observer species transfer settles after mint finalizes.
+      const creation=this.store.all('SELECT * FROM allocations ORDER BY id').find(r=>{const a=JSON.parse(r.body);return a.enabled&&a.purpose==='creation';});
+      requireThat(creation,'creation_allocation_required');
+      requireThat(s.metadataUri&&s.metadataSha256&&s.image,'species_metadata_required_for_mint');
+      const a=JSON.parse(creation.body);
+      let counter=0,symbol='';
+      do{symbol=`${a.symbolPrefix}${sha(`${s.taxonId}:${counter++}`).slice(0,13-a.symbolPrefix.length).toUpperCase()}`;}while(this.store.get("SELECT 1 FROM jobs WHERE json_extract(payload,'$.symbol')=?",symbol));
+      this.reserveJob(a.id,'create',`create:${this.chain.cluster}:${s.taxonId}`,s.taxonId,{route:a.route,name:s.scientificName.slice(0,32),symbol,metadataUri:s.metadataUri,metadataSha256:s.metadataSha256,supply:a.supply,decimals:a.decimals,speciesRevision:s.sourceRevision,licenseId:s.licenseId});
+    }
     const checked=await Promise.all(awards.map(async award=>({...award,info:await this.chain.inspectMint(award.mint),balance:await this.chain.inventory(award.mint)})));
     return this.store.transaction(()=>{
       const current=this.store.get('SELECT * FROM discoveries WHERE id=?',finding.id);requireThat(current.status==='pending','finding_already_reviewed');
@@ -213,11 +236,31 @@ export class Engine {
         const reward={id:randomUUID(),kind:award.kind,taxonId:s.taxonId,mint:award.mint,amount:award.amount,decimals:award.info.decimals,policyId:policy.id,policyVersion:policy.version};
         this.store.run('INSERT INTO rewards(id,discovery_id,user_id,mint,amount,kind,job_id,body) VALUES (?,?,?,?,?,?,?,?)',reward.id,finding.id,finding.user_id,reward.mint,reward.amount,reward.kind,jobId,json(reward));
       }
+      const reviewBody=knownUntokenized?{...v,deferredFirstObserver:true,firstObserverUnits:policy.firstObserverUnits||policy.existingSpeciesUnits}:v;
       // Persist the exact review for replay comparison; timestamp is stored separately in audit.
-      this.store.run("UPDATE discoveries SET status='approved',review=?,reviewed_at=? WHERE id=?",json(v),now(),finding.id);
-      this.store.audit('finding_approved',actor,{...v,reviewedAt:now(),policy});
-      return {id:finding.id,status:'approved',rewards:checked.length};
+      this.store.run("UPDATE discoveries SET status=?,review=?,reviewed_at=? WHERE id=?",knownUntokenized?'approved_pending_mint':'approved',json(reviewBody),now(),finding.id);
+      this.store.audit('finding_approved',actor,{...reviewBody,reviewedAt:now(),policy});
+      return {id:finding.id,status:knownUntokenized?'approved_pending_mint':'approved',rewards:checked.length,deferredFirstObserver:knownUntokenized};
     });
+  }
+  /** After a known-taxon mint finalizes, settle first-observer species rewards that were deferred at review. */
+  settleDeferredFirstObserver(taxonId:string,mint:string,info:{decimals:number;program:string}) {
+    const policy=this.policy();if(!policy)return {settled:0};
+    const amount=policy.firstObserverUnits||policy.existingSpeciesUnits;
+    const rows=this.store.all("SELECT * FROM discoveries WHERE taxon_id=? AND status='approved_pending_mint'",taxonId);
+    let settled=0;
+    for(const finding of rows){
+      const review=finding.review?JSON.parse(finding.review):null;
+      const allocationId=review?.allocationId;if(!allocationId)continue;
+      const payload={mint,recipient:finding.wallet,amount,decimals:info.decimals,program:info.program,discoveryId:finding.id,policyVersion:policy.version,licenseId:this.species(taxonId).licenseId,firstObserver:true};
+      const jobId=this.reserveJob(allocationId,'reward',`reward:${finding.id}:species:first_observer`,taxonId,payload);
+      const reward={id:randomUUID(),kind:'species',taxonId,mint,amount,decimals:info.decimals,policyId:policy.id,policyVersion:policy.version,firstObserver:true};
+      this.store.run('INSERT INTO rewards(id,discovery_id,user_id,mint,amount,kind,job_id,body) VALUES (?,?,?,?,?,?,?,?)',reward.id,finding.id,finding.user_id,mint,amount,'species',jobId,json(reward));
+      this.store.run("UPDATE discoveries SET status='approved' WHERE id=?",finding.id);
+      this.store.audit('first_observer_reward_queued','worker',{findingId:finding.id,taxonId,mint,amount});
+      settled++;
+    }
+    return {settled};
   }
   claimJob(plannedOnly=false):Job|undefined {
     return this.store.transaction(()=>{

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Cpu, Zap, RefreshCw, ArrowDown, Settings2, ShieldCheck, Activity, Target, AlertTriangle, ArrowRightLeft, Clock, History, Fingerprint, Lock, Shield, TrendingUp, TrendingDown, Info, Check, X } from 'lucide-react';
+import { Cpu, Zap, RefreshCw, ArrowDown, ShieldCheck, Activity, Target, AlertTriangle, ArrowRightLeft, Clock, Fingerprint, Shield, TrendingUp, TrendingDown, Info, Check, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 import {
   MYCO_DECIMALS,
@@ -25,8 +25,8 @@ export const MatrixSwap = () => {
   const [orderType, setOrderType] = useState<OrderType>('MARKET');
   const [triggerAction, setTriggerAction] = useState<TriggerAction>('STOP_LOSS');
   const [expiry, setExpiry] = useState<Expiry>('GTC');
-  const [limitPrice, setLimitPrice] = useState('0.135');
-  const [triggerPrice, setTriggerPrice] = useState('0.110');
+  const [limitPrice, setLimitPrice] = useState('');
+  const [triggerPrice, setTriggerPrice] = useState('');
   const [amount, setAmount] = useState('1.0');
   const [quote, setQuote] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -131,14 +131,14 @@ export const MatrixSwap = () => {
     "FINALIZING PROTOCOL HANDSHAKE"
   ];
 
+  const targetPrice = parseFloat(orderType === 'LIMIT' ? limitPrice : triggerPrice);
   const estimatedOutput = orderType === 'MARKET'
     ? quote
       ? formatTokenAmount(quote.outAmount, MYCO_DECIMALS)
       : '---'
-    : (parseFloat(amount) / parseFloat(orderType === 'LIMIT' ? limitPrice : triggerPrice)).toLocaleString(
-        undefined,
-        { maximumFractionDigits: 0 }
-      );
+    : targetPrice > 0 && parseFloat(amount) > 0
+      ? (parseFloat(amount) / targetPrice).toLocaleString(undefined, { maximumFractionDigits: 0 })
+      : '---';
 
   return (
     <div className={cn(
@@ -178,7 +178,7 @@ export const MatrixSwap = () => {
                       <div className="flex justify-between items-center">
                          <span className="text-[10px] font-black text-dim uppercase">Price Impact</span>
                          <span className={cn("text-[10px] font-black", quote?.priceImpactPct > 2 ? "text-red-500" : "text-green-500")}>
-                            {quote ? `${quote.priceImpactPct}%` : '< 0.01%'}
+                            {quote ? `${quote.priceImpactPct}%` : '—'}
                          </span>
                       </div>
                    </div>
@@ -197,10 +197,6 @@ export const MatrixSwap = () => {
                          <Check className="size-3 font-bold" /> Authorized Swap
                       </button>
                    </div>
-                   
-                   <p className="text-[8px] font-bold text-dim/40 text-center uppercase tracking-widest italic pt-4">
-                      Execution protocol: Matrix_L3_Atomic_Sync_v6.4
-                   </p>
                 </div>
              </motion.div>
           )}
@@ -253,13 +249,7 @@ export const MatrixSwap = () => {
              <div className="size-6 bg-myco-accent/10 border border-myco-accent/30 rounded-sm flex items-center justify-center p-1">
                 <Shield className="size-full text-myco-accent" />
              </div>
-             <span className="text-[10px] font-black text-white uppercase tracking-[0.2em]">Matrix Swap Core v6.4 [PRO]</span>
-          </div>
-          <div className="flex gap-2">
-             <div className="px-2 py-0.5 bg-black border border-white/10 text-[7px] font-black text-dim uppercase flex items-center gap-1.5 leading-none">
-                <Lock className="size-2 text-myco-accent" /> Encrypted Session
-             </div>
-             <Settings2 className="size-4 text-dim hover:text-white cursor-pointer transition-colors" />
+             <span className="text-[10px] font-black text-white uppercase tracking-[0.2em]">Swap SOL → MYCO (Jupiter)</span>
           </div>
        </div>
 
@@ -289,7 +279,7 @@ export const MatrixSwap = () => {
           <div className="space-y-1">
              <div className="flex justify-between items-center px-1">
                 <span className="text-[9px] font-black text-dim uppercase">Input Allocation (SOL)</span>
-                <span className="text-[9px] font-bold text-dim uppercase opacity-50">BAL: {walletBalance ? walletBalance.toFixed(2) : '12.42'}</span>
+                <span className="text-[9px] font-bold text-dim uppercase opacity-50">BAL: {walletBalance != null ? walletBalance.toFixed(2) : '—'}</span>
              </div>
              <div className="relative group">
                 <input 
@@ -402,10 +392,10 @@ export const MatrixSwap = () => {
                          </div>
                       </div>
                       <div className="space-y-1">
-                         <span className="text-[9px] font-black text-dim uppercase ml-1">System Mode</span>
+                         <span className="text-[9px] font-black text-dim uppercase ml-1">Status</span>
                          <div className="h-[46px] bg-black border border-white/10 flex items-center justify-center gap-2 px-3">
-                            <Activity className="size-3 text-dim animate-pulse" />
-                            <span className="text-[8px] font-black text-dim uppercase italic">Matrix_Link_Active</span>
+                            <Activity className="size-3 text-dim" />
+                            <span className="text-[8px] font-black text-dim uppercase">Not supported yet</span>
                          </div>
                       </div>
                    </div>
@@ -434,8 +424,7 @@ export const MatrixSwap = () => {
                       {estimatedOutput}
                    </div>
                 )}
-                <div className="absolute top-2 left-5 text-[8px] font-black text-myco-accent/60 uppercase italic tracking-tighter">Neuro-Link Output Analysis</div>
-                <div className="absolute bottom-2 right-5 text-[10px] font-black text-dim opacity-40">~$42,120.40 EST</div>
+                <div className="absolute top-2 left-5 text-[8px] font-black text-myco-accent/60 uppercase italic tracking-tighter">Estimated output</div>
              </div>
           </div>
        </div>
@@ -466,10 +455,8 @@ export const MatrixSwap = () => {
           </button>
           
           <div className="flex justify-between items-center mt-6 text-[8px] font-black text-dim uppercase tracking-[0.2em]">
-             <div className="flex items-center gap-1.5 py-1 px-2 bg-white/5 border border-white/10">
-                <History className="size-2 text-myco-accent" /> Batch Execution Enforced
-             </div>
-             <span>SLIPPAGE CAP: 0.1%</span>
+             <span>Market orders via Jupiter</span>
+             <span>Max slippage: 0.5%</span>
           </div>
        </div>
     </div>

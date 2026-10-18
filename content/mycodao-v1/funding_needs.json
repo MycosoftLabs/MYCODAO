@@ -1,0 +1,30 @@
+[
+  {
+    "id": "8a2f3c40-0001-4d00-9000-00000000c001",
+    "project_slug": "myco-scholarships",
+    "purpose": "Recurring grants for mycological societies (long-term goal: 80 societies × $2,000 per year)",
+    "amount": 160000,
+    "asset": "USD",
+    "valuation_method": "Target arithmetic only. Not an approved budget or reserved funds.",
+    "recipient": null,
+    "stage": "target",
+    "next_action_url": "https://v2.realms.today/dao/At93fiCMzEkZWBAHxSNjfk7zUHnF3JcxyCyPjZELjK9Y/proposals",
+    "next_action_label": "View MycoDAO proposals",
+    "owner": "MycoDAO finance and governance",
+    "updated_at": "2026-10-17T00:00:00Z"
+  },
+  {
+    "id": "8a2f3c40-0001-4d00-9000-00000000c002",
+    "project_slug": "project-oyster",
+    "purpose": "Sequencing for one batch of Project Oyster cultures (proposed MYCO pilot)",
+    "amount": null,
+    "asset": null,
+    "valuation_method": null,
+    "recipient": null,
+    "stage": "target",
+    "next_action_url": null,
+    "next_action_label": null,
+    "owner": "MycoDAO science lead",
+    "updated_at": "2026-10-17T00:00:00Z"
+  }
+]

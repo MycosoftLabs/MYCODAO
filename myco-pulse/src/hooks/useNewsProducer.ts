@@ -232,6 +232,42 @@ export function useNewsProducer(options?: {
     [applyProducerPayload, load, options?.accessToken],
   );
 
+  const patchPresets = useCallback(
+    async (body: Record<string, unknown>, patchOptions?: { accessToken?: string }) => {
+      const token =
+        patchOptions?.accessToken?.trim() ||
+        options?.accessToken?.trim() ||
+        (await getValidProducerAccessToken()) ||
+        "";
+      if (!token) {
+        throw new Error(
+          "Sign in with an authorized producer email to change catalogs",
+        );
+      }
+      const res = await fetch(pulseApiUrl("/api/news/producer/presets"), {
+        method: "PATCH",
+        headers: producerAuthHeaders(token),
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        throw new Error(await parseProducerApiError(res, "presets"));
+      }
+      const data = (await res.json()) as {
+        presets?: NewsProducerView["presets"];
+      };
+      if (data.presets) {
+        presetsCache.current = data.presets;
+        setView((prev) =>
+          prev ? { ...prev, presets: data.presets } : prev,
+        );
+      } else {
+        await load();
+      }
+      return data;
+    },
+    [load, options?.accessToken],
+  );
+
   const talent = view?.talent ?? [];
   const presets = options?.includePresets ? view?.presets : undefined;
   const titleBar = {
@@ -266,5 +302,6 @@ export function useNewsProducer(options?: {
     error,
     reload: load,
     patch,
+    patchPresets,
   };
 }

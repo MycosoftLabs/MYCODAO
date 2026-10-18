@@ -71,61 +71,9 @@ const FUNDING_IMG = (file: string) => `${import.meta.env.BASE_URL}funding/${file
 
 
 
-/** Hero cards on Funding tab — 2 stealth DAO incubations + 2 MycoDAO science projects. */
+/** Hero cards on Funding tab — MycoDAO science programs in incubation. */
 
 export const FEATURED_FUNDING_BLOCKS: DesciFundingProject[] = [
-
-  {
-
-    id: "stealth-dao-alpha",
-
-    name: "STEALTH",
-
-    tagline: "First BioDAO incubation on the MycoDAO launchpad — identity protected pre-launch",
-
-    stage: "incubation",
-
-    category: "network",
-
-    kind: "dao-incubation",
-
-    fungIpEligible: false,
-
-    featured: true,
-
-    imageUrl: FUNDING_IMG("stealth.png"),
-
-    statusLabel: "STEALTH",
-
-    highlight: "Not a MycoDAO operation — independent DAO in stewarded incubation",
-
-  },
-
-  {
-
-    id: "stealth-dao-beta",
-
-    name: "STEALTH",
-
-    tagline: "Second DAO incubation — DeSci treasury design and curator review in progress",
-
-    stage: "incubation",
-
-    category: "network",
-
-    kind: "dao-incubation",
-
-    fungIpEligible: false,
-
-    featured: true,
-
-    imageUrl: FUNDING_IMG("stealth.png"),
-
-    statusLabel: "STEALTH",
-
-    highlight: "Not a MycoDAO operation — first external DAO launches through BLOCK",
-
-  },
 
   {
 
@@ -214,7 +162,7 @@ export const MYCO_DESCI_PROJECTS: DesciFundingProject[] = [
     name: "Project Oyster",
 
     tagline:
-      "Pink oyster mushrooms trained for salt tolerance — bioremediation in the Tijuana Estuary",
+      "Research program evaluating salt tolerance and bioremediation potential in oyster mushrooms (Pleurotus djamor). Stage: laboratory culture work.",
 
     stage: "curation",
 
@@ -228,7 +176,7 @@ export const MYCO_DESCI_PROJECTS: DesciFundingProject[] = [
 
     docsUrl: SCIENCE_PROGRAM_URLS["project-oyster"],
 
-    highlight: "Season 1 flagship — coastal sewage & heavy-metal remediation (Pleurotus djamor)",
+    highlight: "Season 1 program — laboratory culture work (Pleurotus djamor)",
 
   },
 
@@ -264,7 +212,7 @@ export const MYCO_DESCI_PROJECTS: DesciFundingProject[] = [
 
     name: "MYCO Scholarships",
 
-    tagline: "Annual scholarships for mycological organizations worldwide",
+    tagline: "Long-term goal: a recurring grant program for mycological societies. Funding levels and recipients will be announced after budgets and program arrangements are confirmed.",
 
     stage: "auction",
 
@@ -278,7 +226,7 @@ export const MYCO_DESCI_PROJECTS: DesciFundingProject[] = [
 
     proposalUrl: `${MYCO_REALMS_URL}/proposals`,
 
-    highlight: "Treasury grants for university and citizen science mycology programs",
+    highlight: "Planned — not yet funded",
 
   },
 
@@ -288,7 +236,7 @@ export const MYCO_DESCI_PROJECTS: DesciFundingProject[] = [
 
     name: "FungIP Biobank",
 
-    tagline: "From mushroom sample to tokenized fungal intellectual property",
+    tagline: "Specimen records and timestamps that support provenance for fungal samples",
 
     stage: "curation",
 
@@ -300,7 +248,7 @@ export const MYCO_DESCI_PROJECTS: DesciFundingProject[] = [
 
     docsUrl: SCIENCE_PROGRAM_URLS["fungip-biobank"],
 
-    highlight: "On-chain licensing & specimen provenance",
+    highlight: "Provenance records; any licensing happens only under a named, signed agreement",
 
   },
 
@@ -464,7 +412,7 @@ export const MYCO_RESEARCH_PROGRAMS: DesciFundingProject[] = [
 
 
 
-/** Pipeline list excluding featured hero duplicates (stealth DAOs never appear here). */
+/** Pipeline list excluding featured hero duplicates. */
 
 export function getPipelineProjects(): DesciFundingProject[] {
 
@@ -516,7 +464,7 @@ export const FUNDING_STAGE_META: Record<
 
     label: "Live Funding",
 
-    description: "Active grants, IP tokens, and researcher payouts on-chain.",
+    description: "Programs with an approved, active funding allocation.",
 
   },
 

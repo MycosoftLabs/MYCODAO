@@ -63,7 +63,10 @@ export interface Job {
   plan: ChainPlan | null; error: string | null; leaseUntil: number; leaseToken: string;
 }
 export interface RewardPolicy {
-  id: string; version: number; existingSpeciesUnits: string; rareMycoUnits: string;
+  id: string; version: number; existingSpeciesUnits: string;
+  /** Optional; defaults to existingSpeciesUnits when minting a known taxon for the first time. */
+  firstObserverUnits?: string;
+  rareMycoUnits: string;
   newMycoUnits: string; mycoMint: string; dailyUserLimit: number;
 }
 export const STANDING_DISCLAIMER = 'Species tokens grant no ownership of species, DNA, research, intellectual property, or financial returns.';

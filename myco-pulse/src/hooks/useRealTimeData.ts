@@ -24,8 +24,6 @@ import {
 } from "../lib/pulseApi";
 import { ohlcBarsToChartData } from "../lib/tickerDisplay";
 import {
-  mergeEpisodesWithStudio,
-  mergeNewsWithStudio,
   type StreamlabsStats,
 } from "../data/studioPresets";
 import { EMPTY_CHART_DATA } from "../lib/tickerDisplay";
@@ -123,12 +121,12 @@ export const useRealTimeData = () => {
     setWhales((prev) =>
       keepIfEmpty(Array.isArray(whaleMovements) ? whaleMovements : [], prev)
     );
-    setNews((prev) => keepIfEmpty(mergeNewsWithStudio(marketNews), prev));
+    setNews((prev) => keepIfEmpty(marketNews, prev));
     setProposals((prev) =>
       keepIfEmpty(Array.isArray(daoProposals) ? daoProposals : [], prev)
     );
     setEpisodes((prev) =>
-      keepIfEmpty(mergeEpisodesWithStudio(podcastEpisodes), prev)
+      keepIfEmpty(podcastEpisodes, prev)
     );
     setCalendar((prev) =>
       keepIfEmpty(Array.isArray(calendarRows) ? calendarRows : [], prev)

@@ -199,6 +199,18 @@ export function readProducerPresets(): NewsProducerPresets {
   };
 }
 
+export function writeProducerPresets(
+  next: NewsProducerPresets,
+): NewsProducerPresets {
+  const normalized: NewsProducerPresets = {
+    talent: Array.isArray(next.talent) ? next.talent : [],
+    program: Array.isArray(next.program) ? next.program : [],
+    title: Array.isArray(next.title) ? next.title : [],
+  };
+  writeJsonFile(presetsPath(), normalized);
+  return normalized;
+}
+
 export function readProducerState(): NewsProducerState {
   const fallback: NewsProducerState = {
     updatedAt: new Date().toISOString(),

@@ -91,6 +91,7 @@ export class Worker {
         const record:TokenRecord={...info,taxonId:job.taxonId,cluster:e.chain.cluster,route:job.payload.route,launchSignature:job.plan!.signature,creatorWallet:e.chain.payer,status:'canonical',provenance:e.species(job.taxonId).sourceUrl};
         const prior=s.get('SELECT mint FROM tokens WHERE taxon_id=?',job.taxonId);requireThat(!prior || prior.mint===info.mint,'canonical_mint_conflict');
         s.run('INSERT OR IGNORE INTO tokens(taxon_id,mint,body) VALUES (?,?,?)',job.taxonId,info.mint,JSON.stringify(record));
+        if(job.kind==='create') e.settleDeferredFirstObserver(job.taxonId,info.mint,{decimals:info.decimals,program:info.program});
       }
       s.run('UPDATE allocations SET reserved=reserved-?,spent=spent+? WHERE id=?',Number(job.maxLamports),Number(actual),job.allocationId);
       s.run('UPDATE jobs SET state=?,error=?,lease_until=0,updated_at=? WHERE id=?',outcome.state,outcome.error??null,new Date().toISOString(),job.id);

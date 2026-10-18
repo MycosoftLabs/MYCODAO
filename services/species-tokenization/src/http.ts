@@ -6,6 +6,7 @@ import { hash, requireThat, uuid } from './validation.js';
 import { publishMetadata } from './metadata.js';
 import { MindexClient, parseLegacyManifest } from './mindex.js';
 import { syncMindex } from './sync.js';
+import { syncAncestryFungip } from './ancestry-sync.js';
 import { DexScreenerMarkets } from './markets.js';
 
 interface ApiOptions { adminKey:string;reviewerKey:string;proxyKey:string;metadataPublicBase?:string;env?:NodeJS.ProcessEnv; }
@@ -64,6 +65,23 @@ export function createApi(engine:Engine,options:ApiOptions) {
           if(path==='/v1/admin/sync'){
             const input=z.object({scanId:uuid.optional()}).strict().parse(v);requireThat(!syncBusy,'sync_in_progress');requireThat(env.TOKENIZATION_MINDEX_BASE_URL && env.TOKENIZATION_DATA_LICENSE_ID,'mindex_unconfigured');syncBusy=true;
             try{send(200,await syncMindex(engine,new MindexClient({baseUrl:env.TOKENIZATION_MINDEX_BASE_URL,apiKey:env.TOKENIZATION_MINDEX_API_KEY,internalToken:env.TOKENIZATION_MINDEX_INTERNAL_TOKEN,licenseId:env.TOKENIZATION_DATA_LICENSE_ID}), 'admin',input.scanId));}finally{syncBusy=false;}return;
+          }
+          if(path==='/v1/admin/sync-ancestry'){
+            const input=z.object({maxPages:z.number().int().min(1).max(200).optional(),pageSize:z.number().int().min(1).max(48).optional()}).strict().parse(v);
+            requireThat(!syncBusy,'sync_in_progress');
+            requireThat(env.TOKENIZATION_DATA_LICENSE_ID,'data_license_unconfigured');
+            const ancestryBase=env.TOKENIZATION_ANCESTRY_BASE_URL||'https://mycosoft.com';
+            syncBusy=true;
+            try{
+              send(200,await syncAncestryFungip(engine,{
+                baseUrl:ancestryBase,
+                licenseId:env.TOKENIZATION_DATA_LICENSE_ID,
+                maxPages:input.maxPages??8,
+                pageSize:input.pageSize??24,
+                metadataPublicBase:options.metadataPublicBase||env.TOKENIZATION_METADATA_PUBLIC_BASE,
+              },'admin'));
+            }finally{syncBusy=false;}
+            return;
           }
           if(path==='/v1/admin/pause'){
             const input=z.object({paused:z.boolean()}).strict().parse(v);engine.store.run('INSERT INTO config(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value','paused',String(input.paused));engine.store.audit('execution_pause','admin',input);send(200,input);return;

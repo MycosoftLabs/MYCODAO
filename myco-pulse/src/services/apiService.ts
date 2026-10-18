@@ -20,7 +20,6 @@ import {
   type PulsePredictionMarketsBundle,
   type PulseWhaleMovement,
 } from "../lib/pulseApi";
-import { mergeEpisodesWithStudio, mergeNewsWithStudio } from "../data/studioPresets";
 import { fetchRealmsDaoDetail } from "../lib/pulseApi";
 
 const MYCO_REALM_PK = "At93fiCMzEkZWBAHxSNjfk7zUHnF3JcxyCyPjZELjK9Y";
@@ -73,7 +72,7 @@ export const fetchDexScreenerToken = async (_address: string) => {
 };
 
 export const fetchMarketNews = async (): Promise<PulseNewsItem[]> =>
-  mergeNewsWithStudio(await fetchPulseNews());
+  fetchPulseNews();
 
 export const fetchLiveMycoTokenMetrics = async () => {
   const snap = await fetchPulseMyco();
@@ -101,7 +100,7 @@ export const fetchStreamlabsStats = async () => null;
 export const generateNeuralReport = async (_marketContext: string) => "";
 
 export const fetchRSSEpisodes = async (): Promise<PulsePodcastEpisode[]> =>
-  mergeEpisodesWithStudio(await fetchPulsePodcasts());
+  fetchPulsePodcasts();
 
 export const fetchDAOProposals = async () => {
   const { proposals } = await fetchRealmsDaoDetail(MYCO_REALM_PK, { withProposals: true });

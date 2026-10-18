@@ -118,7 +118,7 @@ function ipRows(): FundingMarketRow[] {
     id: `ip-${p.id}`,
     name: p.name,
     subtitle: "FungIP eligible",
-    status: p.stage === "live" ? "Licensed · active" : STAGE_STATUS[p.stage],
+    status: STAGE_STATUS[p.stage],
     fundingLabel: "FungIP market",
     mcapLabel: "—",
     priceLabel: "—",

@@ -29,6 +29,7 @@
     "mount:nas": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/mount-blocks-nas.ps1"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1152.0",
     "@supabase/supabase-js": "^2.49.1",
     "lightweight-charts": "^4.2.1",
     "next": "^14.2.0",

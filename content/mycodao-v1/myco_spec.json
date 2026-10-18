@@ -1,0 +1,13 @@
+{
+  "symbol": "MYCO",
+  "name": "MYCO",
+  "network": "Solana",
+  "mint": "EzYEwn4R5tNkNGw4K2a5a58MJFQESdf1r4UJrV7cpUF3",
+  "total_supply": 210000000,
+  "decimals": null,
+  "governance_realm": "At93fiCMzEkZWBAHxSNjfk7zUHnF3JcxyCyPjZELjK9Y",
+  "explorer_url": "https://solscan.io/token/EzYEwn4R5tNkNGw4K2a5a58MJFQESdf1r4UJrV7cpUF3",
+  "rights_statement": null,
+  "approved_by": null,
+  "approved_at": null
+}

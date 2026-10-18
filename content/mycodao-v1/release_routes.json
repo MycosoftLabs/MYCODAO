@@ -1,0 +1,11 @@
+[
+  { "route": "/v2", "label": "Pulse", "classification": "ready", "reason": "Live research, podcast and catalog feeds with sources and dates." },
+  { "route": "/v2/myco", "label": "MYCO", "classification": "ready", "reason": "Token identity and actions labeled by actual stage." },
+  { "route": "/v2/catalog", "label": "Tissue Catalog", "classification": "ready", "reason": "MINDEX species records and biobank holdings." },
+  { "route": "/v2/projects", "label": "Projects", "classification": "beta", "reason": "Milestones are listed; most still need evidence." },
+  { "route": "/v2/community", "label": "Community", "classification": "beta", "reason": "MycoPOD episodes from RSS; directory is small and curated." },
+  { "route": "/v2/fungip", "label": "FungIP", "classification": "beta", "reason": "Offering policy published; only reference records are available." },
+  { "route": "/v2/rewards", "label": "Species rewards", "classification": "beta", "reason": "Solana devnet only." },
+  { "route": "/blocks/?tab=Trade", "label": "Trade (v1)", "classification": "private", "reason": "Folded into MYCO in v2; custom trade surface deferred (M25, M34)." },
+  { "route": "/blocks/?tab=Settings", "label": "Settings (v1)", "classification": "private", "reason": "Only the theme toggle works." }
+]

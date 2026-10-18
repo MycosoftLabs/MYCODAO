@@ -1,0 +1,9 @@
+{
+  "name": "@mycodao/sdk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "mycodao/v1 contract types and fetch client shared by Blocks web and the MYCO iOS/Android app.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "sideEffects": false
+}

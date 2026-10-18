@@ -50,7 +50,7 @@ function formatMyco(n: number) {
 }
 
 function FeaturedBlockCard({ project }: { project: DesciFundingProject }) {
-  const isStealth = project.kind === "dao-incubation";
+  const isDaoIncubation = project.kind === "dao-incubation";
   return (
     <article className="glass-bento border-white/10 bg-black/50 overflow-hidden flex flex-col group hover:border-myco-accent/40 transition-colors">
       <div className="relative aspect-[16/9] min-h-[160px] sm:min-h-[200px] overflow-hidden bg-black">
@@ -71,12 +71,12 @@ function FeaturedBlockCard({ project }: { project: DesciFundingProject }) {
           <span
             className={cn(
               "text-[8px] font-black uppercase tracking-[0.2em] px-2 py-1 border",
-              isStealth
+              isDaoIncubation
                 ? "bg-violet-500/20 border-violet-400/40 text-violet-200"
                 : "bg-myco-accent/20 border-myco-accent/40 text-myco-accent"
             )}
           >
-            {isStealth ? "DAO incubation" : "MycoDAO"}
+            {isDaoIncubation ? "DAO incubation" : "MycoDAO"}
           </span>
         </div>
         <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-5">
@@ -320,8 +320,7 @@ export function FundingView({ mycoSnapshot, onNavigateTab }: FundingViewProps) {
               Incubation spotlight
             </h2>
             <p className="text-xs text-dim mt-1 max-w-2xl">
-              Two stealth BioDAO incubations and two MycoDAO science programs — hero pipeline on
-              BLOCK Funding.
+              MycoDAO science programs currently in incubation on BLOCK Funding.
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -386,7 +385,7 @@ export function FundingView({ mycoSnapshot, onNavigateTab }: FundingViewProps) {
               },
               {
                 title: "FungIP Studio",
-                desc: "Tokenize specimen IP, royalties, and licensing sub-markets.",
+                desc: "Specimen records and timestamps that support provenance. Licensing only under a named agreement.",
                 href: BLOCK_FUNDING_LINKS.fungip,
                 icon: Shield,
               },

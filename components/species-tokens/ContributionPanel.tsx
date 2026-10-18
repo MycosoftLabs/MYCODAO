@@ -14,7 +14,7 @@ type Phantom = {
 function errorMessage(error: unknown) { return error instanceof Error ? error.message : "The request could not be completed."; }
 function displayDate(raw: string | number) { const date = new Date(raw); return Number.isNaN(date.getTime()) ? "Date unavailable" : date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }); }
 
-export default function ContributionPanel({ supabaseUrl, supabaseAnonKey, selected, cluster, serviceAvailable }: { supabaseUrl: string; supabaseAnonKey: string; selected: CatalogItem | null; cluster: string; serviceAvailable: boolean }) {
+export default function ContributionPanel({ supabaseUrl, supabaseAnonKey, selected, cluster, serviceAvailable, open, onClose }: { supabaseUrl: string; supabaseAnonKey: string; selected: CatalogItem | null; cluster: string; serviceAvailable: boolean; open: boolean; onClose: () => void }) {
   const [client, setClient] = useState<SupabaseClient | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -29,7 +29,11 @@ export default function ContributionPanel({ supabaseUrl, supabaseAnonKey, select
   const [message, setMessage] = useState("");
   const [actionError, setActionError] = useState("");
   const [taxonId, setTaxonId] = useState("");
-  const [source, setSource] = useState("inaturalist");
+  const [source] = useState("mindex");
+  const [substrate, setSubstrate] = useState("");
+  const [habit, setHabit] = useState("");
+  const [confidence, setConfidence] = useState("");
+  const [locality, setLocality] = useState("");
   const [sourceRecordId, setSourceRecordId] = useState("");
   const [evidenceUri, setEvidenceUri] = useState("");
   const [evidenceSha256, setEvidenceSha256] = useState("");
@@ -113,9 +117,22 @@ export default function ContributionPanel({ supabaseUrl, supabaseAnonKey, select
     if (!session?.access_token) return;
     setBusy("discovery"); setActionError(""); setMessage("");
     try {
-      await readApi("discoveries", session.access_token, { taxonId: taxonId.trim(), source, sourceRecordId: sourceRecordId.trim(), evidenceUri: evidenceUri.trim(), evidenceSha256: evidenceSha256.trim().toLowerCase() });
-      setMessage("Observation received for review. Track its verification and any reward below.");
+      await readApi("discoveries", session.access_token, {
+        taxonId: taxonId.trim(),
+        source,
+        sourceRecordId: sourceRecordId.trim(),
+        evidenceUri: evidenceUri.trim(),
+        evidenceSha256: evidenceSha256.trim().toLowerCase(),
+        determination: {
+          substrate: substrate.trim(),
+          habit: habit.trim(),
+          locality: locality.trim(),
+          confidence,
+        },
+      });
+      setMessage("Observation received for review. After approval, eligible species and MYCO rewards settle to your verified wallet automatically.");
       setSourceRecordId(""); setEvidenceUri(""); setEvidenceSha256("");
+      setSubstrate(""); setHabit(""); setLocality(""); setConfidence("");
       await loadAccount();
     } catch (error) { setActionError(errorMessage(error)); } finally { setBusy(""); }
   }
@@ -124,10 +141,13 @@ export default function ContributionPanel({ supabaseUrl, supabaseAnonKey, select
   const hasWallet = !!account?.wallets.length;
 
   return (
-    <section className={styles.contribution} id="contribute" aria-labelledby="contribute-heading">
+    <section className={`${styles.contribution} ${styles.dialog}`} hidden={!open} role="dialog" aria-modal="true" aria-labelledby="contribute-heading">
+      <button type="button" className={styles.dialogScrim} aria-label="Close observation" onClick={onClose} />
+      <div className={styles.dialogPanel}>
+      <button type="button" className={styles.dialogClose} onClick={onClose}>Close</button>
       <div className={styles.sectionHeading}>
-        <div><p className={styles.eyebrow}>Share what you find</p><h2 id="contribute-heading">Your fieldwork. Shared knowledge.</h2></div>
-        <p>Sign in, verify your wallet, and submit traceable evidence. Review decisions and confirmed transfers stay with your account.</p>
+        <div><p className={styles.eyebrow}>MINDEX observation</p><h2 id="contribute-heading">Determine the specimen.</h2></div>
+        <p>Record the characters a specialist would require, then file the evidence against this MINDEX taxon. No other observation network is used.</p>
       </div>
       {authLoading ? <div className={styles.panel} role="status">Checking your account…</div> : !session ? (
         <div className={styles.signInGrid}>
@@ -161,7 +181,13 @@ export default function ContributionPanel({ supabaseUrl, supabaseAnonKey, select
             <form onSubmit={submitDiscovery} className={styles.form}>
               <fieldset disabled={!available || !hasWallet || !!busy}>
                 <label htmlFor="observation-taxon">MINDEX taxon ID<input id="observation-taxon" value={taxonId} onChange={(event) => setTaxonId(event.target.value)} required pattern="[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}" maxLength={36} /></label>
-                <div className={styles.formRow}><label htmlFor="observation-source">Record source<select id="observation-source" value={source} onChange={(event) => setSource(event.target.value)}><option value="inaturalist">iNaturalist</option><option value="fundis">FUNDIS</option><option value="mindex">MINDEX</option><option value="specimen">Lab / citizen specimen</option></select></label><label htmlFor="observation-record">Source record ID<input id="observation-record" value={sourceRecordId} onChange={(event) => setSourceRecordId(event.target.value)} required maxLength={200} pattern={"[a-zA-Z0-9_:.\\/\\-]{1,200}"} /></label></div>
+                <p className={styles.small}>This observation is filed against the MINDEX taxon only. It is not an iNaturalist, GBIF, or FUNDIS record.</p>
+                <label htmlFor="observation-substrate">Substrate and habit<input id="observation-substrate" value={substrate} onChange={(event) => setSubstrate(event.target.value)} required minLength={8} maxLength={240} placeholder="Wood, soil, dung, host plant, clustered or solitary" /></label>
+                <label htmlFor="observation-habit">Characters you determined<input id="observation-habit" value={habit} onChange={(event) => setHabit(event.target.value)} required minLength={12} maxLength={400} placeholder="Cap, gills or pores, stipe, spore print, smell, microscopy" /></label>
+                <label htmlFor="observation-locality">Locality precision<input id="observation-locality" value={locality} onChange={(event) => setLocality(event.target.value)} required minLength={4} maxLength={160} placeholder="County or coarser. Do not publish a sensitive exact site." /></label>
+                <label htmlFor="observation-confidence">Determination confidence<select id="observation-confidence" value={confidence} onChange={(event) => setConfidence(event.target.value)} required><option value="">Select</option><option value="tentative">Tentative — needs a specialist</option><option value="supported">Supported by macroscopic characters</option><option value="confirmed">Confirmed by microscopy or a sequenced voucher</option></select></label>
+                <p className={styles.small}>Write those characters into the evidence file you fingerprint below. MINDEX stores the taxon, the evidence address, and the SHA-256. The file is the determination.</p>
+                <label htmlFor="observation-record">Your MINDEX observation id<input id="observation-record" value={sourceRecordId} onChange={(event) => setSourceRecordId(event.target.value)} required maxLength={200} pattern={"[a-zA-Z0-9_:.\\/\\-]{1,200}"} placeholder="A stable id you assign, such as LAB-2026-014" /></label>
                 <label htmlFor="observation-evidence">Evidence URL<input id="observation-evidence" type="url" pattern="(https://|ipfs://).*" value={evidenceUri} onChange={(event) => setEvidenceUri(event.target.value)} required maxLength={1000} placeholder="https://… or ipfs://…" aria-describedby="evidence-help" /></label>
                 <p id="evidence-help" className={styles.small}>Link to a stable observation or evidence file. Avoid publicly exposing precise locations of sensitive species.</p>
                 <label htmlFor="observation-hash">Evidence SHA-256<input id="observation-hash" value={evidenceSha256} onChange={(event) => setEvidenceSha256(event.target.value)} required pattern="[A-Fa-f0-9]{64}" minLength={64} maxLength={64} placeholder="64-character file fingerprint" aria-describedby="hash-help" /></label>
@@ -184,6 +210,7 @@ export default function ContributionPanel({ supabaseUrl, supabaseAnonKey, select
           </div>
         </div>
       </>}
+      </div>
     </section>
   );
 }

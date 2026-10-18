@@ -76,9 +76,7 @@ function ScienceProgramCard({ program }: { program: DesciFundingProject }) {
           Open on {programHostLabel(href)}{" "}
           <ExternalLink className="size-3 opacity-70 group-hover:opacity-100" />
         </span>
-      ) : (
-        <span className="text-[9px] uppercase text-dim mt-3">Program page coming soon</span>
-      )}
+      ) : null}
     </Wrapper>
   );
 }

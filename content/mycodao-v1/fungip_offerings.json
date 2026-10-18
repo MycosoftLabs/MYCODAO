@@ -1,0 +1,50 @@
+[
+  {
+    "id": "7e3c1b50-0001-4a00-c000-00000000f001",
+    "title": "Species reference record",
+    "offering_type": "record",
+    "description": "MINDEX taxonomy, reference image, collection id and sequence accession where supplied. Public discovery metadata with its source.",
+    "rights_holder": "Per source dataset license (MINDEX and upstream sources)",
+    "permission_basis": "Published under the source's terms. No exclusivity is claimed.",
+    "disclosure": "public",
+    "terms_url": null,
+    "inquiry_owner": "MycoDAO catalog curator",
+    "stage": "available"
+  },
+  {
+    "id": "7e3c1b50-0001-4a00-c000-00000000f002",
+    "title": "Culture or tissue sample request",
+    "offering_type": "material",
+    "description": "A physical culture held in the biobank, transferred under stated conditions.",
+    "rights_holder": "MycoDAO biobank (custodian)",
+    "permission_basis": "Material transfer terms to be written before requests open.",
+    "disclosure": "public",
+    "terms_url": null,
+    "inquiry_owner": "MycoDAO biobank curator",
+    "stage": "planned"
+  },
+  {
+    "id": "7e3c1b50-0001-4a00-c000-00000000f003",
+    "title": "Sequencing and analysis service",
+    "offering_type": "service",
+    "description": "Sequencing of a submitted culture with the accession and report returned.",
+    "rights_holder": "Named service provider",
+    "permission_basis": "Service agreement with the provider.",
+    "disclosure": "public",
+    "terms_url": null,
+    "inquiry_owner": "MycoDAO science lead",
+    "stage": "planned"
+  },
+  {
+    "id": "7e3c1b50-0001-4a00-c000-00000000f004",
+    "title": "Licensed invention or process",
+    "offering_type": "invention",
+    "description": "A specific human-made invention or process, offered only under a written license naming the rights holder.",
+    "rights_holder": null,
+    "permission_basis": "Requires a rights review and a named agreement. Wild species and naturally occurring DNA are not offered.",
+    "disclosure": "summary",
+    "terms_url": null,
+    "inquiry_owner": "MycoDAO and Mycosoft leads",
+    "stage": "planned"
+  }
+]

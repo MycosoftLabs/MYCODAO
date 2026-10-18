@@ -107,9 +107,15 @@ export async function speciesTokenProxy(request: Request, endpoint: Endpoint): P
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid_json");
       // Identity and administrative fields are never accepted by these user routes.
       const fields = endpoint === "discoveries"
-        ? ["taxonId", "source", "sourceRecordId", "evidenceUri", "evidenceSha256"]
+        ? ["taxonId", "source", "sourceRecordId", "evidenceUri", "evidenceSha256", "determination"]
         : endpoint === "wallet/challenge" ? ["wallet"] : ["wallet", "nonce", "signatureBase64"];
       if (Object.keys(parsed).some((field) => !fields.includes(field))) return failure("The request includes unsupported fields.", "invalid_fields", 400);
+      if (endpoint === "discoveries" && parsed.determination != null) {
+        const d = parsed.determination;
+        if (!d || typeof d !== "object" || Array.isArray(d)) return failure("Determination must be an object.", "invalid_fields", 400);
+        const allowed = ["substrate", "habit", "locality", "confidence"];
+        if (Object.keys(d).some((field) => !allowed.includes(field))) return failure("The determination includes unsupported fields.", "invalid_fields", 400);
+      }
       body = JSON.stringify(parsed);
       headers["Content-Type"] = "application/json";
     } catch (error) {

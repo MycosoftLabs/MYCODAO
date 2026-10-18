@@ -6,7 +6,6 @@ import {
   FolderOpen,
   HardDrive,
   Heading,
-  Image,
   Loader2,
   LogOut,
   Radio,
@@ -14,7 +13,6 @@ import {
   Save,
   Tv,
   User,
-  Video,
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { useNewsProducer, type BroadcastTalentLine } from "../hooks/useNewsProducer";
@@ -31,6 +29,7 @@ import { prefetchPulseNewsBundle } from "../lib/pulseNewsPrefetch";
 import { loadMarketsSnapshot } from "../lib/pulseMarketsStore";
 import type { PulseTicker } from "../lib/pulseApi";
 import type { StudioMarketIndex } from "../data/studioPresets";
+import { CloudMediaLibrary } from "./CloudMediaLibrary";
 import { NasGraphicsPicker } from "./NasGraphicsPicker";
 import { ProgramDetailPanel } from "./ProgramDetailPanel";
 import { SchedulerDetailPanel } from "./SchedulerDetailPanel";
@@ -52,20 +51,6 @@ const CORE_TITLE_PRESET_IDS = new Set([
   "fungi-desk",
   "partner-segment",
 ]);
-const CATEGORIES = [
-  "commercials",
-  "shows",
-  "live-streams",
-  "graphics",
-  "bumpers",
-] as const;
-
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
   const auth = useProducerAuth();
   const [panelProgramId, setPanelProgramId] = useState<string | null>(null);
@@ -75,11 +60,17 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
   const [showScheduleIntegrations, setShowScheduleIntegrations] =
     useState(false);
 
-  const { view, presets, loading, error, patch, reload } = useNewsProducer({
+  const { view, presets, loading, error, patch, patchPresets, reload } = useNewsProducer({
     includePresets: true,
     accessToken: auth.accessToken,
     pausePoll: panelProgramId !== null || panelScheduleSlotId !== null,
   });
+  const [catalogLabel, setCatalogLabel] = useState("");
+  const [catalogTitleText, setCatalogTitleText] = useState("");
+  const [catalogProgramType, setCatalogProgramType] = useState<
+    "live" | "commercial" | "bumper" | "partner" | "recorded"
+  >("recorded");
+  const [catalogNasPath, setCatalogNasPath] = useState("");
   const schedulerIntegrations = useSchedulerIntegrations(auth.accessToken);
   const nas = useProducerNas();
   const [authError, setAuthError] = useState<string | null>(null);
@@ -100,7 +91,6 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
   const [customRoles, setCustomRoles] = useState("");
   const [customTitleText, setCustomTitleText] = useState("");
   const [customVideoUrl, setCustomVideoUrl] = useState("");
-  const [nasFilter, setNasFilter] = useState<string>("all");
   const [scheduleDraft, setScheduleDraft] = useState<NewsChannelSchedule | null>(
     null,
   );
@@ -137,11 +127,6 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
       cancelled = true;
     };
   }, [auth.isAuthenticated, auth.accessToken, auth.verifySession]);
-
-  const filteredAssets = useMemo(() => {
-    if (nasFilter === "all") return nas.assets;
-    return nas.assets.filter((a) => a.category === nasFilter);
-  }, [nas.assets, nasFilter]);
 
   const assetCatalog = useMemo(
     () => listMarketsNowAssetOptions(catalogIndices, catalogTickers),
@@ -288,6 +273,91 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
       },
     ];
     await runPatch({ customTalent: lines, activeTalentPresetId: null });
+  }
+
+  async function runPresetPatch(body: Record<string, unknown>) {
+    const token = (await auth.getAccessToken()) ?? auth.accessToken;
+    if (!token) {
+      setAuthError("Sign in with Google (authorized producer account) first");
+      return;
+    }
+    setBusy(true);
+    setAuthError(null);
+    try {
+      await patchPresets(body, { accessToken: token });
+      setAuthOk(true);
+      await reload();
+    } catch (e) {
+      setAuthOk(false);
+      setAuthError(e instanceof Error ? e.message : "Catalog update failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveTalentCatalog() {
+    const label = catalogLabel.trim() || customName.trim();
+    if (!label) return;
+    const roles = customRoles
+      .split(",")
+      .map((r) => r.trim())
+      .filter(Boolean);
+    await runPresetPatch({
+      action: "upsert",
+      kind: "talent",
+      label,
+      lines: [
+        {
+          name: label,
+          roles: roles.length ? roles : ["On Air"],
+          creditLine: label,
+        },
+      ],
+    });
+    setCatalogLabel("");
+  }
+
+  async function removeTalentCatalog(id: string) {
+    await runPresetPatch({ action: "remove", kind: "talent", id });
+  }
+
+  async function saveTitleCatalog() {
+    const label = catalogLabel.trim();
+    const title = catalogTitleText.trim() || label;
+    if (!label || !title) return;
+    await runPresetPatch({
+      action: "upsert",
+      kind: "title",
+      label,
+      title,
+      logoNasPath: catalogNasPath.trim() || null,
+    });
+    setCatalogLabel("");
+    setCatalogTitleText("");
+    setCatalogNasPath("");
+  }
+
+  async function removeTitleCatalog(id: string) {
+    await runPresetPatch({ action: "remove", kind: "title", id });
+  }
+
+  async function saveProgramCatalog() {
+    const label = catalogLabel.trim();
+    if (!label) return;
+    await runPresetPatch({
+      action: "upsert",
+      kind: "program",
+      label,
+      type: catalogProgramType,
+      nasPath: catalogNasPath.trim() || undefined,
+      videoUrl: customVideoUrl.trim() || undefined,
+    });
+    setCatalogLabel("");
+    setCatalogNasPath("");
+  }
+
+  async function removeProgramCatalog(id: string) {
+    await runPresetPatch({ action: "remove", kind: "program", id });
   }
 
   async function selectProgram(id: string) {
@@ -525,9 +595,9 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
     }
   }
 
-  const nasWebUrl =
-    (nas.nasConfig?.webDriveUrl as string | undefined) ??
-    "https://192.168.0.105/drive/shared-drives/MYCODAO/BLOCKS";
+  const brandLogo = nas.assets.find((a) =>
+    /MycoDAO_Icon_Colour/i.test(a.fileName),
+  );
 
   return (
     <div className="flex min-h-dvh h-dvh flex-col bg-[#050505] text-white overflow-hidden">
@@ -546,7 +616,7 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
               BLOCKS Producer
             </p>
             <h1 className="text-sm sm:text-base font-black uppercase tracking-wide">
-              Live Control · NAS
+              Studio Control
             </h1>
           </div>
         </div>
@@ -585,7 +655,7 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
             ["title", "Title", Heading],
             ["program", "Program", Tv],
             ["schedule", "Scheduler", Calendar],
-            ["nas", "NAS Library", HardDrive],
+            ["nas", "Media Library", HardDrive],
           ] as const
         ).map(([id, label, Icon]) => (
           <button
@@ -741,7 +811,7 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
                     </p>
                     <p className="text-[10px] text-white/60 mt-1">
                       {view?.programMediaUrl
-                        ? `NAS: ${view.programNasPath ?? "file"}`
+                        ? `Library: ${view.programNasPath ?? "file"}`
                         : view?.programEmbedUrl
                           ? "YouTube override"
                           : "Following schedule"}
@@ -791,7 +861,7 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
             <section className="border border-white/10 p-4 bg-black/40">
               <p className="text-[10px] font-black uppercase tracking-widest text-white/60 mb-3 flex items-center gap-2">
                 <HardDrive className="size-4" />
-                NAS status
+                Cloud library
               </p>
               {nas.nasStatus ? (
                 <div className="grid sm:grid-cols-2 gap-3 text-xs">
@@ -822,14 +892,9 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
               ) : (
                 <p className="text-xs text-white/50">Scanning…</p>
               )}
-              <a
-                href={nasWebUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-block mt-3 text-[10px] font-bold uppercase tracking-widest text-[#5eb3ff] underline"
-              >
-                Open NAS BLOCKS folder
-              </a>
+              <p className="mt-3 text-[11px] text-white/45">
+                Files live in AWS S3. Drop them on the Media Library tab.
+              </p>
             </section>
 
             <button
@@ -844,122 +909,14 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
         ) : null}
 
         {tab === "nas" ? (
-          <section className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setNasFilter("all")}
-                className={cn(
-                  "min-h-[44px] px-4 text-[10px] font-black uppercase border touch-manipulation",
-                  nasFilter === "all"
-                    ? "border-[#5eb3ff] bg-[#5eb3ff]/15"
-                    : "border-white/15",
-                )}
-              >
-                All ({nas.assets.length})
-              </button>
-              {CATEGORIES.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setNasFilter(c)}
-                  className={cn(
-                    "min-h-[44px] px-4 text-[10px] font-black uppercase border touch-manipulation",
-                    nasFilter === c
-                      ? "border-[#5eb3ff] bg-[#5eb3ff]/15"
-                      : "border-white/15",
-                  )}
-                >
-                  {c} ({nas.nasStatus?.categories?.[c] ?? 0})
-                </button>
-              ))}
-            </div>
-
-            <p className="text-xs text-white/50">
-              Drop files into NAS folders:{" "}
-              <code>commercials/</code>, <code>shows/</code>,{" "}
-              <code>live-streams/</code>, <code>graphics/</code>,{" "}
-              <code>bumpers/</code> — then Sync.
-            </p>
-
-            {!nas.nasStatus?.available ? (
-              <div className="border border-red-500/40 bg-red-500/10 p-4 text-sm">
-                <p className="font-bold text-red-300">NAS not mounted</p>
-                <p className="text-xs text-white/70 mt-2">
-                  Windows dev: run <code>npm run mount:nas</code> from the
-                  MYCODAO repo (loads <code>NAS_SMB_PASSWORD</code> from{" "}
-                  <code>.credentials.local</code>). Or set{" "}
-                  <code>BLOCKS_NAS_ROOT</code> to a mounted UNC path. Offline
-                  fallback: <code>data/blocks-nas-dev/</code> when the share is
-                  down.
-                </p>
-              </div>
-            ) : null}
-
-            <div className="space-y-2">
-              {filteredAssets.length === 0 ? (
-                <p className="text-sm text-white/40 py-8 text-center">
-                  No assets in this category. Upload to NAS and Sync.
-                </p>
-              ) : (
-                filteredAssets.map((asset) => (
-                  <div
-                    key={asset.id}
-                    className="flex flex-col sm:flex-row sm:items-center gap-3 border border-white/10 p-3 bg-black/30"
-                  >
-                    <div className="flex items-start gap-3 flex-1 min-w-0">
-                      {asset.kind === "graphic" ? (
-                        <Image className="size-5 shrink-0 text-amber-400 mt-0.5" />
-                      ) : (
-                        <Video className="size-5 shrink-0 text-[#5eb3ff] mt-0.5" />
-                      )}
-                      <div className="min-w-0">
-                        <p className="text-[11px] font-black uppercase truncate">
-                          {asset.fileName}
-                        </p>
-                        <p className="text-[9px] text-white/45 uppercase">
-                          {asset.category} · {formatBytes(asset.sizeBytes)} ·{" "}
-                          {new Date(asset.modifiedAt).toLocaleString()}
-                        </p>
-                        <p className="text-[9px] text-white/30 truncate font-mono">
-                          {asset.relPath}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex gap-2 shrink-0">
-                      <a
-                        href={pulseApiUrl(asset.serveUrl)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="min-h-[44px] px-3 flex items-center text-[9px] font-bold uppercase border border-white/20 touch-manipulation"
-                      >
-                        Preview
-                      </a>
-                      <button
-                        type="button"
-                        disabled={busy || controlsLocked}
-                        onClick={() => void fireNasAsset(asset)}
-                        className="min-h-[44px] px-4 bg-[#0055cc] text-[10px] font-black uppercase touch-manipulation disabled:opacity-50"
-                      >
-                        {asset.kind === "graphic" ? "Overlay" : "Cut to air"}
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {view?.activeGraphicNasPath ? (
-              <button
-                type="button"
-                disabled={busy || controlsLocked}
-                onClick={() => void clearGraphic()}
-                className="w-full min-h-[48px] border border-amber-400/50 text-amber-300 text-[10px] font-black uppercase touch-manipulation"
-              >
-                Clear graphic overlay
-              </button>
-            ) : null}
-          </section>
+          <CloudMediaLibrary
+            assets={nas.assets}
+            counts={nas.nasStatus?.categories}
+            accessToken={auth.accessToken}
+            disabled={busy || controlsLocked}
+            onUploaded={() => void nas.reload()}
+            onUse={(asset) => void fireNasAsset(asset)}
+          />
         ) : null}
 
         {tab === "schedule" && scheduleDraft ? (
@@ -1219,6 +1176,55 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
               onSelect={(relPath) => void setTitleLogo(relPath)}
               onClear={() => void clearTitleLogo()}
             />
+            <div className="border border-[#00ff88]/25 p-4 space-y-3 bg-black/50">
+              <p className="text-[9px] font-black uppercase tracking-widest text-[#00ff88]">
+                Title catalog CRUD
+              </p>
+              <input
+                value={catalogLabel}
+                onChange={(e) => setCatalogLabel(e.target.value)}
+                placeholder="Preset label"
+                className="w-full h-12 px-4 text-base bg-black border border-white/20"
+              />
+              <input
+                value={catalogTitleText}
+                onChange={(e) => setCatalogTitleText(e.target.value)}
+                placeholder="On-air title text"
+                className="w-full h-12 px-4 text-base bg-black border border-white/20"
+              />
+              <input
+                value={catalogNasPath}
+                onChange={(e) => setCatalogNasPath(e.target.value)}
+                placeholder="Optional logo NAS path (graphics/...)"
+                className="w-full h-12 px-4 text-base bg-black border border-white/20 font-mono text-sm"
+              />
+              <button
+                type="button"
+                disabled={busy || controlsLocked || !catalogLabel.trim()}
+                onClick={() => void saveTitleCatalog()}
+                className="w-full min-h-[44px] bg-[#00ff88]/20 border border-[#00ff88]/40 text-[10px] font-black uppercase touch-manipulation disabled:opacity-50"
+              >
+                Save title preset
+              </button>
+              <ul className="space-y-2">
+                {(presets?.title ?? []).map((t) => (
+                  <li
+                    key={t.id}
+                    className="flex items-center justify-between gap-2 border border-white/10 px-3 py-2"
+                  >
+                    <span className="text-[11px] font-bold uppercase text-white/80">{t.label}</span>
+                    <button
+                      type="button"
+                      disabled={busy || controlsLocked || CORE_TITLE_PRESET_IDS.has(t.id)}
+                      onClick={() => void removeTitleCatalog(t.id)}
+                      className="min-h-[40px] px-3 text-[9px] font-black uppercase border border-[#E10600]/50 text-[#E10600] touch-manipulation disabled:opacity-40"
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </section>
         ) : null}
 
@@ -1270,6 +1276,45 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
                 Push custom tag
               </button>
             </div>
+            <div className="border border-[#00ff88]/25 p-4 space-y-3 bg-black/50">
+              <p className="text-[9px] font-black uppercase tracking-widest text-[#00ff88]">
+                Catalog CRUD — persists to Supabase/JSON
+              </p>
+              <input
+                value={catalogLabel}
+                onChange={(e) => setCatalogLabel(e.target.value)}
+                placeholder="New talent preset label"
+                className="w-full h-12 px-4 text-base bg-black border border-white/20"
+              />
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={busy || controlsLocked || !(catalogLabel.trim() || customName.trim())}
+                  onClick={() => void saveTalentCatalog()}
+                  className="min-h-[44px] px-4 bg-[#00ff88]/20 border border-[#00ff88]/40 text-[10px] font-black uppercase touch-manipulation disabled:opacity-50"
+                >
+                  Save preset
+                </button>
+              </div>
+              <ul className="space-y-2">
+                {(presets?.talent ?? []).map((t) => (
+                  <li
+                    key={t.id}
+                    className="flex items-center justify-between gap-2 border border-white/10 px-3 py-2"
+                  >
+                    <span className="text-[11px] font-bold uppercase text-white/80">{t.label}</span>
+                    <button
+                      type="button"
+                      disabled={busy || controlsLocked || t.id === "none"}
+                      onClick={() => void removeTalentCatalog(t.id)}
+                      className="min-h-[40px] px-3 text-[9px] font-black uppercase border border-[#E10600]/50 text-[#E10600] touch-manipulation disabled:opacity-40"
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </section>
         ) : null}
 
@@ -1305,7 +1350,7 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
                   {selectedLiveDataAssetIds.map((id) => (
                     <span
                       key={id}
-                      className="px-3 py-2 text-[10px] font-black uppercase bg-[#0055cc]/30 border border-[#5eb3ff]/50"
+                      className="rounded-full px-3 py-2 text-[11px] font-medium bg-[#1450d4]/40"
                     >
                       {assetCatalog.find((a) => a.id === id)?.label ?? id}
                     </span>
@@ -1333,10 +1378,10 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
                         disabled={busy || controlsLocked || atMax}
                         onClick={() => void toggleLiveDataAsset(item.id)}
                         className={cn(
-                          "min-h-[44px] px-3 py-2 text-left text-[10px] font-black uppercase border touch-manipulation transition-colors disabled:opacity-40",
+                          "h-10 rounded-full px-4 text-left text-xs font-medium transition-colors disabled:opacity-40",
                           selected
-                            ? "border-[#0055cc] bg-[#0055cc]/25 text-white"
-                            : "border-white/15 hover:bg-white/5 text-white/85",
+                            ? "bg-white text-black"
+                            : "bg-white/10 text-white/80 hover:bg-white/15",
                         )}
                       >
                         {item.label}
@@ -1349,7 +1394,7 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
 
             <NasGraphicsPicker
               title="Marketing logo (optional)"
-              description="PNG/SVG/WebP from NAS graphics/. Any aspect ratio scales to fit the Live Stream Data widget automatically."
+              description="Logos from the cloud graphics shelf. Any aspect ratio scales to fit the Live Stream Data widget."
               graphics={liveDataGraphics}
               selectedRelPath={view?.liveStreamDataMarketingNasPath ?? null}
               previewImageUrl={view?.liveStreamDataMarketingImageUrl ?? null}
@@ -1399,18 +1444,31 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
                   }
                   onClick={() => void selectProgram(p.id)}
                   className={cn(
-                    "min-h-[52px] px-4 py-3 text-left border touch-manipulation disabled:opacity-40",
+                    "flex min-h-[72px] items-center gap-3 rounded-2xl px-3 py-3 text-left touch-manipulation disabled:opacity-40",
                     onAir
-                      ? "border-emerald-400 bg-emerald-400/10"
+                      ? "bg-emerald-400/15 ring-1 ring-emerald-400"
                       : selected
-                        ? "border-[#5eb3ff] bg-[#5eb3ff]/10"
-                        : "border-white/15 hover:bg-white/5",
+                        ? "bg-[#5eb3ff]/15 ring-1 ring-[#5eb3ff]"
+                        : "bg-white/[0.04] hover:bg-white/[0.07]",
                   )}
                 >
-                  <p className="text-[11px] font-black uppercase">{p.label}</p>
-                  <p className="text-[9px] text-white/50 uppercase mt-0.5">
-                    {onAir ? "on air" : p.type}
-                  </p>
+                  {brandLogo ? (
+                    <img
+                      src={pulseApiUrl(brandLogo.serveUrl)}
+                      alt=""
+                      className="size-10 rounded-xl bg-black object-contain"
+                    />
+                  ) : (
+                    <span className="flex size-10 items-center justify-center rounded-xl bg-white/10 text-sm font-semibold">
+                      {p.label.slice(0, 1)}
+                    </span>
+                  )}
+                  <span>
+                    <p className="text-sm font-semibold">{p.label}</p>
+                    <p className="text-[11px] capitalize text-white/50">
+                      {onAir ? "On air" : p.type}
+                    </p>
+                  </span>
                 </button>
               );
               })}
@@ -1433,13 +1491,78 @@ export function ProducerDashboard({ onExit }: ProducerDashboardProps) {
             </div>
             <p className="text-[9px] text-white/35 flex items-center gap-2">
               <FolderOpen className="size-3" />
-              For NAS commercials/shows use the NAS Library tab
+              Shows and logos are on the Media Library tab.
             </p>
+            <div className="border border-[#00ff88]/25 p-4 space-y-3 bg-black/50">
+              <p className="text-[9px] font-black uppercase tracking-widest text-[#00ff88]">
+                Program catalog CRUD
+              </p>
+              <input
+                value={catalogLabel}
+                onChange={(e) => setCatalogLabel(e.target.value)}
+                placeholder="Program preset label"
+                className="w-full h-12 px-4 text-base bg-black border border-white/20"
+              />
+              <select
+                value={catalogProgramType}
+                onChange={(e) =>
+                  setCatalogProgramType(
+                    e.target.value as
+                      | "live"
+                      | "commercial"
+                      | "bumper"
+                      | "partner"
+                      | "recorded",
+                  )
+                }
+                className="w-full h-12 px-4 text-base bg-black border border-white/20"
+              >
+                <option value="recorded">recorded</option>
+                <option value="live">live</option>
+                <option value="commercial">commercial</option>
+                <option value="bumper">bumper</option>
+                <option value="partner">partner</option>
+              </select>
+              <input
+                value={catalogNasPath}
+                onChange={(e) => setCatalogNasPath(e.target.value)}
+                placeholder="NAS/S3 path (shows/... or library/...)"
+                className="w-full h-12 px-4 text-base bg-black border border-white/20 font-mono text-sm"
+              />
+              <button
+                type="button"
+                disabled={busy || controlsLocked || !catalogLabel.trim()}
+                onClick={() => void saveProgramCatalog()}
+                className="w-full min-h-[44px] bg-[#00ff88]/20 border border-[#00ff88]/40 text-[10px] font-black uppercase touch-manipulation disabled:opacity-50"
+              >
+                Save program preset
+              </button>
+              <ul className="space-y-2">
+                {(presets?.program ?? []).map((p) => (
+                  <li
+                    key={p.id}
+                    className="flex items-center justify-between gap-2 border border-white/10 px-3 py-2"
+                  >
+                    <span className="text-[11px] font-bold uppercase text-white/80">
+                      {p.label} · {p.type}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={busy || controlsLocked}
+                      onClick={() => void removeProgramCatalog(p.id)}
+                      className="min-h-[40px] px-3 text-[9px] font-black uppercase border border-[#E10600]/50 text-[#E10600] touch-manipulation disabled:opacity-40"
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </section>
         ) : null}
 
         <p className="text-[9px] text-white/35 uppercase tracking-widest pb-8 text-center">
-          NAS: MYCODAO/BLOCKS · Scheduler: data/news-channel-schedule.json
+          Cloud library · AWS S3 · Scheduler: data/news-channel-schedule.json
         </p>
       </div>
 

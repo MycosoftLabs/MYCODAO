@@ -1,0 +1,62 @@
+[
+  {
+    "id": "5d4b2a30-0001-4f00-b000-00000000e001",
+    "utility": "governance",
+    "title": "Governance",
+    "user_action": "Read and vote on MycoDAO proposals in Realms with MYCO.",
+    "interface_url": "https://v2.realms.today/dao/At93fiCMzEkZWBAHxSNjfk7zUHnF3JcxyCyPjZELjK9Y/proposals",
+    "interface_label": "Open proposals",
+    "ops_owner": "MycoDAO governance",
+    "stage": "beta",
+    "fulfillment_evidence_uri": null,
+    "note": "The realm exists. Voting rules and a recorded vote still need to be checked (task M13)."
+  },
+  {
+    "id": "5d4b2a30-0001-4f00-b000-00000000e002",
+    "utility": "contributor_rewards",
+    "title": "Contributor rewards",
+    "user_action": "Submit an observation against a MINDEX taxon. Approved observations can earn that species' token, or MYCO for eligible new or rare records.",
+    "interface_url": "/v2/rewards",
+    "interface_label": "Submit an observation",
+    "ops_owner": "MycoDAO species rewards",
+    "stage": "beta",
+    "fulfillment_evidence_uri": null,
+    "note": "Runs on Solana devnet. Test tokens have no mainnet value."
+  },
+  {
+    "id": "5d4b2a30-0001-4f00-b000-00000000e003",
+    "utility": "service_payment",
+    "title": "Pay for biobank services",
+    "user_action": "Pay in MYCO for culture storage or a tissue sample.",
+    "interface_url": null,
+    "interface_label": null,
+    "ops_owner": "MycoDAO biobank",
+    "stage": "planned",
+    "fulfillment_evidence_uri": null,
+    "note": "Not available yet. No order or fulfillment path exists."
+  },
+  {
+    "id": "5d4b2a30-0001-4f00-b000-00000000e004",
+    "utility": "project_support",
+    "title": "Support a documented project need",
+    "user_action": "Contribute MYCO to a named project need and follow the result.",
+    "interface_url": "/v2/projects/project-oyster",
+    "interface_label": "See the proposed pilot",
+    "ops_owner": "MycoDAO operations",
+    "stage": "planned",
+    "fulfillment_evidence_uri": null,
+    "note": "Proposed pilot: one Project Oyster sequencing batch. Not open until the recipient, budget and terms are set."
+  },
+  {
+    "id": "5d4b2a30-0001-4f00-b000-00000000e005",
+    "utility": "commercial_rights",
+    "title": "Commercial rights",
+    "user_action": "None today.",
+    "interface_url": null,
+    "interface_label": null,
+    "ops_owner": "MycoDAO and Mycosoft leads",
+    "stage": "planned",
+    "fulfillment_evidence_uri": null,
+    "note": "Holding MYCO gives no royalty, revenue or ownership rights. Any licensing would be under a named agreement."
+  }
+]

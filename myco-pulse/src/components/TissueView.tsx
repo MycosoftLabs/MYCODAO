@@ -268,10 +268,10 @@ function SpeciesCard({
 }) {
   const speciesImg = item.speciesImageUrl;
   const labCover = mediaServeUrl(item.coverServeUrl);
-  /** Catalog hero = species reference only; lab jar never replaces it. */
-  const hero = speciesImg;
   const hasPhysicalSample =
     item.status === "stored" && Boolean(item.coverServeUrl);
+  // Prefer real lab jar/dish photos when we hold the sample; fall back to iNat reference.
+  const hero = hasPhysicalSample && labCover ? labCover : speciesImg;
   const accent = healthHex(item.health);
 
   const cardClass = cn(
@@ -393,7 +393,8 @@ export function TissueView() {
   const theme = useTheme();
 
   const [view, setView] = useState<ViewId>("catalog");
-  const [catalogScope, setCatalogScope] = useState<CatalogScope>("library");
+  // Default to physical holdings — fungal library stays empty until MINDEX sync publishes taxa.
+  const [catalogScope, setCatalogScope] = useState<CatalogScope>("physical");
   const [catalog, setCatalog] = useState<PublicBiobankItem[]>([]);
   const [library, setLibrary] = useState<FungalLibraryItem[]>([]);
   const [libraryMeta, setLibraryMeta] = useState<{
