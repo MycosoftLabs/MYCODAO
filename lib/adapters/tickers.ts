@@ -506,7 +506,7 @@ async function tickerFromLiveMyco(mint: string): Promise<Ticker | null> {
   if (!quote) return null;
   const now = new Date().toISOString();
   const change = (quote.priceUsd * quote.change24h) / 100;
-  const sparkline = Array.from({ length: 24 }, () => quote.priceUsd);
+  const sparkline: number[] = [];
   return {
     id: "MYCO",
     symbol: "MYCO",
@@ -520,6 +520,19 @@ async function tickerFromLiveMyco(mint: string): Promise<Ticker | null> {
     sparkline,
     updatedAt: now,
   };
+}
+
+function isFlatSparkline(points?: number[]): boolean {
+  if (!points || points.length < 2) return true;
+  return points.every((p) => p === points[0]);
+}
+
+/** Later price sources only carry a flat placeholder sparkline; keep the real intraday series when one exists. */
+function withRealSparkline(next: Ticker, existing?: Ticker): Ticker {
+  if (existing && isFlatSparkline(next.sparkline) && !isFlatSparkline(existing.sparkline)) {
+    return { ...next, sparkline: existing.sparkline };
+  }
+  return next;
 }
 
 export async function fetchTickers(opts?: FetchTickersOptions): Promise<Ticker[]> {
@@ -558,13 +571,13 @@ export async function fetchTickers(opts?: FetchTickersOptions): Promise<Ticker[]
         existing && typeof existing.changePct === "number" && Math.abs(existing.changePct) > 0.0001;
       if (existing && !cgHasChange && prevHasChange) {
         bySymbol.set(t.symbol, {
-          ...t,
+          ...withRealSparkline(t, existing),
           changePct: existing.changePct,
           change: existing.change,
           sessionChangePct: existing.sessionChangePct ?? existing.changePct,
         });
       } else {
-        bySymbol.set(t.symbol, t);
+        bySymbol.set(t.symbol, withRealSparkline(t, existing));
       }
     }
   }
@@ -576,13 +589,13 @@ export async function fetchTickers(opts?: FetchTickersOptions): Promise<Ticker[]
         existing && typeof existing.changePct === "number" && Math.abs(existing.changePct) > 0.0001;
       if (existing && !fhHasChange && prevHasChange) {
         bySymbol.set(t.symbol, {
-          ...t,
+          ...withRealSparkline(t, existing),
           changePct: existing.changePct,
           change: existing.change,
           sessionChangePct: existing.sessionChangePct ?? existing.changePct,
         });
       } else {
-        bySymbol.set(t.symbol, t);
+        bySymbol.set(t.symbol, withRealSparkline(t, existing));
       }
     }
   }

@@ -31,6 +31,14 @@ import { TissueCuratorPanel } from "./TissueCuratorPanel";
 import { AccessionsGrid } from "./tissue/AccessionsGrid";
 import { AccessionDetailDrawer } from "./tissue/AccessionDetailDrawer";
 import { TaxonDetailDrawer } from "./tissue/TaxonDetailDrawer";
+import { TissueFilters } from "./tissue/TissueFilters";
+import {
+  LIBRARY_FACETS,
+  PHYSICAL_FACETS,
+  applyFacets,
+  buildFacetGroups,
+  useFacetSelection,
+} from "../lib/tissueFacets";
 import {
   Chip,
   FormIcon,
@@ -617,6 +625,24 @@ export function TissueView() {
     [filteredLibrary],
   );
 
+  // Facet filters apply to the catalog grids only; the hero tiles above keep their own data.
+  const facets = useFacetSelection();
+  const facetedCatalog = useMemo(
+    () => applyFacets(filteredCatalog, PHYSICAL_FACETS, facets.selection),
+    [filteredCatalog, facets.selection],
+  );
+  const facetedLibrary = useMemo(
+    () => applyFacets(filteredLibrary, LIBRARY_FACETS, facets.selection),
+    [filteredLibrary, facets.selection],
+  );
+  const facetGroups = useMemo(
+    () =>
+      catalogScope === "library"
+        ? buildFacetGroups(filteredLibrary, LIBRARY_FACETS, facets.selection)
+        : buildFacetGroups(filteredCatalog, PHYSICAL_FACETS, facets.selection),
+    [catalogScope, filteredLibrary, filteredCatalog, facets.selection],
+  );
+
   const reload = useCallback(() => {
     void loadCatalog();
     if (catalogScope === "library") void loadLibrary();
@@ -657,8 +683,8 @@ export function TissueView() {
   const countLabel =
     view === "catalog"
       ? catalogScope === "library"
-        ? `${filteredLibrary.length} taxa${libraryMeta.total != null ? ` / ${libraryMeta.total}` : ""}`
-        : `${filteredCatalog.length} holdings`
+        ? `${facetedLibrary.length} taxa${libraryMeta.total != null ? ` / ${libraryMeta.total}` : ""}`
+        : `${facetedCatalog.length} holdings`
       : view === "inventory"
         ? `${invList.length} unit${invList.length === 1 ? "" : "s"}`
         : `${replateList.length} due`;
@@ -838,6 +864,22 @@ export function TissueView() {
               Last published sync {new Date(libraryMeta.lastSyncAt).toLocaleString()}
             </p>
           ) : null}
+          {(catalogScope === "library" ? filteredLibrary.length : filteredCatalog.length) > 0 ? (
+            <TissueFilters
+              groups={facetGroups}
+              selection={facets.selection}
+              onToggle={facets.toggle}
+              onClear={facets.clear}
+              resultCount={catalogScope === "library" ? facetedLibrary.length : facetedCatalog.length}
+              totalCount={catalogScope === "library" ? filteredLibrary.length : filteredCatalog.length}
+              basisNote={
+                catalogScope === "library"
+                  ? `Options and counts come from the ${filteredLibrary.length} loaded reference taxa that match the search and chips above.`
+                  : `Options and counts come from the ${filteredCatalog.length} loaded physical holdings that match the search and category above.`
+              }
+              theme={theme}
+            />
+          ) : null}
         </div>
       ) : null}
 
@@ -860,7 +902,7 @@ export function TissueView() {
                 "The licensed reference replica is not reachable. This is not an empty catalog."
               }
             />
-          ) : filteredLibrary.length === 0 ? (
+          ) : facetedLibrary.length === 0 ? (
             <EmptyState
               title={
                 libraryMeta.availability === "empty"
@@ -870,12 +912,12 @@ export function TissueView() {
               body={
                 libraryMeta.availability === "empty"
                   ? "Run a curator sync after the MINDEX data agreement and export credentials are configured. Reference taxa will appear here without inventing physical jars."
-                  : "Try a different category, holdings filter, or search."
+                  : "Try a different category, holdings filter, filter panel selection, or search."
               }
             />
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-              {filteredLibrary.map((item, i) => (
+              {facetedLibrary.map((item, i) => (
                 <LibraryTaxonCard
                   key={item.mindexTaxonUuid}
                   item={item}
@@ -888,18 +930,18 @@ export function TissueView() {
           )
         ) : !catalogLoaded ? (
           <Loading label="Loading catalog…" />
-        ) : filteredCatalog.length === 0 ? (
+        ) : facetedCatalog.length === 0 ? (
           <EmptyState
             title={catalog.length === 0 ? "No public physical holdings" : "No matches"}
             body={
               catalog.length === 0
                 ? "Public specimens will appear here as they are verified and published. Browse the Fungal library for reference taxa."
-                : "Try a different category or search."
+                : "Try a different category, filter, or search."
             }
           />
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-            {filteredCatalog.map((item, i) => (
+            {facetedCatalog.map((item, i) => (
               <SpeciesCard
                 key={item.accessionCode}
                 item={item}

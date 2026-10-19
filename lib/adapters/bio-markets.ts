@@ -19,7 +19,7 @@ type BioListToken = {
 type DexPair = {
   baseToken?: { address?: string; symbol?: string; name?: string };
   priceUsd?: string;
-  priceChange?: { h24?: number };
+  priceChange?: { m5?: number; h1?: number; h6?: number; h24?: number };
   liquidity?: { usd?: number };
 };
 
@@ -50,10 +50,21 @@ async function fetchBioTokenList(): Promise<BioListToken[]> {
   }
 }
 
+/**
+ * Price 24h, 6h, 1h and 5m ago, back-calculated from DexScreener's reported percentage changes,
+ * ending at the current price. These are the only historical points the pair API exposes.
+ */
+function sparklineFromChanges(priceUsd: number, change?: DexPair["priceChange"]): number[] {
+  const anchors = [change?.h24, change?.h6, change?.h1, change?.m5]
+    .filter((pct): pct is number => typeof pct === "number" && Number.isFinite(pct) && pct > -100)
+    .map((pct) => priceUsd / (1 + pct / 100));
+  return anchors.length ? [...anchors, priceUsd] : [];
+}
+
 async function dexQuotesByAddress(
   addresses: string[]
-): Promise<Map<string, { priceUsd: number; change24h: number; name: string; symbol: string }>> {
-  const out = new Map<string, { priceUsd: number; change24h: number; name: string; symbol: string }>();
+): Promise<Map<string, { priceUsd: number; change24h: number; sparkline: number[]; name: string; symbol: string }>> {
+  const out = new Map<string, { priceUsd: number; change24h: number; sparkline: number[]; name: string; symbol: string }>();
   const BATCH = 30;
 
   for (let i = 0; i < addresses.length; i += BATCH) {
@@ -82,6 +93,7 @@ async function dexQuotesByAddress(
         out.set(addr, {
           priceUsd,
           change24h: typeof pair.priceChange?.h24 === "number" ? pair.priceChange.h24 : 0,
+          sparkline: sparklineFromChanges(priceUsd, pair.priceChange),
           name: pair.baseToken?.name ?? pair.baseToken?.symbol ?? "Bio asset",
           symbol: (pair.baseToken?.symbol ?? "").toUpperCase(),
         });
@@ -135,18 +147,8 @@ export async function tickersFromBioMarkets(): Promise<Ticker[]> {
       change: (q.priceUsd * changePct) / 100,
       changePct,
       sessionChangePct: changePct,
-      sparkline: Array.from({ length: 24 }, () => q.priceUsd),
+      sparkline: q.sparkline,
       updatedAt: now,
-    });
-  }
-
-  const grow = tickers.find((t) => t.symbol === "GROW");
-  if (grow && !tickers.some((t) => t.symbol === "VALLEY")) {
-    tickers.push({
-      ...grow,
-      id: "VALLEY",
-      symbol: "VALLEY",
-      name: "ValleyDAO",
     });
   }
 

@@ -12,13 +12,13 @@ import {
   Settings,
   Microscope,
   Terminal,
-  TrendingUp,
   Users,
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { mycodaoBlackLogo } from "../lib/brandLogos";
 import { handleMobileNewsPointerDown } from "../lib/mobileNewsGestureUnlock";
 
+/** "Markets" is a legacy alias (deep links, Funding buttons); App maps it to "Trade". */
 export type PulseTabId =
   | "Pulse"
   | "DAO"
@@ -42,16 +42,15 @@ export const PULSE_TABS: {
 }[] = [
   { id: "News", label: "News", shortLabel: "News", icon: Globe },
   { id: "Pulse", label: "Pulse", shortLabel: "Pulse", icon: LayoutDashboard },
+  { id: "MYCO", label: "MYCO", shortLabel: "MYCO", icon: Coins },
   { id: "Podcasts", label: "Podcasts", shortLabel: "Pod", icon: Mic2 },
-  { id: "DAO", label: "Organizations", shortLabel: "Orgs", icon: Users },
-  { id: "Funding", label: "Funding", shortLabel: "Fund", icon: CircleDollarSign },
+  { id: "DAO", label: "Community", shortLabel: "Comm", icon: Users },
+  // Tab id stays "Funding" so existing ?tab=Funding links keep working; ?tab=Projects is an alias.
+  { id: "Funding", label: "Projects", shortLabel: "Proj", icon: CircleDollarSign },
   { id: "Research", label: "Research", shortLabel: "Sci", icon: FlaskConical },
-  { id: "Markets", label: "Markets", shortLabel: "Mkt", icon: TrendingUp },
   { id: "Trade", label: "Trade", shortLabel: "Trade", icon: BarChart3 },
   { id: "FungIP", label: "FungIP", shortLabel: "FungIP", icon: Terminal },
   { id: "Tissue", label: "Tissue", shortLabel: "Tissue", icon: Microscope },
-  { id: "Learn", label: "Learn", shortLabel: "Learn", icon: BookOpen },
-  { id: "MYCO", label: "MYCO", shortLabel: "MYCO", icon: Coins },
 ];
 
 interface NavItemProps {
@@ -137,7 +136,7 @@ export function PulseSidebarNav({
             className="h-full w-full object-contain scale-[1.28]"
           />
         </div>
-        <span className="text-lg font-black tracking-tighter leading-none uppercase">BLOCKS</span>
+        <span className="text-lg font-black tracking-tighter leading-none uppercase">MYCO</span>
       </div>
       <div className="flex-1 py-4 flex flex-col min-h-0">
         <nav className="flex-1 space-y-0.5 overflow-y-auto no-scrollbar">
@@ -151,10 +150,6 @@ export function PulseSidebarNav({
               onClick={() => setActiveTab(tab.id)}
             />
           ))}
-          <a href="/species-tokens" className="w-full flex items-center gap-3 px-4 py-2.5 min-h-[44px] border-l-2 border-transparent text-dim hover:text-white hover:bg-white/5">
-            <Microscope className="w-4 h-4 shrink-0" aria-hidden />
-            <span className="text-xs uppercase tracking-widest leading-none">Species rewards ↗</span>
-          </a>
         </nav>
         <div className="p-2 border-t border-white/5 shrink-0">
           <PulseNavItem
@@ -214,7 +209,7 @@ export function PulseMobileBrandPair({
             className="h-full w-full object-contain scale-[1.28]"
           />
         </div>
-        <span className="text-[7px] font-black uppercase tracking-tighter leading-none">BLOCKS</span>
+        <span className="text-[7px] font-black uppercase tracking-tighter leading-none">MYCO</span>
       </button>
       <button
         type="button"
@@ -258,10 +253,6 @@ export function PulseBottomNav({
             variant="bottom"
           />
         ))}
-        <a href="/species-tokens" className="flex flex-col items-center justify-center gap-0.5 shrink-0 min-w-[4.1rem] sm:min-w-[4.5rem] h-14 px-1 text-dim hover:text-white hover:bg-white/5" aria-label="Species library and rewards">
-          <Microscope className="size-4 shrink-0" aria-hidden />
-          <span className="text-[7px] sm:text-[8px] font-bold uppercase tracking-wide leading-none">Species ↗</span>
-        </a>
       </div>
     </nav>
   );

@@ -23,6 +23,8 @@ import {
   type FungalLibraryItem,
   type FungalOverview,
 } from "../lib/tissueApi";
+import { SpeciesRewardsSection } from "./SpeciesRewardsSection";
+import { FungalEconomyCycle } from "./FungalEconomyCycle";
 
 export interface FungIPViewProps {
   setActiveTab?: (tab: PulseTabId) => void;
@@ -318,6 +320,10 @@ export function FungIPView({ setActiveTab }: FungIPViewProps) {
           ))}
         </div>
       </section>
+
+      <FungalEconomyCycle variant="fungip" />
+
+      <SpeciesRewardsSection />
 
       {/* Library search */}
       <section className="px-4 md:px-8 lg:px-12 py-8 border-b border-white/10">

@@ -49,10 +49,29 @@ function formatMyco(n: number) {
   return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
-function FeaturedBlockCard({ project }: { project: DesciFundingProject }) {
+interface ProjectCardProps {
+  project: DesciFundingProject;
+  onOpen?: (slug: string) => void;
+}
+
+/** Full-card button under the card's own links, which sit above it (`relative z-[2]`). */
+function CardOpenOverlay({ project, onOpen }: ProjectCardProps) {
+  if (!onOpen) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(project.id)}
+      aria-label={`Open ${project.name} project page`}
+      className="absolute inset-0 z-[1] cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-myco-accent/70 touch-manipulation"
+    />
+  );
+}
+
+function FeaturedBlockCard({ project, onOpen }: ProjectCardProps) {
   const isDaoIncubation = project.kind === "dao-incubation";
   return (
-    <article className="glass-bento border-white/10 bg-black/50 overflow-hidden flex flex-col group hover:border-myco-accent/40 transition-colors">
+    <article className="relative glass-bento border-white/10 bg-black/50 overflow-hidden flex flex-col group hover:border-myco-accent/40 transition-colors">
+      <CardOpenOverlay project={project} onOpen={onOpen} />
       <div className="relative aspect-[16/9] min-h-[160px] sm:min-h-[200px] overflow-hidden bg-black">
         {project.imageUrl ? (
           <img
@@ -103,10 +122,15 @@ function FeaturedBlockCard({ project }: { project: DesciFundingProject }) {
               href={project.docsUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-dim hover:text-white transition-colors min-h-[44px] px-2 touch-manipulation"
+              className="relative z-[2] inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-dim hover:text-white transition-colors min-h-[44px] px-2 touch-manipulation"
             >
               Docs <ArrowUpRight className="size-3" />
             </a>
+          ) : null}
+          {onOpen ? (
+            <span className="ml-auto inline-flex items-center min-h-[44px] px-2 text-[9px] font-bold uppercase tracking-widest text-myco-accent">
+              View project →
+            </span>
           ) : null}
         </div>
       </div>
@@ -114,10 +138,11 @@ function FeaturedBlockCard({ project }: { project: DesciFundingProject }) {
   );
 }
 
-function ProjectCard({ project }: { project: DesciFundingProject }) {
+function ProjectCard({ project, onOpen }: ProjectCardProps) {
   const meta = FUNDING_STAGE_META[project.stage];
   return (
-    <article className="glass-bento border-white/10 bg-black/40 flex flex-col min-h-[200px] hover:border-myco-accent/30 transition-colors group">
+    <article className="relative glass-bento border-white/10 bg-black/40 flex flex-col min-h-[200px] hover:border-myco-accent/30 transition-colors group">
+      <CardOpenOverlay project={project} onOpen={onOpen} />
       <div className="p-4 border-b border-white/5 flex items-start justify-between gap-2">
         <div className="min-w-0">
           <span
@@ -149,7 +174,7 @@ function ProjectCard({ project }: { project: DesciFundingProject }) {
               href={project.proposalUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-myco-accent hover:text-white transition-colors min-h-[44px] px-2 touch-manipulation"
+              className="relative z-[2] inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-myco-accent hover:text-white transition-colors min-h-[44px] px-2 touch-manipulation"
             >
               Proposals <ExternalLink className="size-3" />
             </a>
@@ -159,10 +184,15 @@ function ProjectCard({ project }: { project: DesciFundingProject }) {
               href={project.docsUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-dim hover:text-white transition-colors min-h-[44px] px-2 touch-manipulation"
+              className="relative z-[2] inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-dim hover:text-white transition-colors min-h-[44px] px-2 touch-manipulation"
             >
               Docs <ArrowUpRight className="size-3" />
             </a>
+          ) : null}
+          {onOpen ? (
+            <span className="ml-auto inline-flex items-center min-h-[44px] px-2 text-[9px] font-bold uppercase tracking-widest text-myco-accent">
+              View project →
+            </span>
           ) : null}
         </div>
       </div>
@@ -173,9 +203,10 @@ function ProjectCard({ project }: { project: DesciFundingProject }) {
 interface FundingViewProps {
   mycoSnapshot: PulseMycoSnapshot | null;
   onNavigateTab?: (tab: PulseTabId, focus?: string) => void;
+  onOpenProject?: (slug: string) => void;
 }
 
-export function FundingView({ mycoSnapshot, onNavigateTab }: FundingViewProps) {
+export function FundingView({ mycoSnapshot, onNavigateTab, onOpenProject }: FundingViewProps) {
   const [section, setSection] = useState<FundingSection>("auction");
   const [bundle, setBundle] = useState<PulseFundingBundle | null>(null);
   const [loading, setLoading] = useState(true);
@@ -219,7 +250,7 @@ export function FundingView({ mycoSnapshot, onNavigateTab }: FundingViewProps) {
                 BLOCK · DeSci Launchpad
               </p>
               <h1 className="text-2xl sm:text-3xl md:text-4xl font-black uppercase tracking-tight text-white leading-none">
-                MycoDAO Funding
+                MycoDAO Projects
               </h1>
               <p className="text-sm text-white/60 mt-3 leading-relaxed max-w-xl">
                 Incubate, curate, and auction fungal science on Solana — treasury grants, FungIP
@@ -325,7 +356,7 @@ export function FundingView({ mycoSnapshot, onNavigateTab }: FundingViewProps) {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {FEATURED_FUNDING_BLOCKS.map((p) => (
-              <FeaturedBlockCard key={p.id} project={p} />
+              <FeaturedBlockCard key={p.id} project={p} onOpen={onOpenProject} />
             ))}
           </div>
         </section>
@@ -370,7 +401,7 @@ export function FundingView({ mycoSnapshot, onNavigateTab }: FundingViewProps) {
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
               {projects.map((p) => (
-                <ProjectCard key={p.id} project={p} />
+                <ProjectCard key={p.id} project={p} onOpen={onOpenProject} />
               ))}
             </div>
           </>
@@ -433,14 +464,11 @@ export function FundingView({ mycoSnapshot, onNavigateTab }: FundingViewProps) {
             </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {marketGrid.map((p) => (
-              <a
-                key={`m-${p.id}`}
-                href={p.docsUrl ?? BLOCK_FUNDING_LINKS.researchhub}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-3 p-3 border border-white/10 bg-black/50 hover:bg-white/[0.03] hover:border-myco-accent/30 transition-colors min-h-[44px] touch-manipulation"
-              >
+            {marketGrid.map((p) => {
+              const rowClass =
+                "flex items-center gap-3 p-3 border border-white/10 bg-black/50 hover:bg-white/[0.03] hover:border-myco-accent/30 transition-colors min-h-[44px] touch-manipulation text-left w-full";
+              const rowBody = (
+                <>
                 {p.imageUrl ? (
                   <img
                     src={p.imageUrl}
@@ -464,8 +492,30 @@ export function FundingView({ mycoSnapshot, onNavigateTab }: FundingViewProps) {
                 <span className="text-[8px] font-mono text-myco-accent/80 uppercase shrink-0">
                   {p.statusLabel ?? FUNDING_STAGE_META[p.stage].label}
                 </span>
-              </a>
-            ))}
+                </>
+              );
+              return onOpenProject ? (
+                <button
+                  key={`m-${p.id}`}
+                  type="button"
+                  onClick={() => onOpenProject(p.id)}
+                  aria-label={`Open ${p.name} project page`}
+                  className={rowClass}
+                >
+                  {rowBody}
+                </button>
+              ) : (
+                <a
+                  key={`m-${p.id}`}
+                  href={p.docsUrl ?? BLOCK_FUNDING_LINKS.researchhub}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={rowClass}
+                >
+                  {rowBody}
+                </a>
+              );
+            })}
           </div>
           <a
             href="https://www.mycodao.com/projects"
@@ -483,6 +533,7 @@ export function FundingView({ mycoSnapshot, onNavigateTab }: FundingViewProps) {
           loading={loading}
           onNavigateTab={onNavigateTab}
           onRefresh={() => void load()}
+          onOpenProject={onOpenProject}
         />
       </div>
     </div>

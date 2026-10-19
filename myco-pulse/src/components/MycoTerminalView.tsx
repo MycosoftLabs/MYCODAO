@@ -10,6 +10,8 @@ import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { cn } from "../lib/utils";
 import { DexScreenerEmbed } from "./DexScreenerEmbed";
 import { MatrixSwap } from "./MatrixSwap";
+import { MycoTokenFacts } from "./MycoTokenFacts";
+import { FungalEconomyCycle } from "./FungalEconomyCycle";
 import {
   fetchLiquidityPoolsFromDex,
   fetchPulseMyco,
@@ -178,6 +180,10 @@ export function MycoTerminalView({ setActiveTab }: MycoTerminalViewProps) {
             </button>
           </div>
         </div>
+
+        <MycoTokenFacts />
+
+        <FungalEconomyCycle variant="myco" />
 
         {/* Explorer links */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">

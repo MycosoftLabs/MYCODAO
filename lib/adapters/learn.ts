@@ -3,7 +3,7 @@
  * Optional dev fallback when `LEARN_DEV_FALLBACK=1` and no remote/local data (see `learn-dev-fallback.ts`).
  */
 
-import { readFile } from "fs/promises";
+import { readdir, readFile } from "fs/promises";
 import path from "path";
 import type { LearnModule, LearnResourceLink, LearnTrack } from "@/lib/types";
 import { getMockLearnModules } from "@/lib/adapters/learn-dev-fallback";
@@ -56,7 +56,54 @@ function normalizeModule(m: LearnModule): LearnModule {
   };
 }
 
+/**
+ * Course files: `content/learn/NN-slug.md`. First line `# Course: <name>`; then lessons, each opened by a
+ * `+++` block of `key: value` lines (id, title, level, minutes, track, summary, tags, resources) and closed
+ * by `+++`, followed by the lesson markdown. `resources` is `Label | https://url; Label | https://url`.
+ */
+async function readCourseFiles(): Promise<LearnModule[]> {
+  const dir = path.join(process.cwd(), "content", "learn");
+  const files = (await readdir(dir).catch(() => [] as string[])).filter((f) => f.endsWith(".md")).sort();
+  const modules: LearnModule[] = [];
+  for (const [courseIndex, file] of files.entries()) {
+    const raw = (await readFile(path.join(dir, file), "utf8")).replace(/\r\n/g, "\n");
+    const course = raw.match(/^# Course:\s*(.+)$/m)?.[1]?.trim() ?? file.replace(/\.md$/, "");
+    const parts = raw.split(/^\+\+\+\s*$/m).slice(1);
+    for (let i = 0; i + 1 < parts.length; i += 2) {
+      const meta: Record<string, string> = {};
+      for (const line of parts[i].split("\n")) {
+        const at = line.indexOf(":");
+        if (at > 0) meta[line.slice(0, at).trim()] = line.slice(at + 1).trim();
+      }
+      const level = meta.level as LearnModule["level"];
+      const mod: LearnModule = {
+        id: meta.id,
+        title: meta.title,
+        level,
+        readingTimeMin: Number(meta.minutes) || 5,
+        summary: meta.summary ?? "",
+        tags: (meta.tags ?? "").split(",").map((t) => t.trim()).filter(Boolean),
+        contentMd: parts[i + 1].trim(),
+        track: (meta.track as LearnTrack) || undefined,
+        course,
+        courseOrder: courseIndex + 1,
+        lessonOrder: i / 2 + 1,
+        resourceLinks: (meta.resources ?? "")
+          .split(";")
+          .map((r) => r.split("|").map((s) => s.trim()))
+          .filter(([label, href]) => label && href)
+          .map(([label, href]) => ({ label, href })),
+      };
+      if (isLearnModule(mod)) modules.push(mod);
+    }
+  }
+  return modules;
+}
+
 export async function fetchLearnModules(): Promise<LearnModule[]> {
+  const courses = await readCourseFiles();
+  if (courses.length) return courses.map(normalizeModule);
+
   const remote = process.env.LEARN_MODULES_URL?.trim();
   if (remote) {
     try {

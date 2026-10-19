@@ -51,6 +51,8 @@ export interface FundingMarketRow {
   tradeFocus?: string;
   externalHref?: string;
   imageUrl?: string;
+  /** desciCatalog id when the row is a MycoDAO project with an in-app project page. */
+  projectSlug?: string;
 }
 
 function formatUsd(n: number | undefined) {
@@ -82,6 +84,7 @@ function projectRows(projects: DesciFundingProject[]): FundingMarketRow[] {
     tradeFocus: undefined,
     externalHref: p.docsUrl,
     imageUrl: p.imageUrl,
+    projectSlug: p.id,
   }));
 }
 
@@ -126,6 +129,7 @@ function ipRows(): FundingMarketRow[] {
     tradeTab: "FungIP",
     externalHref: p.docsUrl ?? BLOCK_FUNDING_LINKS.fungip,
     imageUrl: p.imageUrl,
+    projectSlug: p.id,
   }));
 }
 
@@ -166,6 +170,7 @@ interface FundingMarketTableProps {
   loading: boolean;
   onNavigateTab?: (tab: PulseTabId, focus?: string) => void;
   onRefresh?: () => void;
+  onOpenProject?: (slug: string) => void;
 }
 
 export function FundingMarketTable({
@@ -174,6 +179,7 @@ export function FundingMarketTable({
   loading,
   onNavigateTab,
   onRefresh,
+  onOpenProject,
 }: FundingMarketTableProps) {
   const [tab, setTab] = useState<FundingMarketTab>("projects");
 
@@ -279,9 +285,19 @@ export function FundingMarketTable({
                   </div>
                 )}
                 <div className="min-w-0">
-                  <p className="text-[11px] font-bold text-white leading-snug line-clamp-2">
-                    {row.name}
-                  </p>
+                  {row.projectSlug && onOpenProject ? (
+                    <button
+                      type="button"
+                      onClick={() => onOpenProject(row.projectSlug ?? "")}
+                      className="text-[11px] font-bold text-white leading-snug line-clamp-2 text-left hover:text-myco-accent hover:underline touch-manipulation"
+                    >
+                      {row.name}
+                    </button>
+                  ) : (
+                    <p className="text-[11px] font-bold text-white leading-snug line-clamp-2">
+                      {row.name}
+                    </p>
+                  )}
                   {row.subtitle ? (
                     <p className="text-[9px] text-dim uppercase tracking-widest truncate">
                       {row.subtitle}
@@ -317,6 +333,15 @@ export function FundingMarketTable({
               </div>
 
               <div className="md:col-span-3 flex flex-wrap items-center justify-start md:justify-end gap-2 pt-1 md:pt-0">
+                {row.projectSlug && onOpenProject ? (
+                  <button
+                    type="button"
+                    onClick={() => onOpenProject(row.projectSlug ?? "")}
+                    className="inline-flex items-center gap-1 px-2 py-1.5 min-h-[44px] text-[8px] font-black uppercase tracking-widest border border-myco-accent/30 text-myco-accent hover:bg-myco-accent/10 touch-manipulation"
+                  >
+                    Project page
+                  </button>
+                ) : null}
                 <a
                   href={row.treasuryHref}
                   target="_blank"

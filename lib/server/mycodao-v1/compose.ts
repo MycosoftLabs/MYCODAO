@@ -29,6 +29,9 @@ import { getPublicBiobankCatalog } from "@/lib/server/biobank";
 import { speciesTokenProxy } from "@/lib/server/species-token-proxy";
 import { mindexSpeciesCatalog } from "@/lib/server/species-catalog-mindex";
 import { contentSource, mindexGet, readMirror, type ContentSource } from "./store";
+import { FUNGAL_TOPICS, latestFungalNews, latestFungalResearch } from "@/lib/server/fungal-research-feed";
+
+const NATURE_TOPICS = new Set<string>(["new-species", "networks", "remediation"]);
 
 type Source = Page<unknown>["source"];
 
@@ -143,10 +146,11 @@ export async function composePulse(query: URLSearchParams): Promise<Page<Content
   const offset = decodeCursor(query.get("cursor"));
   const now = new Date().toISOString();
 
-  const [editorial, needs, research, podcasts, news] = await Promise.all([
+  const [editorial, needs, research, fungalNews, podcasts, news] = await Promise.all([
     editorialList<ContentItem>("/pulse?limit=100", "content_items"),
     editorialList<FundingNeed>("/funding-needs", "funding_needs"),
-    feed && feed !== "research" ? Promise.resolve([]) : recentResearch(20).catch(() => []),
+    feed && feed !== "research" ? Promise.resolve([]) : latestFungalResearch(24).catch(() => []),
+    feed && feed !== "community" ? Promise.resolve([]) : latestFungalNews(10).catch(() => []),
     feed && feed !== "community" ? Promise.resolve([]) : fetchPodcastEpisodes().catch(() => []),
     feed && feed !== "community" ? Promise.resolve([]) : fetchNews().catch(() => []),
   ]);
@@ -155,17 +159,35 @@ export async function composePulse(query: URLSearchParams): Promise<Page<Content
     ...research.map((r): ContentItem => ({
       id: `research:${r.id}`,
       feed: "research",
-      pillar: "science",
+      pillar: NATURE_TOPICS.has(r.topic) ? "nature" : "science",
       title: r.title,
-      summary: r.summary || null,
-      why_it_matters: null,
-      action_url: r.url ?? null,
-      action_label: r.url ? "Read the paper" : null,
-      result_status: "literature",
-      published_at: r.publishedAt || null,
+      summary: r.authors,
+      why_it_matters: r.topic !== "news" ? `Topic: ${FUNGAL_TOPICS[r.topic].label}` : null,
+      action_url: r.url,
+      action_label: r.kind === "preprint" ? "Read the preprint" : "Read the paper",
+      result_status: r.kind === "preprint" ? "preprint" : "literature",
+      published_at: r.published_at,
       project_slug: null,
       source_name: r.source,
-      source_url: r.url ?? null,
+      source_url: r.url,
+      created_at: now,
+      updated_at: now,
+      ...LIVE_STAMP,
+    })),
+    ...fungalNews.map((n): ContentItem => ({
+      id: `fungal-news:${n.id}`,
+      feed: "community",
+      pillar: "science",
+      title: n.title,
+      summary: null,
+      why_it_matters: null,
+      action_url: n.url,
+      action_label: "Read",
+      result_status: "news",
+      published_at: n.published_at,
+      project_slug: null,
+      source_name: n.source,
+      source_url: n.url,
       created_at: now,
       updated_at: now,
       ...LIVE_STAMP,
@@ -471,7 +493,7 @@ export async function composeCatalog(request: Request): Promise<Page<CatalogReco
         curator: "MINDEX",
         availability: "reference",
         image_url: s.image?.url ?? null,
-        next_action_url: `/v2/rewards?taxon=${encodeURIComponent(s.taxonId)}`,
+        next_action_url: `/blocks/?tab=FungIP&taxon=${encodeURIComponent(s.taxonId)}`,
         next_action_label: "Submit an observation",
         mindex_taxon_id: s.taxonId,
         species_token_mint: s.token?.mint ?? null,

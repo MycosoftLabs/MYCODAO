@@ -68,10 +68,17 @@ export default defineConfig(({mode}) => {
       // Forward /api/* to MYCODAO Next (npm run dev in repo root on :3004)
       proxy: {
         '/api': {
-          target: env.VITE_PULSE_API_ORIGIN || 'http://127.0.0.1:3004',
+          target: process.env.PULSE_API_PROXY_TARGET || env.VITE_PULSE_API_ORIGIN || 'http://127.0.0.1:3004',
           changeOrigin: true,
           secure: false,
         },
+        // Next-rendered pages linked from the SPA (species rewards, QR accession pages) and their assets.
+        ...Object.fromEntries(
+          ['/species-tokens', '/t/', '/_next', '/assets/', '/org-logos/'].map((route) => [
+            route,
+            { target: process.env.PULSE_API_PROXY_TARGET || env.VITE_PULSE_API_ORIGIN || 'http://127.0.0.1:3004', changeOrigin: true, secure: false },
+          ]),
+        ),
       },
     },
   };

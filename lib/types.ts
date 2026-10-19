@@ -106,6 +106,10 @@ export type LearnModule = {
   contentMd: string;
   /** Primary curriculum track (defaults to markets-basics if omitted in legacy data). */
   track?: LearnTrack;
+  /** Course grouping (content/learn/*.md) and position for ordered learning paths. */
+  course?: string;
+  courseOrder?: number;
+  lessonOrder?: number;
   /** External references — documentation, standards, neutral primers (not endorsements). */
   resourceLinks?: LearnResourceLink[];
 };

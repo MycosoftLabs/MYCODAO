@@ -159,6 +159,10 @@ export interface PulseLearnModule {
   tags: string[];
   contentMd?: string;
   resourceLinks?: { label: string; href: string }[];
+  track?: string;
+  course?: string;
+  courseOrder?: number;
+  lessonOrder?: number;
 }
 
 export interface PulseResearchHubPaper {

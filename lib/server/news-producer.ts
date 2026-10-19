@@ -589,7 +589,7 @@ export function resolveProducerTitleBar(
   }
 
   return {
-    text: "BLOCKS NEWS · LIVE",
+    text: "NEWS · LIVE",
     logoUrl: null,
     logoNasPath: null,
     presetId: null,

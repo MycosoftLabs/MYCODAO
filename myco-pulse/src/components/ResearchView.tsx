@@ -10,6 +10,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { cn } from "../lib/utils";
+import { FungalFrontiers } from "./FungalFrontiers";
 import { stripHtml } from "../lib/stripHtml";
 import { MYCO_RESEARCH_PROGRAMS, type DesciFundingProject } from "../data/desciCatalog";
 import type { PulseResearchItem } from "../lib/pulseApi";
@@ -207,6 +208,7 @@ export function ResearchView({ research, loading: parentLoading }: ResearchViewP
             <BookOpen className="size-4" /> ResearchHub docs
           </a>
         </header>
+        <FungalFrontiers />
 
         <div className="relative">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-dim" aria-hidden />

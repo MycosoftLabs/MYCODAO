@@ -104,6 +104,26 @@ const YAHOO_MAP: Record<
   DIS: { yahoo: "DIS", name: "Disney", assetClass: "equity" },
   PLTR: { yahoo: "PLTR", name: "Palantir", assetClass: "equity" },
   SMCI: { yahoo: "SMCI", name: "Super Micro", assetClass: "equity" },
+  XBI: { yahoo: "XBI", name: "SPDR S&P Biotech ETF", assetClass: "equity" },
+  IBB: { yahoo: "IBB", name: "iShares Biotechnology ETF", assetClass: "equity" },
+  ARKG: { yahoo: "ARKG", name: "ARK Genomic Revolution ETF", assetClass: "equity" },
+  MRNA: { yahoo: "MRNA", name: "Moderna", assetClass: "equity" },
+  VRTX: { yahoo: "VRTX", name: "Vertex Pharmaceuticals", assetClass: "equity" },
+  REGN: { yahoo: "REGN", name: "Regeneron", assetClass: "equity" },
+  AMGN: { yahoo: "AMGN", name: "Amgen", assetClass: "equity" },
+  GILD: { yahoo: "GILD", name: "Gilead Sciences", assetClass: "equity" },
+  BIIB: { yahoo: "BIIB", name: "Biogen", assetClass: "equity" },
+  CRSP: { yahoo: "CRSP", name: "CRISPR Therapeutics", assetClass: "equity" },
+  NTLA: { yahoo: "NTLA", name: "Intellia Therapeutics", assetClass: "equity" },
+  BEAM: { yahoo: "BEAM", name: "Beam Therapeutics", assetClass: "equity" },
+  ILMN: { yahoo: "ILMN", name: "Illumina", assetClass: "equity" },
+  TWST: { yahoo: "TWST", name: "Twist Bioscience", assetClass: "equity" },
+  DNA: { yahoo: "DNA", name: "Ginkgo Bioworks", assetClass: "equity" },
+  RXRX: { yahoo: "RXRX", name: "Recursion Pharmaceuticals", assetClass: "equity" },
+  TMO: { yahoo: "TMO", name: "Thermo Fisher Scientific", assetClass: "equity" },
+  TAO: { yahoo: "TAO22974-USD", name: "Bittensor", assetClass: "crypto" },
+  AKT: { yahoo: "AKT-USD", name: "Akash Network", assetClass: "crypto" },
+  HNT: { yahoo: "HNT-USD", name: "Helium", assetClass: "crypto" },
   OIL: { yahoo: "CL=F", name: "WTI Crude Oil", assetClass: "commodity" },
   GOLD: { yahoo: "GC=F", name: "Gold Futures", assetClass: "precious_metals" },
   XAU: { yahoo: "GC=F", name: "Gold Futures", assetClass: "precious_metals" },
@@ -137,30 +157,68 @@ const YAHOO_MAP: Record<
   BNO: { yahoo: "BNO", name: "Brent Crude ETF", assetClass: "commodity" },
 };
 
-async function fetchYahooMeta(yahooSym: string): Promise<YahooMeta | null> {
+const SPARKLINE_POINTS = 32;
+
+interface YahooChart {
+  meta: YahooMeta;
+  closes: number[];
+}
+
+function downsample(values: number[], points: number): number[] {
+  if (values.length <= points) return values;
+  const step = (values.length - 1) / (points - 1);
+  return Array.from({ length: points }, (_, i) => values[Math.round(i * step)]);
+}
+
+/**
+ * Markets: today's 15-minute bars (meta carries price and previous close).
+ * Crypto trades around the clock, so it uses the last two days of hourly bars instead of the UTC day.
+ */
+async function fetchYahooChart(yahooSym: string, isCrypto: boolean): Promise<YahooChart | null> {
   try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSym)}?interval=1d&range=1d`;
+    const window = isCrypto ? "interval=1h&range=2d" : "interval=15m&range=1d";
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSym)}?${window}`;
     const res = await fetch(url, {
       cache: "no-store",
       signal: AbortSignal.timeout(8_000),
       headers: { "User-Agent": "Mozilla/5.0 (compatible; MycosoftPulse/1.0)" },
     });
     if (!res.ok) return null;
-    const body = (await res.json()) as { chart?: { result?: Array<{ meta?: YahooMeta }> } };
-    return body.chart?.result?.[0]?.meta ?? null;
+    const body = (await res.json()) as {
+      chart?: {
+        result?: Array<{ meta?: YahooMeta; indicators?: { quote?: Array<{ close?: Array<number | null> }> } }>;
+      };
+    };
+    const result = body.chart?.result?.[0];
+    if (!result?.meta) return null;
+    const closes = (result.indicators?.quote?.[0]?.close ?? []).filter(
+      (v): v is number => typeof v === "number" && Number.isFinite(v) && v > 0
+    );
+    return { meta: result.meta, closes };
   } catch {
     return null;
   }
 }
 
-function metaToTicker(sym: string, meta: YahooMeta): Ticker | null {
+function metaToTicker(sym: string, chart: YahooChart): Ticker | null {
+  const { meta, closes } = chart;
   const map = YAHOO_MAP[sym];
   if (!map) return null;
   const price = meta.regularMarketPrice;
   if (typeof price !== "number" || !Number.isFinite(price) || price <= 0) return null;
-  const changePct = changePctFromYahooMeta(meta, price);
+  const isCrypto = map.assetClass === "crypto";
+  const window = isCrypto ? closes.slice(-25) : closes;
+  const dayAgo = isCrypto && window.length >= 2 ? window[0] : null;
+  const changePct = dayAgo ? ((price - dayAgo) / dayAgo) * 100 : changePctFromYahooMeta(meta, price);
   const change = (price * changePct) / 100;
   const now = new Date().toISOString();
+  const prevClose = meta.chartPreviousClose ?? meta.previousClose;
+  const sparkline =
+    window.length >= 2
+      ? downsample([...window.slice(0, -1), price], SPARKLINE_POINTS)
+      : prevClose && prevClose > 0
+        ? [prevClose, price]
+        : [];
   return {
     id: sym,
     symbol: sym,
@@ -171,7 +229,7 @@ function metaToTicker(sym: string, meta: YahooMeta): Ticker | null {
     change,
     changePct,
     sessionChangePct: changePct,
-    sparkline: Array.from({ length: 24 }, () => price),
+    sparkline,
     updatedAt: now,
   };
 }
@@ -187,9 +245,9 @@ export async function tickersFromYahoo(skipSymbols?: Set<string>): Promise<Ticke
     const rows = await Promise.all(
       batch.map(async (sym) => {
         const map = YAHOO_MAP[sym];
-        const meta = await fetchYahooMeta(map.yahoo);
-        if (!meta) return null;
-        return metaToTicker(sym, meta);
+        const chart = await fetchYahooChart(map.yahoo, map.assetClass === "crypto");
+        if (!chart) return null;
+        return metaToTicker(sym, chart);
       })
     );
     for (const row of rows) {

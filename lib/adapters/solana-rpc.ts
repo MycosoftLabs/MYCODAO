@@ -20,7 +20,7 @@ function rpcUrl(): string {
   );
 }
 
-async function solanaRpc<T>(method: string, params: unknown[]): Promise<T | null> {
+export async function solanaRpc<T>(method: string, params: unknown[]): Promise<T | null> {
   try {
     const res = await fetch(rpcUrl(), {
       method: "POST",

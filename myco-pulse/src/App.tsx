@@ -53,11 +53,14 @@ import {
   Bot,
   Rss,
   BrainCircuit,
-  Shield
+  Shield,
+  PanelRightOpen
 } from 'lucide-react';
 import { cn } from './lib/utils';
 import { mycodaoBlackLogo, mycodaoColorLogo } from './lib/brandLogos';
 import { RealmsDaoHub } from './components/RealmsDaoHub';
+import { CommunityView } from './components/CommunityView';
+import { LearnAcademy } from './components/learn/LearnAcademy';
 import { MycoTerminalView } from './components/MycoTerminalView';
 import { 
   AreaChart, 
@@ -91,25 +94,39 @@ import { WalletDisplay } from './components/WalletDisplay';
 import { TradeHistory } from './components/TradeHistory';
 import {
   EMPTY_CHART_DATA,
-  EMPTY_TICKER_GROUPS,
   tickerToAssetRow,
   buildTickerGroups,
-  buildBigMovers,
-  findTickerStrip,
+  type TickerGroups,
 } from './lib/tickerDisplay';
 import type {
   PulseCalendarEvent,
   PulseLearnModule,
+  PulseNewsItem,
   PulsePodcastEpisode,
   PulseResearchItem,
   PulseTicker,
   PulseMycoSnapshot,
 } from './lib/pulseApi';
 import { buildOracleSyncInsight } from './lib/oracleSyncInsight';
-import { formatGlobalMarketSessionSummary } from './lib/marketSessions';
+import { TradeMarketWidgets } from './components/TradeMarketWidgets';
+import {
+  BiobankWidget,
+  FungalLibraryWidget,
+  MycoPodWidget,
+  ResearchFeedWidget,
+  ScienceHeadlinesWidget,
+  ScienceLearnWidget,
+  ScienceProgramsWidget,
+  SpeciesRewardsWidget,
+} from './components/PulseScienceWidgets';
 import { PulseBottomNav, PulseSidebarNav, PulseMobileBrandPair, type PulseTabId } from './components/PulseShellNav';
 import { handleMobileNewsPointerDown } from './lib/mobileNewsGestureUnlock';
-import { FundingView } from './components/FundingView';
+import { FundingProjectsTab } from './components/FundingProjectsTab';
+import { PulseHeroFeed } from './components/PulseHeroFeed';
+import { ScienceMarketsWidget } from './components/ScienceMarketsWidget';
+import { PulseMycoWidget } from './components/PulseMycoWidget';
+import { clearQueryPrefix, readQuery, writeQuery } from './lib/spaQuery';
+import { isOneOf } from './lib/mycodaoV1Labels';
 import { ResearchView } from './components/ResearchView';
 import { TissueView } from './components/TissueView';
 import { useMediaQuery } from './hooks/useMediaQuery';
@@ -118,30 +135,24 @@ import { useDaoWallet } from './hooks/useDaoWallet';
 // Handle RGL ESM/CJS interop
 const Grid = (RGL as any).default || RGL;
 const ResponsiveGridLayout = Grid.WidthProvider(Grid.Responsive);
+const PulseResponsiveGrid = Grid.Responsive;
+const PULSE_FEED_OPEN_KEY = "mycodao.pulse.feedOpen.v1";
 
-function stackGridLayout(
-  items: { i: string; w: number; h: number; x?: number; y?: number }[],
-  cols: number
-) {
-  let y = 0;
-  return items.map((item) => {
-    const next = { ...item, x: 0, w: cols, y };
-    y += item.h;
-    return next;
-  });
+type GridItem = { i: string; w: number; h: number; x?: number; y?: number };
+
+function pairGridLayout(items: GridItem[], cols: number, h: number) {
+  const half = Math.floor(cols / 2);
+  return items.map((item, index) => ({
+    ...item,
+    x: (index % 2) * half,
+    y: Math.floor(index / 2) * h,
+    w: half,
+    h,
+  }));
 }
 
-/** Full-width square tiles on tablet/phone — h equals w in grid units when rowHeight = width/cols. */
-function squareStackLayout(
-  items: { i: string; w: number; h: number; x?: number; y?: number }[],
-  cols: number
-) {
-  let y = 0;
-  return items.map((item) => {
-    const next = { ...item, x: 0, w: cols, h: cols, y };
-    y += cols;
-    return next;
-  });
+function stackGridLayout(items: GridItem[], cols: number, h: number) {
+  return items.map((item, index) => ({ ...item, x: 0, y: index * h, w: cols, h }));
 }
 
 function gridColsForWidth(width: number): number {
@@ -151,59 +162,29 @@ function gridColsForWidth(width: number): number {
   return 1;
 }
 
-const lgLayout = [
-    { i: 'overview', x: 0, y: 0, w: 4, h: 4 },
-    { i: 'crypto', x: 4, y: 0, w: 3, h: 4 },
-    { i: 'metals', x: 7, y: 0, w: 2, h: 4 },
-    { i: 'big_movers', x: 9, y: 0, w: 3, h: 4 },
+const lgLayout: GridItem[] = [
+    { i: 'science_markets', x: 0, y: 0, w: 6, h: 5 },
+    { i: 'research', x: 6, y: 0, w: 6, h: 5 },
 
-    { i: 'commodities', x: 0, y: 4, w: 3, h: 4 },
-    { i: 'bio_assets', x: 3, y: 4, w: 3, h: 4 },
-    { i: 'tech', x: 6, y: 4, w: 3, h: 4 },
-    { i: 'business', x: 9, y: 4, w: 3, h: 4 },
+    { i: 'species_rewards', x: 0, y: 5, w: 3, h: 5 },
+    { i: 'biobank', x: 3, y: 5, w: 3, h: 5 },
+    { i: 'fungal_library', x: 6, y: 5, w: 3, h: 5 },
+    { i: 'mycopod', x: 9, y: 5, w: 3, h: 5 },
 
-    { i: 'news_mini', x: 0, y: 8, w: 4, h: 4 },
-    { i: 'podcast_mini', x: 4, y: 8, w: 4, h: 4 },
-    { i: 'learn_mini', x: 8, y: 8, w: 4, h: 4 },
-
-    { i: 'watchlist', x: 0, y: 12, w: 3, h: 4 },
-    { i: 'indicators', x: 3, y: 12, w: 3, h: 4 },
-    { i: 'eco', x: 6, y: 12, w: 3, h: 4 },
-    { i: 'funding', x: 9, y: 12, w: 3, h: 4 },
-
-    { i: 'bonds', x: 0, y: 16, w: 3, h: 4 },
-    { i: 'research', x: 3, y: 16, w: 3, h: 4 },
-    { i: 'calendar', x: 6, y: 16, w: 3, h: 4 },
-    { i: 'status', x: 9, y: 16, w: 3, h: 4 },
-
-    { i: 'whale_watch_mini', x: 0, y: 20, w: 12, h: 4 },
+    { i: 'programs', x: 0, y: 10, w: 6, h: 5 },
+    { i: 'learn', x: 6, y: 10, w: 6, h: 5 },
+    { i: 'science_news', x: 0, y: 15, w: 12, h: 4 },
 ];
 
 const initialLayouts = {
   lg: lgLayout,
-  md: squareStackLayout(lgLayout, 6),
-  sm: squareStackLayout(lgLayout, 3),
-  xs: squareStackLayout(lgLayout, 1),
-  xxs: squareStackLayout(lgLayout, 1),
+  md: pairGridLayout(lgLayout, 6, 3),
+  sm: stackGridLayout(lgLayout, 3, 2),
+  xs: stackGridLayout(lgLayout, 1, 1),
+  xxs: stackGridLayout(lgLayout, 1, 1),
 };
 
 // --- TERMINAL COMPONENTS ---
-
-const Ticker = ({ groups = EMPTY_TICKER_GROUPS }: { groups?: typeof EMPTY_TICKER_GROUPS }) => (
-  <div className="h-8 bg-black border-b border-myco-accent/20 flex items-center overflow-hidden shrink-0 z-50">
-    <div className="ticker-track">
-      {[...(groups.crypto || []), ...(groups.tech || [])].map((t, i) => (
-        <div key={i} className="inline-flex items-center gap-2 px-6 border-r border-myco-accent/10 h-full group cursor-pointer hover:bg-myco-accent/5">
-          <span className="text-[10px] font-bold text-dim group-hover:text-white transition-colors uppercase">{t.s}</span>
-          <span className="text-[11px] font-mono font-medium">{t.p}</span>
-          <span className={cn("text-[10px] font-bold", t.up ? "text-myco-accent" : "text-red-500")}>
-            {t.c}
-          </span>
-        </div>
-      ))}
-    </div>
-  </div>
-);
 
 const WidgetWrapper = ({ children, title, onToggleFull, isFull, id }: any) => {
   const layoutLocked = useMediaQuery('(max-width: 767px)');
@@ -241,61 +222,51 @@ const WidgetWrapper = ({ children, title, onToggleFull, isFull, id }: any) => {
   );
 };
 
-function formatNewsAge(iso?: string): string {
-  if (!iso) return "—";
-  const mins = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60_000));
-  if (mins < 60) return `${mins}m`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 48) return `${hrs}h`;
-  return `${Math.floor(hrs / 24)}d`;
-}
-
 // --- SUB-VIEWS ---
 
-const PulseDashboard = ({ 
-  aiInsight, 
-  layouts, 
+interface PulseDashboardProps {
+  layouts: any;
+  setLayouts: (layouts: any) => void;
+  onLayoutChange: (currentLayout: any, allLayouts: any) => void;
+  setActiveTab: (tab: PulseTabId) => void;
+  onOpenProject: (slug: string) => void;
+  news: PulseNewsItem[];
+  episodes: PulsePodcastEpisode[];
+  research: PulseResearchItem[];
+  learnModules: PulseLearnModule[];
+  tickers: PulseTicker[];
+  loading: boolean;
+}
+
+const PulseDashboard = ({
+  layouts,
   setLayouts,
-  onLayoutChange, 
+  onLayoutChange,
   setActiveTab,
-  tickerGroups = EMPTY_TICKER_GROUPS,
-  tickers = [] as PulseTicker[],
-  mycoSnapshot = null as PulseMycoSnapshot | null,
-  chartData = EMPTY_CHART_DATA,
-  whales = [],
-  news = [],
-  episodes = [] as PulsePodcastEpisode[],
-  calendar = [] as PulseCalendarEvent[],
-  research = [] as PulseResearchItem[],
-  learnModules = [] as PulseLearnModule[],
-  fearGreed = null as { value: number; classification: string } | null,
-  configStatus = null as { configured?: Record<string, boolean> } | null,
-  loading = false
-}: any) => {
+  onOpenProject,
+  news,
+  episodes,
+  research,
+  learnModules,
+  tickers,
+  loading,
+}: PulseDashboardProps) => {
   const [fullWidget, setFullWidget] = useState<string | null>(null);
   const [savedLayouts, setSavedLayouts] = useState<any>(null);
   const pulseGridRef = useRef<HTMLDivElement>(null);
+  const pulseGridColRef = useRef<HTMLDivElement>(null);
   const [pulseGridWidth, setPulseGridWidth] = useState(0);
-  const [globalMarket, setGlobalMarket] = useState<any>({ SOL: '...', BTC: '...', ETH: '...', status: 'SYNCING' });
-  const [exchangeSessionSummary, setExchangeSessionSummary] = useState(() =>
-    formatGlobalMarketSessionSummary()
+  const [isFeedOpen, setIsFeedOpen] = useState(
+    () => typeof window !== "undefined" && window.localStorage.getItem(PULSE_FEED_OPEN_KEY) === "1"
   );
 
-  useEffect(() => {
-    import('./services/apiService').then(({ fetchGlobalMarketData }) => {
-      fetchGlobalMarketData().then(data => setGlobalMarket(data));
-    });
-  }, []);
+  const setFeedOpen = (open: boolean) => {
+    setIsFeedOpen(open);
+    window.localStorage.setItem(PULSE_FEED_OPEN_KEY, open ? "1" : "0");
+  };
 
   useEffect(() => {
-    const refresh = () => setExchangeSessionSummary(formatGlobalMarketSessionSummary());
-    refresh();
-    const t = setInterval(refresh, 30_000);
-    return () => clearInterval(t);
-  }, []);
-
-  useEffect(() => {
-    const el = pulseGridRef.current;
+    const el = pulseGridColRef.current;
     if (!el) return;
     const update = () => setPulseGridWidth(el.clientWidth);
     update();
@@ -314,58 +285,6 @@ const PulseDashboard = ({
 
   const isTouchPulse = pulseGridWidth > 0 && pulseGridWidth < 768;
 
-  const bigMovers = useMemo(() => buildBigMovers(tickers, 10), [tickers]);
-
-  const footerTapeItems = useMemo(
-    () => [
-      ...tickerGroups.crypto,
-      ...tickerGroups.metals,
-      ...tickerGroups.commodities,
-      ...tickerGroups.bio,
-      ...tickerGroups.tech,
-      ...tickerGroups.business,
-      ...tickerGroups.indicators,
-    ].filter((t) => t.p && t.p !== "—"),
-    [tickerGroups]
-  );
-
-  const overviewMajors = useMemo(() => {
-    const pick = (sym: string) =>
-      findTickerStrip(tickerGroups, sym) ??
-      tickerGroups.crypto.find((t) => t.s === sym);
-    return {
-      BTC: pick("BTC"),
-      ETH: pick("ETH"),
-      SOL: pick("SOL"),
-    };
-  }, [tickerGroups]);
-
-  const mycoStrip = useMemo(
-    () => findTickerStrip(tickerGroups, "MYCO") ?? tickerGroups.bio.find((t) => t.s === "MYCO"),
-    [tickerGroups]
-  );
-
-  const vixStrip = useMemo(
-    () => findTickerStrip(tickerGroups, "VIX") ?? tickerGroups.indicators.find((t) => t.s === "VIX"),
-    [tickerGroups]
-  );
-
-  const mycoDistPct = useMemo(() => {
-    const dist = mycoSnapshot?.canonical?.distribution ?? [];
-    const find = (needle: string) =>
-      dist.find((d) => d.title.toLowerCase().includes(needle))?.pct;
-    return {
-      supply: mycoSnapshot?.canonical?.totalSupplyLabel ?? (mycoSnapshot?.supply ? `${mycoSnapshot.supply.toLocaleString()} MYCO` : null),
-      community: find("community"),
-      biobank: find("biobank"),
-    };
-  }, [mycoSnapshot]);
-
-  const footerSegments = useMemo(
-    () => newsToTickerSegments(news, footerTapeItems),
-    [news, footerTapeItems]
-  );
-
   const toggleFull = (id: string) => {
     if (fullWidget === id) {
       if (savedLayouts) {
@@ -380,10 +299,10 @@ const PulseDashboard = ({
       Object.keys(newLayouts).forEach(bp => {
         newLayouts[bp] = newLayouts[bp].map((item: any) => {
           if (item.i === id) {
-             const growW = bp === 'lg' ? 12 : bp === 'md' ? 6 : 4;
-             return { ...item, x: 0, y: 0, w: growW, h: 16 };
+             const growW = bp === 'lg' ? 12 : bp === 'md' ? 6 : bp === 'sm' ? 3 : 1;
+             return { ...item, x: 0, y: 0, w: growW, h: 8 };
           }
-          return { ...item, w: bp === 'lg' ? 3 : 2, h: 4 };
+          return item;
         });
       });
       setLayouts(newLayouts);
@@ -391,129 +310,11 @@ const PulseDashboard = ({
     }
   };
 
-  const MarketOverviewDetailed = () => (
-    <div className="h-full flex flex-col gap-6 animate-in fade-in duration-500">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {[
-          { label: 'BITCOIN', sym: 'BTC', val: overviewMajors.BTC?.p ?? globalMarket.BTC, change: overviewMajors.BTC?.c, up: overviewMajors.BTC?.up, color: 'text-orange-500' },
-          { label: 'ETHEREUM', sym: 'ETH', val: overviewMajors.ETH?.p ?? globalMarket.ETH, change: overviewMajors.ETH?.c, up: overviewMajors.ETH?.up, color: 'text-blue-400' },
-          { label: 'SOLANA', sym: 'SOL', val: overviewMajors.SOL?.p ?? globalMarket.SOL, change: overviewMajors.SOL?.c, up: overviewMajors.SOL?.up, color: 'text-myco-accent' }
-        ].map((m, i) => (
-          <div key={i} className="p-4 glass-bento border-white/5 bg-white/[0.02]">
-            <span className="text-[10px] font-black text-dim uppercase tracking-widest block mb-2">{m.label}</span>
-            <div className="flex justify-between items-end">
-              <span className="text-2xl font-black text-white font-mono">{m.val}</span>
-              {m.change ? (
-                <span className={cn("text-xs font-bold", m.up ? "text-myco-accent" : "text-red-400")}>{m.change}</span>
-              ) : null}
-            </div>
-          </div>
-        ))}
-      </div>
-      
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 overflow-hidden">
-        <div className="glass-bento p-6 border-white/5 bg-black/40 flex flex-col">
-           <div className="flex justify-between items-center mb-4">
-              <h4 className="text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2">
-                <BarChart3 className="size-3 text-myco-accent" />
-                Aggregated Volatility Index
-              </h4>
-              <div className="flex gap-2">
-                 <div className="px-2 py-0.5 bg-myco-accent/20 text-myco-accent text-[8px] font-bold uppercase rounded-sm border border-myco-accent/30">Live Trace</div>
-              </div>
-           </div>
-           <div className="flex-1 min-h-[200px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData}>
-                  <defs>
-                    <linearGradient id="colorWave" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#00ff88" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#00ff88" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
-                  <XAxis dataKey="time" hide />
-                  <YAxis hide domain={['auto', 'auto']} />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#050505', border: '1px solid rgba(255,255,255,0.1)', fontSize: '10px' }}
-                    itemStyle={{ color: '#00ff88' }}
-                  />
-                  <Area type="monotone" dataKey="price" stroke="#00ff88" fillOpacity={1} fill="url(#colorWave)" />
-                </AreaChart>
-              </ResponsiveContainer>
-           </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-           <div className="glass-bento p-6 border-white/5 bg-black/40 flex flex-col justify-center items-center text-center gap-4">
-              <Compass className="size-8 text-myco-accent animate-pulse" />
-              <div>
-                <p className="text-[10px] font-black text-white uppercase tracking-widest mb-1">Crypto Fear &amp; Greed</p>
-                <div className="text-2xl font-black text-myco-accent">
-                  {fearGreed ? `${fearGreed.classification.toUpperCase()} (${fearGreed.value})` : '—'}
-                </div>
-              </div>
-           </div>
-           <div className="glass-bento p-6 border-white/5 bg-black/40 flex flex-col justify-center items-center text-center gap-4">
-              <Zap className="size-8 text-yellow-400" />
-              <div>
-                <p className="text-[10px] font-black text-white uppercase tracking-widest mb-1">VIX (Volatility)</p>
-                <div className="text-2xl font-black text-white">{vixStrip?.p ?? '—'}</div>
-                {vixStrip?.c ? (
-                  <span className={cn("text-[10px] font-bold", vixStrip.up ? "text-myco-accent" : "text-red-400")}>{vixStrip.c}</span>
-                ) : null}
-              </div>
-           </div>
-           <div className="col-span-2 glass-bento p-6 border-white/5 bg-white/[0.02] flex items-center justify-between">
-              <div className="flex gap-4">
-                 <div className="size-10 bg-myco-accent flex items-center justify-center p-2 rounded-sm shrink-0">
-                    <FlaskConical className="size-6 text-black" />
-                 </div>
-                 <div>
-                    <h5 className="text-[10px] font-black text-white uppercase tracking-widest">Latest Research</h5>
-                    <p className="text-[9px] text-dim font-bold uppercase leading-tight mt-1 line-clamp-2">
-                      {research[0]?.title || news[0]?.title || 'Awaiting /api/research or /api/news'}
-                    </p>
-                 </div>
-              </div>
-           </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  const TickerList = ({ items }: any) => (
-    <div className="flex flex-col gap-0.5 overflow-y-auto no-scrollbar max-h-full">
-      {!items?.length ? (
-        <p className="text-[9px] font-bold text-dim uppercase py-2">Awaiting live feed…</p>
-      ) : (
-        items.map((item: any, i: number) => (
-          <div
-            key={`${item.s}-${i}`}
-            className="flex items-center justify-between py-1 px-1 group cursor-pointer hover:bg-myco-accent/10 transition-colors"
-            onClick={() => setActiveTab('Markets')}
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="text-[10px] font-bold text-dim group-hover:text-white transition-colors w-12 shrink-0">{item.s}</span>
-              <span className="text-[11px] font-mono font-medium truncate">{item.p}</span>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <span className={cn("text-[9px] font-bold", item.up ? "text-myco-accent" : "text-red-500")}>
-                {item.c}
-              </span>
-              <div className="w-10 h-3 flex items-end gap-[1px] opacity-40">
-                {[0, 1, 2, 3].map((j) => (
-                  <div
-                    key={j}
-                    className={cn("w-full bg-current", item.up ? "text-myco-accent" : "text-red-500")}
-                    style={{ height: `${item.up ? 28 + j * 18 : 88 - j * 18}%` }}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-        ))
-      )}
+  const widget = (id: string, title: string, body: React.ReactNode) => (
+    <div key={id}>
+      <WidgetWrapper title={title} id={id} onToggleFull={toggleFull} isFull={fullWidget === id}>
+        {body}
+      </WidgetWrapper>
     </div>
   );
 
@@ -531,8 +332,34 @@ const PulseDashboard = ({
           isTouchPulse && "pulse-grid-touch"
         )}
       >
-        <ResponsiveGridLayout
+        <div className="flex flex-col gap-3 p-3 md:px-4 lg:flex-row lg:items-start">
+          {isFeedOpen ? (
+            <aside
+              aria-label="What's happening now"
+              className="order-1 h-[22rem] shrink-0 lg:sticky lg:top-3 lg:order-2 lg:h-[calc(100dvh-7rem)] lg:w-[340px] xl:w-[380px]"
+            >
+              <PulseHeroFeed onOpenProject={onOpenProject} onCollapse={() => setFeedOpen(false)} />
+            </aside>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setFeedOpen(true)}
+              aria-expanded={false}
+              aria-label="Expand What's happening now"
+              className="order-1 flex min-h-[44px] shrink-0 items-center justify-between gap-2 border border-white/10 bg-black/40 px-3 text-[10px] font-black uppercase tracking-widest text-white/80 hover:border-myco-accent/40 hover:text-myco-accent touch-manipulation lg:sticky lg:top-3 lg:order-2 lg:h-[calc(100dvh-7rem)] lg:w-11 lg:flex-col lg:justify-start lg:px-0 lg:py-3"
+            >
+              <PanelRightOpen className="size-4 shrink-0" aria-hidden="true" />
+              <span className="flex items-center gap-2 lg:[writing-mode:vertical-rl]">
+                <span className="size-1.5 rounded-full bg-myco-accent animate-pulse" aria-hidden="true" />
+                What&apos;s happening now
+              </span>
+            </button>
+          )}
+          <div ref={pulseGridColRef} className="order-2 min-w-0 flex-1 lg:order-1">
+            <PulseMycoWidget onOpenMyco={() => setActiveTab('MYCO')} />
+        <PulseResponsiveGrid
           className="layout"
+          width={pulseGridWidth || 1200}
           layouts={layouts}
           breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
           cols={{ lg: 12, md: 6, sm: 3, xs: 1, xxs: 1 }}
@@ -544,331 +371,20 @@ const PulseDashboard = ({
           containerPadding={[0, 0]}
           onLayoutChange={onLayoutChange}
         >
-          {/* Market Overview */}
-          <div key="overview">
-             <WidgetWrapper title="Market Overview" id="overview" onToggleFull={toggleFull} isFull={fullWidget === 'overview'}>
-                {fullWidget === 'overview' ? (
-                  <MarketOverviewDetailed />
-                ) : (
-                  <div className="h-full flex flex-col justify-between py-1">
-                    <div className="space-y-1">
-                        <span className="text-[8px] font-bold text-dim uppercase tracking-[0.2em] block">Sessions: {exchangeSessionSummary} // Feed {globalMarket.status}</span>
-                        <p className="text-xs font-bold leading-tight uppercase text-white/90">BTC at {globalMarket.BTC}, SOL at ${globalMarket.SOL}.</p>
-                    </div>
-                  </div>
-                )}
-             </WidgetWrapper>
+          {widget('science_markets', 'Science markets', <ScienceMarketsWidget tickers={tickers} onOpenTrade={() => setActiveTab('Trade')} />)}
+          {widget('research', 'New research', <ResearchFeedWidget research={research} />)}
+          {widget('species_rewards', 'Species rewards', <SpeciesRewardsWidget onOpenFungIP={() => setActiveTab('FungIP')} />)}
+          {widget('biobank', 'Biobank holdings', <BiobankWidget onOpenTissue={() => setActiveTab('Tissue')} />)}
+          {widget('fungal_library', 'Fungal library', <FungalLibraryWidget onOpenFungIP={() => setActiveTab('FungIP')} />)}
+          {widget('programs', 'Science programs', <ScienceProgramsWidget onOpenResearch={() => setActiveTab('Research')} />)}
+          {widget('mycopod', 'MycoPOD', <MycoPodWidget episodes={episodes} onOpenPodcasts={() => setActiveTab('Podcasts')} />)}
+          {widget('learn', 'Learn: fungi & biology', <ScienceLearnWidget learnModules={learnModules} onOpenLearn={() => setActiveTab('Learn')} />)}
+          {widget('science_news', 'Science headlines', <ScienceHeadlinesWidget news={news} onOpenNews={() => setActiveTab('News')} />)}
+        </PulseResponsiveGrid>
           </div>
-
-          {/* Asset Groups */}
-          <div key="crypto">
-             <WidgetWrapper title="— CRYPTO —" id="crypto" onToggleFull={toggleFull} isFull={fullWidget === 'crypto'}>
-                <TickerList items={tickerGroups.crypto} />
-             </WidgetWrapper>
-          </div>
-          <div key="metals">
-             <WidgetWrapper title="— METALS —" id="metals" onToggleFull={toggleFull} isFull={fullWidget === 'metals'}>
-                <TickerList items={tickerGroups.metals} />
-             </WidgetWrapper>
-          </div>
-          <div key="big_movers">
-             <WidgetWrapper title="— BIG MOVERS —" id="big_movers" onToggleFull={toggleFull} isFull={fullWidget === 'big_movers'}>
-                <div className="flex flex-col gap-0.5 overflow-y-auto no-scrollbar">
-                   {bigMovers.length ? (
-                     bigMovers.map((m, i) => (
-                      <div key={`${m.s}-${i}`} className="flex flex-col border-b border-white/5 py-1">
-                         <div className="flex justify-between items-center">
-                            <span className="text-[10px] font-black text-white">{m.s}</span>
-                            <span className={cn("text-[10px] font-bold", m.up ? "text-myco-accent" : "text-red-500")}>{m.c}</span>
-                         </div>
-                         {m.name ? (
-                           <p className="text-[8px] text-dim truncate uppercase font-bold">{m.name}</p>
-                         ) : null}
-                      </div>
-                     ))
-                   ) : (
-                     <p className="text-[9px] font-bold text-dim uppercase py-2">Awaiting live movers…</p>
-                   )}
-                </div>
-             </WidgetWrapper>
-          </div>
-
-          <div key="commodities">
-             <WidgetWrapper title="— COMMODITIES —" id="commodities" onToggleFull={toggleFull} isFull={fullWidget === 'commodities'}>
-                <TickerList items={tickerGroups.commodities} />
-             </WidgetWrapper>
-          </div>
-          <div key="bio_assets">
-             <WidgetWrapper title="— BIO ASSETS —" id="bio_assets" onToggleFull={toggleFull} isFull={fullWidget === 'bio_assets'}>
-                <TickerList items={tickerGroups.bio} />
-             </WidgetWrapper>
-          </div>
-          <div key="tech">
-             <WidgetWrapper title="— TECH —" id="tech" onToggleFull={toggleFull} isFull={fullWidget === 'tech'}>
-                <TickerList items={tickerGroups.tech} />
-             </WidgetWrapper>
-          </div>
-          <div key="business">
-             <WidgetWrapper title="— BUSINESS —" id="business" onToggleFull={toggleFull} isFull={fullWidget === 'business'}>
-                <TickerList items={tickerGroups.business} />
-             </WidgetWrapper>
-          </div>
-
-          <div key="news_mini">
-             <WidgetWrapper title="— NEWS —" id="news_mini" onToggleFull={toggleFull} isFull={fullWidget === 'news_mini'}>
-                <div className="flex flex-col gap-3 h-full overflow-hidden">
-                   {news.length ? (
-                     news.slice(0, 8).map((n: any, i: number) => (
-                      <div key={n.id || i} className="flex gap-2">
-                         <span className="text-[9px] font-mono text-dim shrink-0">
-                           {formatNewsAge(n.publishedAt)}
-                         </span>
-                         <div className="flex flex-col min-w-0">
-                            <p className="text-[10px] font-bold text-white/90 leading-tight line-clamp-2">{n.title}</p>
-                            <div className="flex gap-1 mt-1 flex-wrap">
-                               {(n.tags || []).slice(0, 3).map((tag: string) => (
-                                 <span key={tag} className="text-[7px] border border-white/10 px-1 text-dim uppercase">{tag}</span>
-                               ))}
-                            </div>
-                         </div>
-                      </div>
-                     ))
-                   ) : (
-                     <p className="text-[9px] font-bold text-dim uppercase">No live headlines — check RSS / API keys</p>
-                   )}
-                </div>
-             </WidgetWrapper>
-          </div>
-
-          <div key="podcast_mini">
-             <WidgetWrapper title="— PODCASTS —" id="podcast_mini" onToggleFull={toggleFull} isFull={fullWidget === 'podcast_mini'}>
-                <div className="flex flex-col gap-3">
-                   {episodes.length ? (
-                     episodes.slice(0, 6).map((ep) => {
-                       const mins = Math.max(1, Math.round((ep.durationSec || 0) / 60));
-                       const href = ep.audioUrl || ep.embedUrl || "#";
-                       return (
-                         <a
-                           key={ep.id}
-                           href={href}
-                           target="_blank"
-                           rel="noreferrer"
-                           className="flex items-center gap-3 group cursor-pointer hover:bg-myco-accent/5 p-1"
-                           onClick={() => setActiveTab('Podcasts')}
-                         >
-                           <Play className="size-3 text-myco-accent shrink-0" />
-                           <div className="flex flex-col min-w-0">
-                              <span className="text-[9px] font-bold text-white group-hover:text-myco-accent transition-colors line-clamp-2">{ep.title}</span>
-                              <span className="text-[8px] text-dim uppercase truncate">{ep.show} • {mins}m</span>
-                           </div>
-                         </a>
-                       );
-                     })
-                   ) : (
-                     <p className="text-[9px] font-bold text-dim uppercase">No crypto podcast RSS — check /api/podcasts</p>
-                   )}
-                </div>
-             </WidgetWrapper>
-          </div>
-
-          <div key="learn_mini">
-             <WidgetWrapper title="— LEARN —" id="learn_mini" onToggleFull={toggleFull} isFull={fullWidget === 'learn_mini'}>
-                <div className="flex flex-col gap-1.5 h-full overflow-hidden">
-                   {learnModules.length ? (
-                     learnModules.slice(0, 8).map((l) => (
-                      <div key={l.id} className="flex justify-between items-center group cursor-pointer hover:bg-white/5 py-1" onClick={() => setActiveTab('Learn')}>
-                         <div className="flex items-center gap-2 min-w-0">
-                           <span className={cn("text-[7px] border px-1 uppercase shrink-0 w-16 text-center", l.level === 'beginner' ? 'border-myco-accent text-myco-accent' : 'border-dim text-dim')}>{l.level}</span>
-                           <span className="text-[9px] font-bold text-white/90 truncate">{l.title}</span>
-                         </div>
-                         <span className="text-[8px] font-mono text-dim shrink-0">{l.readingTimeMin}m</span>
-                      </div>
-                     ))
-                   ) : (
-                     <p className="text-[9px] font-bold text-dim uppercase">No learn modules — add data/learn-modules.json</p>
-                   )}
-                   <button className="mt-auto text-[8px] font-bold text-dim uppercase text-left hover:text-myco-accent" onClick={() => setActiveTab('Learn')}>All lessons →</button>
-                </div>
-             </WidgetWrapper>
-          </div>
-
-          <div key="watchlist">
-             <WidgetWrapper title="— WATCHLIST —" id="watchlist" onToggleFull={toggleFull} isFull={fullWidget === 'watchlist'}>
-                <TickerList items={tickerGroups.watchlist} />
-                <button className="mt-2 text-[8px] font-bold text-dim uppercase text-left hover:text-myco-accent" onClick={() => setActiveTab('Markets')}>Markets →</button>
-             </WidgetWrapper>
-          </div>
-
-          <div key="indicators">
-             <WidgetWrapper title="— GLOBAL INDEXES —" id="indicators" onToggleFull={toggleFull} isFull={fullWidget === 'indicators'}>
-                <TickerList items={tickerGroups.indicators} />
-             </WidgetWrapper>
-          </div>
-
-          <div key="bonds">
-             <WidgetWrapper title="— BONDS —" id="bonds" onToggleFull={toggleFull} isFull={fullWidget === 'bonds'}>
-                <TickerList items={tickerGroups.bonds} />
-             </WidgetWrapper>
-          </div>
-
-          <div key="eco">
-             <WidgetWrapper title="— MYCO ECOSYSTEM —" id="eco" onToggleFull={toggleFull} isFull={fullWidget === 'eco'}>
-                <div className="h-full flex flex-col justify-between py-1">
-                   <div className="flex justify-between items-start">
-                      <div className="flex flex-col">
-                         <span className="text-sm font-black text-myco-accent">
-                           {mycoStrip?.p ? `$${mycoStrip.p}` : mycoSnapshot?.price ? `$${mycoSnapshot.price}` : '—'}
-                         </span>
-                         <span className="text-[8px] text-dim font-bold uppercase">
-                           Supply: {mycoDistPct.supply ?? '—'}
-                         </span>
-                         <span className="text-[8px] text-dim font-bold uppercase">
-                           Community: {mycoDistPct.community != null ? `${mycoDistPct.community}%` : '—'}
-                         </span>
-                      </div>
-                      <div className="flex flex-col items-end">
-                         <span className={cn("text-[10px] font-bold", (mycoStrip?.up ?? (mycoSnapshot?.changePct ?? 0) >= 0) ? "text-myco-accent" : "text-red-400")}>
-                           {mycoStrip?.c ?? (mycoSnapshot?.changePct != null ? `${mycoSnapshot.changePct >= 0 ? '+' : ''}${mycoSnapshot.changePct.toFixed(2)}%` : '—')}
-                         </span>
-                         <span className="text-[8px] text-dim font-bold uppercase">Chain: Solana</span>
-                         <span className="text-[8px] text-dim font-bold uppercase">
-                           Biobank: {mycoDistPct.biobank != null ? `${mycoDistPct.biobank}%` : '—'}
-                         </span>
-                      </div>
-                   </div>
-                   <button className="text-[8px] font-bold text-dim uppercase text-left hover:text-myco-accent mt-2" onClick={() => setActiveTab('MYCO')}>Token details →</button>
-                </div>
-             </WidgetWrapper>
-          </div>
-
-          <div key="funding">
-             <WidgetWrapper title="— REALM TREASURY —" id="funding" onToggleFull={toggleFull} isFull={fullWidget === 'funding'}>
-                <div className="flex flex-col gap-1.5 h-full overflow-hidden">
-                   <div className="flex flex-col gap-4 mb-4">
-                      <a href="https://v2.realms.today/dao/At93fiCMzEkZWBAHxSNjfk7zUHnF3JcxyCyPjZELjK9Y/treasury" target="_blank" rel="noreferrer" className="w-full py-3 bg-white/5 border border-white/10 text-[9px] font-black uppercase tracking-widest text-white hover:bg-myco-accent hover:text-black text-center">
-                         View Realm Treasury
-                      </a>
-                   </div>
-                   <div className="space-y-1.5 overflow-y-auto no-scrollbar">
-                      {[
-                         { l: 'MYCO mint', v: 'EzYEwn...vUF3' },
-                         { l: 'Network', v: 'Solana Mainnet' },
-                         { l: 'Realm ID', v: 'At93fi...K9Y' },
-                      ].map((f, i) => (
-                         <div key={i} className="flex justify-between items-center text-[9px] font-bold uppercase border-b border-white/5 py-0.5">
-                            <span className="text-dim pr-2">{f.l}</span>
-                            <span className="text-white font-mono shrink-0">{f.v}</span>
-                         </div>
-                      ))}
-                   </div>
-                </div>
-             </WidgetWrapper>
-          </div>
-
-          <div key="research">
-             <WidgetWrapper title="— RESEARCH —" id="research" onToggleFull={toggleFull} isFull={fullWidget === 'research'}>
-                <div className="flex flex-col gap-3 h-full overflow-hidden">
-                   {research.length ? (
-                     research.slice(0, 6).map((r) => {
-                       const d = r.publishedAt
-                         ? new Date(r.publishedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })
-                         : "—";
-                       return (
-                         <div key={r.id} className="flex flex-col gap-0.5">
-                            <span className="text-[8px] font-bold text-myco-accent uppercase tracking-widest">{r.category} {d}</span>
-                            <p className="text-[10px] font-bold text-white/90 leading-tight line-clamp-2">{r.title}</p>
-                         </div>
-                       );
-                     })
-                   ) : (
-                     <p className="text-[9px] font-bold text-dim uppercase">No research feed — OpenAlex / ResearchHub</p>
-                   )}
-                </div>
-             </WidgetWrapper>
-          </div>
-
-          <div key="calendar">
-             <WidgetWrapper title="— CALENDAR / EVENTS —" id="calendar" onToggleFull={toggleFull} isFull={fullWidget === 'calendar'}>
-                <div className="flex flex-col gap-2 overflow-y-auto no-scrollbar h-full pr-1">
-                   {calendar.length ? (
-                     calendar.slice(0, 12).map((c, i) => (
-                      <div key={`${c.label}-${i}`} className="flex items-center justify-between group cursor-pointer hover:bg-white/5">
-                         <div className="flex items-center gap-2 shrink-0">
-                            <div className={cn("size-1 rounded-full", c.importance === "high" ? "bg-myco-accent" : "bg-dim group-hover:bg-myco-accent")} />
-                            <span className="text-[9px] font-bold text-dim group-hover:text-white transition-colors">{c.date}</span>
-                         </div>
-                         <span className="text-[10px] font-bold text-white truncate px-2">{c.label}</span>
-                         <span className="text-[8px] font-mono text-dim shrink-0">{c.time}</span>
-                      </div>
-                     ))
-                   ) : (
-                     <p className="text-[9px] font-bold text-dim uppercase">No calendar — set FINNHUB_API_KEY</p>
-                   )}
-                </div>
-             </WidgetWrapper>
-          </div>
-
-          <div key="quick_links">
-             <WidgetWrapper title="— QUICK LINKS —" id="quick_links" onToggleFull={toggleFull} isFull={fullWidget === 'quick_links'}>
-                <div className="flex flex-wrap gap-1">
-                   {['Markets', 'News', 'Podcasts', 'Learn', 'MYCO', 'Settings'].map(l => (
-                      <button 
-                         key={l}
-                         onClick={() => setActiveTab(l)}
-                         className="px-3 py-1 bg-white/5 border border-white/10 text-[9px] font-bold uppercase text-dim hover:text-white hover:border-myco-accent"
-                      >
-                         {l}
-                      </button>
-                   ))}
-                </div>
-             </WidgetWrapper>
-          </div>
-
-          <div key="status">
-             <WidgetWrapper title="— STATUS —" id="status" onToggleFull={toggleFull} isFull={fullWidget === 'status'}>
-                <div className="flex flex-col gap-2 h-full justify-between">
-                   <div className="flex items-center gap-2">
-                       <div className="size-1.5 rounded-full bg-myco-accent shadow-[0_0_8px_var(--color-myco-accent)]" />
-                       <span className="text-[9px] font-bold text-myco-accent uppercase tracking-widest leading-none">{loading ? "SYNCING" : "LIVE"}</span>
-                   </div>
-                   <p className="text-[10px] font-bold text-white leading-tight line-clamp-3">
-                     {news[0]?.title || "Awaiting live headline from /api/news"}
-                   </p>
-                   <button className="text-[8px] font-bold text-dim uppercase text-left hover:text-myco-accent" onClick={() => setActiveTab('News')}>News →</button>
-                </div>
-             </WidgetWrapper>
-          </div>
-
-          <div key="whale_watch_mini">
-             <WidgetWrapper title="— WHALE WATCH —" id="whale_watch_mini" onToggleFull={toggleFull} isFull={fullWidget === 'whale_watch_mini'}>
-                <div className="grid grid-cols-1 gap-2 h-full overflow-hidden">
-                   {Array.isArray(whales) && whales.length ? (
-                     whales.slice(0, 4).map((w, i) => {
-                       const label = String(w.text || `${w.type} ${w.symbol}`).slice(0, 80);
-                       const detail = `${w.usd} · ${w.timeAgo}`;
-                       return (
-                         <div key={w.id || i} className="p-2 bg-blue-500/5 border border-blue-500/20 rounded-sm">
-                            <p className="text-[9px] font-bold text-white leading-tight line-clamp-2 uppercase">{label}</p>
-                            <p className="text-[8px] text-dim mt-0.5">{detail}</p>
-                         </div>
-                       );
-                     })
-                   ) : (
-                     <p className="text-[9px] font-bold text-dim uppercase">No whale feed — Whale Alert / Polymarket trades</p>
-                   )}
-                </div>
-                <button className="absolute bottom-2 right-2 text-[8px] font-bold text-dim uppercase hover:text-myco-accent" onClick={() => setActiveTab('Trade')}>Whale Terminal →</button>
-             </WidgetWrapper>
-          </div>
-
-        </ResponsiveGridLayout>
+        </div>
       </div>
 
-      <PulseMarqueeTicker
-        items={footerSegments.length ? undefined : footerTapeItems}
-        segments={footerSegments.length ? footerSegments : undefined}
-      />
-      
       <div className="scanline" />
     </div>
   );
@@ -881,7 +397,7 @@ const MarketView = ({ assets = [] }: any) => {
   const filteredAssets = filter === 'ALL' ? assets : assets.filter((a: any) => a.type === filter);
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden p-3 md:p-4 lg:p-6 bg-[#050505] min-h-0">
+    <div className="flex flex-col">
       <div className="flex gap-2 md:gap-3 mb-4 shrink-0 overflow-x-auto no-scrollbar pb-1">
         {['ALL', 'SOL', 'BTC', 'DESCI', 'MYCO', 'XSTOCK', 'DEFI'].map(t => (
           <button 
@@ -897,7 +413,7 @@ const MarketView = ({ assets = [] }: any) => {
           </button>
         ))}
       </div>
-      <div className="flex-1 glass-bento p-0 overflow-hidden flex flex-col border-white/5 min-h-0">
+      <div className="glass-bento p-0 overflow-hidden flex flex-col border-white/5">
         <div className="hidden md:grid grid-cols-12 p-3 md:p-4 border-b border-white/10 text-[10px] font-bold uppercase tracking-widest opacity-50 bg-black/40">
           <span className="col-span-4 lg:col-span-3">Instrument</span>
           <span className="col-span-2 text-right">Price</span>
@@ -905,7 +421,7 @@ const MarketView = ({ assets = [] }: any) => {
           <span className="hidden lg:block col-span-2 text-right">Market Cap</span>
           <span className="col-span-4 lg:col-span-3 text-right">Volume</span>
         </div>
-        <div className="flex-1 overflow-y-auto no-scrollbar">
+        <div className="max-h-[65vh] overflow-y-auto no-scrollbar">
           {filteredAssets.length === 0 && (
             <div className="p-12 text-center text-dim text-[11px] uppercase tracking-widest">
               No market data — /api/tickers returned empty. Configure FINNHUB_API_KEY or CoinGecko on VM.
@@ -964,7 +480,7 @@ const MarketView = ({ assets = [] }: any) => {
                     exit={{ height: 0, opacity: 0 }}
                     className="overflow-hidden bg-black/40 border-t border-white/5"
                   >
-                    <div className="p-8 grid grid-cols-12 gap-8">
+                    <div className="p-4 md:p-8 grid grid-cols-12 gap-4 md:gap-8">
                       <div className="col-span-12 lg:col-span-6 space-y-6">
                          <div className="flex flex-col gap-1">
                             <span className="text-[10px] font-bold text-dim uppercase tracking-widest">Available Exchanges & Pools</span>
@@ -1030,11 +546,10 @@ const MarketView = ({ assets = [] }: any) => {
   );
 };
 
-const TradeView = ({ prices, chartData, whales }: any) => {
+const SwapActivitySection = () => {
   const [liquidityPools, setLiquidityPools] = useState<any[]>([]);
 
   useEffect(() => {
-    logToSupabase({ type: 'SYSTEM', message: 'User entered Matrix/Whale Trade View' });
     const loadPools = async () => {
       const pools = await fetchLiquidityPools();
       setLiquidityPools(pools);
@@ -1052,7 +567,7 @@ const TradeView = ({ prices, chartData, whales }: any) => {
                <div className="size-4 bg-myco-accent border border-myco-accent/20 flex items-center justify-center p-0.5">
                   <Terminal className="text-black size-full" />
                </div>
-               <h1 className="text-xl md:text-3xl font-black text-white uppercase tracking-tighter">Market Terminal</h1>
+               <h2 className="text-xl md:text-3xl font-black text-white uppercase tracking-tighter">Market Terminal</h2>
             </div>
             <div className="flex items-center gap-2 mt-1">
                <div className="size-1.5 bg-myco-accent rounded-full animate-pulse shadow-[0_0_8px_rgba(30,255,188,0.5)]" />
@@ -1136,6 +651,104 @@ const TradeView = ({ prices, chartData, whales }: any) => {
           </div>
         </div>
       </div>
+    </div>
+  );
+};
+
+type TradeSection = 'markets' | 'swap';
+
+const TRADE_SECTIONS: { id: TradeSection; label: string }[] = [
+  { id: 'markets', label: 'Markets' },
+  { id: 'swap', label: 'Swap & activity' },
+];
+
+interface TradeViewProps {
+  assets: ReturnType<typeof tickerToAssetRow>[];
+  tickers: PulseTicker[];
+  tickerGroups: TickerGroups;
+  mycoSnapshot: PulseMycoSnapshot | null;
+  chartData: { time: string; price: number; volume?: number }[];
+  calendar: PulseCalendarEvent[];
+  fearGreed: { value: number; classification: string } | null;
+  news: PulseNewsItem[];
+  onOpenMyco: () => void;
+}
+
+const TradeView = ({
+  assets,
+  tickers,
+  tickerGroups,
+  mycoSnapshot,
+  chartData,
+  calendar,
+  fearGreed,
+  news,
+  onOpenMyco,
+}: TradeViewProps) => {
+  const [section, setSection] = useState<TradeSection>('markets');
+
+  useEffect(() => {
+    logToSupabase({ type: 'SYSTEM', message: 'User entered Matrix/Whale Trade View' });
+  }, []);
+
+  const tapeItems = useMemo(
+    () => [
+      ...tickerGroups.crypto,
+      ...tickerGroups.metals,
+      ...tickerGroups.commodities,
+      ...tickerGroups.bio,
+      ...tickerGroups.tech,
+      ...tickerGroups.business,
+      ...tickerGroups.indicators,
+    ].filter((t) => t.p && t.p !== '—'),
+    [tickerGroups]
+  );
+  const tapeSegments = useMemo(() => newsToTickerSegments(news, tapeItems), [news, tapeItems]);
+
+  return (
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-[#050505]">
+      <div className="shrink-0 flex flex-col sm:flex-row sm:items-center gap-3 px-3 md:px-4 lg:px-6 pt-3 md:pt-4">
+        <h1 className="text-lg md:text-2xl font-black text-white uppercase tracking-tighter">Trade</h1>
+        <div role="tablist" aria-label="Trade sections" className="flex border border-white/10 divide-x divide-white/10 self-start">
+          {TRADE_SECTIONS.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              role="tab"
+              aria-selected={section === s.id}
+              onClick={() => setSection(s.id)}
+              className={cn(
+                "min-h-[44px] px-4 text-[10px] font-black uppercase tracking-widest touch-manipulation transition-colors",
+                section === s.id ? "bg-myco-accent text-black" : "text-dim hover:text-white hover:bg-white/5"
+              )}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {section === 'markets' ? (
+        <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar p-3 md:p-4 lg:p-6 flex flex-col gap-6 pb-8">
+          <MarketView assets={assets} />
+          <TradeMarketWidgets
+            tickerGroups={tickerGroups}
+            tickers={tickers}
+            mycoSnapshot={mycoSnapshot}
+            chartData={chartData}
+            calendar={calendar}
+            fearGreed={fearGreed}
+            onOpenMyco={onOpenMyco}
+          />
+        </div>
+      ) : (
+        <SwapActivitySection />
+      )}
+
+      <PulseMarqueeTicker
+        items={tapeSegments.length ? undefined : tapeItems}
+        segments={tapeSegments.length ? tapeSegments : undefined}
+      />
     </div>
   );
 };
@@ -1500,19 +1113,48 @@ function useProducerRoute(): boolean {
   return producerMode;
 }
 
+const URL_TAB_IDS: readonly PulseTabId[] = [
+  'News', 'Pulse', 'Podcasts', 'DAO', 'Funding', 'Research',
+  'Markets', 'Trade', 'FungIP', 'Tissue', 'Learn', 'MYCO', 'Settings',
+];
+
+/** `?tab=` → tab id. "Projects" is the public name of the Funding tab; "Markets" maps to Trade. */
+function tabFromQuery(): PulseTabId | null {
+  const tab = readQuery('tab');
+  if (tab === 'Projects') return 'Funding';
+  if (!isOneOf(URL_TAB_IDS, tab)) return null;
+  return tab === 'Markets' ? 'Trade' : tab;
+}
+
+/** Write the tab to the URL and drop query state that belongs to other tabs. */
+function syncTabQuery(tab: PulseTabId) {
+  const urlTab = readQuery('tab');
+  writeQuery({
+    tab: urlTab === 'Projects' && tab === 'Funding' ? 'Projects' : tab,
+    pillar: tab === 'Pulse' ? readQuery('pillar') : null,
+    feed: tab === 'Pulse' ? readQuery('feed') : null,
+    project: tab === 'Funding' ? readQuery('project') : null,
+  });
+  if (tab !== 'Tissue') clearQueryPrefix('tf_');
+}
+
 export default function App() {
   const producerMode = useProducerRoute();
-  const [activeTab, setActiveTab] = useState<PulseTabId>('News');
+  const [activeTab, setActiveTabState] = useState<PulseTabId>(() => tabFromQuery() ?? 'News');
+  const setActiveTab = (tab: PulseTabId) => {
+    const next = tab === 'Markets' ? 'Trade' : tab;
+    setActiveTabState(next);
+    syncTabQuery(next);
+  };
+  const openProject = (slug: string) => {
+    setActiveTabState('Funding');
+    writeQuery({ tab: 'Funding', pillar: null, feed: null, project: slug }, 'push', { openedFrom: 'Pulse' });
+  };
 
   useEffect(() => {
-    const tab = new URLSearchParams(window.location.search).get('tab');
-    const allowed: PulseTabId[] = [
-      'News', 'Pulse', 'Podcasts', 'DAO', 'Funding', 'Research',
-      'Markets', 'Trade', 'FungIP', 'Tissue', 'Learn', 'MYCO', 'Settings',
-    ];
-    if (tab && allowed.includes(tab as PulseTabId)) {
-      setActiveTab(tab as PulseTabId);
-    }
+    const onPopState = () => setActiveTabState(tabFromQuery() ?? 'News');
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
   }, []);
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [layouts, setLayouts] = useState<any>(initialLayouts);
@@ -1604,14 +1246,26 @@ export default function App() {
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'Pulse': return <PulseDashboard aiInsight={aiInsight} layouts={layouts} setLayouts={setLayouts} onLayoutChange={onLayoutChange} setActiveTab={setActiveTab} tickerGroups={tickerGroups} tickers={tickers} mycoSnapshot={mycoSnapshot} chartData={history.length > 0 ? history : EMPTY_CHART_DATA} whales={whales} news={news} episodes={episodes} calendar={calendar} research={research} learnModules={learnModules} fearGreed={fearGreed} configStatus={configStatus} loading={loading} />;
-      case 'DAO': return <DAOView />;
-      case 'Markets': return <MarketView assets={assetTickers} />;
-      case 'Trade': return <TradeView prices={assetTickers} chartData={history.length > 0 ? history : EMPTY_CHART_DATA} whales={whales} />;
+      case 'Pulse': return <PulseDashboard layouts={layouts} setLayouts={setLayouts} onLayoutChange={onLayoutChange} setActiveTab={setActiveTab} onOpenProject={openProject} news={news} episodes={episodes} research={research} learnModules={learnModules} tickers={tickers} loading={loading} />;
+      case 'DAO': return <CommunityView learn={<LearnAcademy initialModules={learnModules} />} />;
+      case 'Markets':
+      case 'Trade': return (
+        <TradeView
+          assets={assetTickers}
+          tickers={tickers}
+          tickerGroups={tickerGroups}
+          mycoSnapshot={mycoSnapshot}
+          chartData={history.length > 0 ? history : EMPTY_CHART_DATA}
+          calendar={calendar}
+          fearGreed={fearGreed}
+          news={news}
+          onOpenMyco={() => setActiveTab('MYCO')}
+        />
+      );
       case 'News': return null;
       case 'Podcasts': return <PodcastView episodes={episodes} />;
       case 'Funding': return (
-        <FundingView
+        <FundingProjectsTab
           mycoSnapshot={mycoSnapshot}
           onNavigateTab={(tab, focus) => {
             if (focus) {
@@ -1628,7 +1282,7 @@ export default function App() {
       case 'Research': return <ResearchView research={research} loading={loading} />;
       case 'FungIP': return <FungIPView setActiveTab={setActiveTab} />;
       case 'Tissue': return <TissueView />;
-      case 'Learn': return <LearnView learnModules={learnModules} />;
+      case 'Learn': return <CommunityView initialSection="learn" learn={<LearnAcademy initialModules={learnModules} />} />;
       case 'MYCO': return <MycoTerminalView setActiveTab={(tab) => setActiveTab(tab as PulseTabId)} />;
       case 'Settings': return <SettingsView isDarkMode={isDarkMode} setIsDarkMode={setIsDarkMode} />;
       default: return null;
@@ -1668,12 +1322,12 @@ export default function App() {
                   "hidden md:flex items-center gap-2 sm:gap-3 text-left transition-opacity hover:opacity-100 focus:outline-none focus-visible:ring-1 focus-visible:ring-myco-accent/60 rounded-sm min-h-[44px] shrink-0",
                   activeTab === 'News' ? "opacity-100" : "opacity-80 hover:opacity-95"
                 )}
-                aria-label="Open Block News Live"
+                aria-label="Open News Live"
                 aria-current={activeTab === 'News' ? 'page' : undefined}
               >
                  <div className="size-2 rounded-full bg-myco-accent shadow-[0_0_8px_var(--color-myco-accent)] shrink-0" />
                  <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.2em] sm:tracking-[0.35em] whitespace-nowrap">
-                   <span className="hidden sm:inline">Block News. </span>
+                   <span className="hidden sm:inline">News </span>
                    <span className="text-myco-accent opacity-100 animate-live-on-air">Live</span>
                  </span>
               </button>
