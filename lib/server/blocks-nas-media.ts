@@ -1,3 +1,4 @@
+// AWS topology correction 2026-11-27: production is AWS-only; this file's legacy on-prem references are not deployment authority. See AWS_INFRA_REFERENCE.md for its replacement and disposition. Loopback development and physical-device fixtures are separate.
 /**
  * BLOCKS producer media library on UniFi NAS (same SMB creds as MINDEX library).
  * Canonical share: //192.168.0.105/MYCODAO/BLOCKS (dedicated MYCODAO SMB share)

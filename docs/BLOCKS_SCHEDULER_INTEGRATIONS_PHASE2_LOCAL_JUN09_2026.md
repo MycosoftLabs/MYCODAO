@@ -1,3 +1,5 @@
+> **AWS topology correction 2026-11-27: production is AWS-only; this file's legacy on-prem references are not deployment authority. See [AWS_INFRA_REFERENCE.md](../AWS_INFRA_REFERENCE.md) for its replacement and disposition. Loopback development and physical-device fixtures are separate.**
+
 # BLOCKS Scheduler Integrations Phase 2 — Local Build Complete
 
 **Date:** June 9, 2026  

@@ -1,3 +1,5 @@
+> AWS topology correction 2026-11-27: local production servers, LAN addresses and VM/Proxmox/NAS deployment instructions are retired. Use [AWS_INFRA_REFERENCE.md](../AWS_INFRA_REFERENCE.md). Preserve historical evidence and optional device/external connectors.
+
 # Pulse local full-stack env matrix (Apr 14, 2026)
 
 Use this with **`.env.example`** when running Pulse on **port 3004** (`npm run dev`). See also **`docs/DEPLOY_AND_CLEAN_BUILD_APR14_2026.md`**.

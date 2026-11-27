@@ -1,3 +1,4 @@
+// AWS topology correction 2026-11-27: production is AWS-only; this file's legacy on-prem references are not deployment authority. See AWS_INFRA_REFERENCE.md for its replacement and disposition. Loopback development and physical-device fixtures are separate.
 /**
  * Stage the 6-10-2026 Lab photos into the BLOCKS tissue media roots so the
  * biobank catalog can serve them. COPY-ONLY and additive: never deletes, never

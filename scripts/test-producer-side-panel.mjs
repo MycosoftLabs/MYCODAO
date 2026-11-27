@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// AWS topology correction 2026-11-27: production is AWS-only; this file's legacy on-prem references are not deployment authority. See AWS_INFRA_REFERENCE.md for its replacement and disposition. Loopback development and physical-device fixtures are separate.
 /**
  * Smoke-test Producer Program Side Panel APIs (GET + server-side patch simulation).
  * Requires: npm run dev (or dev:pulse) on port 3004.

@@ -1,3 +1,5 @@
+> AWS topology correction 2026-11-27: local production servers, LAN addresses and VM/Proxmox/NAS deployment instructions are retired. Use [AWS_INFRA_REFERENCE.md](../AWS_INFRA_REFERENCE.md). Preserve historical evidence and optional device/external connectors.
+
 # Roadmap — Webflow exit, Figma parity, MYCA CMS (Apr 14, 2026)
 
 ## Out of current Pulse MVP
