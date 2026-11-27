@@ -1,3 +1,4 @@
+// AWS topology correction 2026-11-27: production is AWS-only; this file's legacy on-prem references are not deployment authority. See AWS_INFRA_REFERENCE.md for its replacement and disposition. Loopback development and physical-device fixtures are separate.
 import React, { useState } from "react";
 import { Bell, Cloud, Loader2, Radio, Save, Webhook } from "lucide-react";
 
@@ -363,7 +364,7 @@ export function SchedulerIntegrationsHub({
             label="MAS webhook URL"
             value={integrations.mas?.webhookUrl ?? ""}
             disabled={locked}
-            placeholder="http://192.168.0.188:8001/api/webhooks/…"
+            placeholder="http://mas-internal.mycosoft.com:8001/api/webhooks/…"
             onChange={(webhookUrl) =>
               onChangeIntegrations({ mas: { ...integrations.mas, webhookUrl } })
             }

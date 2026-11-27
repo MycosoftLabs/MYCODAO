@@ -1,3 +1,5 @@
+> AWS topology correction 2026-11-27: local production servers, LAN addresses and VM/Proxmox/NAS deployment instructions are retired. Use [AWS_INFRA_REFERENCE.md](../AWS_INFRA_REFERENCE.md). Preserve historical evidence and optional device/external connectors.
+
 # Pulse full functionality — gaps to close (Apr 14, 2026)
 
 **Status:** Working checklist (not a commitment date). Pulse runs with **empty states** when keys or backends are missing; this lists what is needed for a **fully wired** product.

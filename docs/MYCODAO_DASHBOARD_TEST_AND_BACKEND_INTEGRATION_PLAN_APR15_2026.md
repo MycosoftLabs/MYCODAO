@@ -1,3 +1,5 @@
+> **AWS topology correction 2026-11-27: production is AWS-only; this file's legacy on-prem references are not deployment authority. See [AWS_INFRA_REFERENCE.md](../AWS_INFRA_REFERENCE.md) for its replacement and disposition. Loopback development and physical-device fixtures are separate.**
+
 # MYCODAO dashboard test & backend integration plan — Apr 15, 2026
 
 **Goal:** Run and extend **Abelardo’s MYCODAO Next dashboard** (port **3004**), connect it to **real** MAS / MINDEX / NatureOS APIs, without affecting **mycosoft.com** local dev on **localhost:3010**.
@@ -29,8 +31,8 @@ Use the same **VM URLs** as the rest of the Mycosoft stack (from each project’
 
 | System | Typical base (LAN) | Used for |
 |--------|---------------------|----------|
-| **MAS** | `http://192.168.0.188:8001` | MYCA orchestrator, agents, device registry, proxies |
-| **MINDEX** | `http://192.168.0.189:8000` | Species, research data, search-backed APIs |
+| **MAS** | `http://mas-internal.mycosoft.com:8001` | MYCA orchestrator, agents, device registry, proxies |
+| **MINDEX** | `http://mindex-internal.mycosoft.com:8000` | Species, research data, search-backed APIs |
 | **NatureOS** | Your deployed core-api base URL | Platform APIs, SignalR, device flows as applicable |
 
 Set in **MYCODAO** `.env.local` (already stubbed in `.env.example`):

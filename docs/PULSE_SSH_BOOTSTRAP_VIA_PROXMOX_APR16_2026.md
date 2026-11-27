@@ -1,3 +1,5 @@
+> **AWS topology correction 2026-11-27: production is AWS-only; this file's legacy on-prem references are not deployment authority. See [AWS_INFRA_REFERENCE.md](../AWS_INFRA_REFERENCE.md) for its replacement and disposition. Loopback development and physical-device fixtures are separate.**
+
 # Pulse VM SSH access via Proxmox + virt-customize — Apr 16, 2026
 
 **Problem:** Guest **192.168.0.198** (`mycodao-pulse`, VMID **102** on **192.168.0.90**) may allow **public-key only** for `mycosoft`, so LAN deploy from a PC with no authorized key fails.

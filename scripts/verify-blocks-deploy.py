@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
+# AWS topology correction 2026-11-27: production is AWS-only; this file's legacy on-prem references are not deployment authority. See AWS_INFRA_REFERENCE.md for its replacement and disposition. Loopback development and physical-device fixtures are separate.
 """Post-deploy verification for BLOCKS + n8n + MINDEX."""
 from __future__ import annotations
+
+if __name__ == "__main__":
+    raise SystemExit('Retired on-prem utility: use the AWS release/SSM procedure in AWS_INFRA_REFERENCE.md; no local production servers exist.')
+
 
 import json
 import os
@@ -41,13 +46,13 @@ def main() -> int:
         check("blocks epg", False, str(e))
 
     try:
-        code, _, _ = get("http://192.168.0.189:8000/health")
+        code, _, _ = get("http://mindex-internal.mycosoft.com:8000/health")
         check("mindex api", code == 200)
     except Exception as e:
         check("mindex api", False, str(e))
 
     try:
-        code, _, _ = get("http://192.168.0.188:5678/healthz")
+        code, _, _ = get("http://internal-mycosoft-core-int-21300503.us-east-1.elb.amazonaws.com:5678/healthz")
         check("n8n health", code == 200)
     except Exception as e:
         check("n8n health", False, str(e))

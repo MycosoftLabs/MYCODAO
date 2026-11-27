@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# AWS topology correction 2026-11-27: production is AWS-only; this file's legacy on-prem references are not deployment authority. See AWS_INFRA_REFERENCE.md for its replacement and disposition. Loopback development and physical-device fixtures are separate.
 """Import and activate BLOCKS Calendar Auto-Import workflow on MAS n8n (188)."""
 from __future__ import annotations
 
@@ -13,7 +14,7 @@ MAS_REPO = Path(__file__).resolve().parents[2] / "MAS" / "mycosoft-mas"
 if not (MAS_REPO / "n8n").is_dir():
     MAS_REPO = Path(r"D:/Users/admin2/Desktop/MYCOSOFT/CODE/MAS/mycosoft-mas")
 WF_PATH = MAS_REPO / "n8n" / "workflows" / "blocks_calendar_auto_import.json"
-N8N_URL = os.environ.get("N8N_URL", "http://192.168.0.188:5678").rstrip("/")
+N8N_URL = os.environ.get("N8N_URL", "http://internal-mycosoft-core-int-21300503.us-east-1.elb.amazonaws.com:5678").rstrip("/")
 API_KEY = os.environ.get("N8N_API_KEY", "")
 
 

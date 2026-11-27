@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# AWS topology correction 2026-11-27: production is AWS-only; this file's legacy on-prem references are not deployment authority. See AWS_INFRA_REFERENCE.md for its replacement and disposition. Loopback development and physical-device fixtures are separate.
 # Run once on the Ubuntu guest (e.g. 192.168.0.198) as a user with sudo.
 # Installs Docker, clones MYCODAO if missing, copies .env.example → .env.production if missing, builds and starts stack.
 set -euo pipefail

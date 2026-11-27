@@ -1,3 +1,4 @@
+# AWS topology correction 2026-11-27: production is AWS-only; this file's legacy on-prem references are not deployment authority. See AWS_INFRA_REFERENCE.md for its replacement and disposition. Loopback development and physical-device fixtures are separate.
 # Configure BLOCKS scheduler LAN env: Streamlabs Remote API + Google Calendar + cron secrets.
 # Writes scheduler block to .env.local; secrets live in .credentials.local (gitignored).
 

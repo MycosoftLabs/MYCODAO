@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// AWS topology correction 2026-11-27: production is AWS-only; this file's legacy on-prem references are not deployment authority. See AWS_INFRA_REFERENCE.md for its replacement and disposition. Loopback development and physical-device fixtures are separate.
 /**
  * Smoke-test BLOCKS scheduler integrations on production.
  * Usage: node scripts/test-scheduler-integrations-prod.mjs
@@ -48,7 +49,7 @@ async function main() {
   }
 
   try {
-    const n8n = await fetch("http://192.168.0.188:5678/healthz", { signal: AbortSignal.timeout(8000) });
+    const n8n = await fetch("http://internal-mycosoft-core-int-21300503.us-east-1.elb.amazonaws.com:5678/healthz", { signal: AbortSignal.timeout(8000) });
     console.log(`${n8n.ok ? "PASS" : "FAIL"} n8n health → ${n8n.status}`);
     if (!n8n.ok) failed++;
   } catch (e) {

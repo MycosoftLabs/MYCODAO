@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# AWS topology correction 2026-11-27: production is AWS-only; this file's legacy on-prem references are not deployment authority. See AWS_INFRA_REFERENCE.md for its replacement and disposition. Loopback development and physical-device fixtures are separate.
 # Mount UniFi NAS BLOCKS producer media on MycoDAO VM (198).
 # Share: //192.168.0.105/MYCODAO  subfolder: BLOCKS
 # Same SMB credentials as MINDEX library.

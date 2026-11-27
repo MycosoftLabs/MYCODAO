@@ -1,3 +1,5 @@
+> **AWS topology correction 2026-11-27: production is AWS-only; this file's legacy on-prem references are not deployment authority. See [AWS_INFRA_REFERENCE.md](../AWS_INFRA_REFERENCE.md) for its replacement and disposition. Loopback development and physical-device fixtures are separate.**
+
 # pulse.mycodao.com — deploy and test — April 14, 2026
 
 ## What runs where
@@ -19,7 +21,7 @@
 2. Clone repo: e.g. `sudo git clone <repo> /opt/mycodao && cd /opt/mycodao`.
 3. **`cp .env.example .env.production`** and set at minimum:
    - `FINNHUB_API_KEY` (market data)
-   - `MINDEX_API_URL=http://192.168.0.189:8000` and `MAS_API_URL=http://192.168.0.188:8001` (and tokens if your APIs require them)
+   - `MINDEX_API_URL=http://mindex-internal.mycosoft.com:8000` and `MAS_API_URL=http://mas-internal.mycosoft.com:8001` (and tokens if your APIs require them)
    - Optional: `GNEWS_API_KEY`, `PODCAST_RSS_URLS`, etc.
 4. **App only (port 3004):**
    ```bash
